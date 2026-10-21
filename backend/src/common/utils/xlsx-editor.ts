@@ -25,6 +25,7 @@ const CT_COMMENTS = 'application/vnd.openxmlformats-officedocument.spreadsheetml
 const REL_SHEET = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
 const REL_COMMENTS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 const REL_VML = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing';
+const REL_HYPERLINK = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
 
 interface StyleParts {
   numFmts: Map<number, string>;
@@ -371,31 +372,25 @@ export class XlsxEditor {
     // 2. styles
     if (!sameWorkbook) xml = await this.remapStyles(source, xml);
 
-    // 3. drop things we do not copy
+    // 3. sheet-view state that must not be duplicated
     xml = xml.replace(/\stabSelected="1"/g, '');
-    if (/<drawing\s/.test(xml)) {
-      xml = xml.replace(/<drawing\s[^>]*\/>/g, '');
-      warnings.push('Charts/images (drawing part) were not copied');
-    }
-    xml = xml.replace(/<pageSetup\s([^>]*?)\sr:id="[^"]*"([^>]*?)\/>/g, '<pageSetup $1$2/>');
-    if (/<(tableParts|controls|oleObjects)\b/.test(xml)) {
-      xml = xml.replace(/<(tableParts|controls|oleObjects)\b[\s\S]*?<\/\1>|<(tableParts|controls|oleObjects)\b[^>]*\/>/g, '');
-      warnings.push('Tables/form controls were not copied');
-    }
 
-    // 4. comments (+ vml) via the sheet rels
+    // 4. relationships: comments (+ their VML) and hyperlinks are carried over; every other
+    //    relationship consumer (drawings, printer settings, tables, controls, OLE, pictures)
+    //    is removed from the XML and reported, so the copy never has dangling r:id's.
     const newNo = this.nextPartNumber('xl/worksheets/sheet', '.xml');
     const newPart = `xl/worksheets/sheet${newNo}.xml`;
     const srcRelsPart = srcPart.replace(/worksheets\/(sheet\d+\.xml)$/, 'worksheets/_rels/$1.rels');
     const newRels: string[] = [];
+    const keptIds = new Set<string>();
     const srcSheetRels = source.file(srcRelsPart);
-    let keepLegacy = false;
     if (srcSheetRels) {
       const rx = await srcSheetRels.async('string');
       for (const r of rx.matchAll(/<Relationship\s[^>]*>/g)) {
         const type = xmlAttr(r[0], 'Type') ?? '';
         const id = xmlAttr(r[0], 'Id') ?? '';
         const target = xmlAttr(r[0], 'Target') ?? '';
+        const mode = xmlAttr(r[0], 'TargetMode');
         const abs = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\.\//, '');
         if (type === REL_COMMENTS && source.file(abs)) {
           const n = this.nextPartNumber('xl/comments', '.xml');
@@ -403,18 +398,32 @@ export class XlsxEditor {
           this.zip.file(dest, await source.file(abs)!.async('nodebuffer'));
           newRels.push(`<Relationship Id="${id}" Type="${REL_COMMENTS}" Target="../comments${n}.xml"/>`);
           await this.addContentTypeOverride(`/${dest}`, CT_COMMENTS);
+          keptIds.add(id);
         } else if (type === REL_VML && source.file(abs)) {
           const n = this.nextPartNumber('xl/drawings/vmlDrawing', '.vml');
           const dest = `xl/drawings/vmlDrawing${n}.vml`;
           this.zip.file(dest, await source.file(abs)!.async('nodebuffer'));
           newRels.push(`<Relationship Id="${id}" Type="${REL_VML}" Target="../drawings/vmlDrawing${n}.vml"/>`);
           await this.ensureDefaultContentType('vml', 'application/vnd.openxmlformats-officedocument.vmlDrawing');
-          keepLegacy = true;
+          keptIds.add(id);
+        } else if (type === REL_HYPERLINK) {
+          newRels.push(`<Relationship Id="${id}" Type="${REL_HYPERLINK}" Target="${encodeXml(target)}"${mode ? ` TargetMode="${mode}"` : ''}/>`);
+          keptIds.add(id);
+        } else {
+          warnings.push(`relationship ${id} (${type.split('/').pop()} -> ${target}) not copied`);
         }
       }
     }
-    if (!keepLegacy) xml = xml.replace(/<legacyDrawing\s[^>]*\/>/g, '');
-    xml = xml.replace(/<legacyDrawingHF\s[^>]*\/>/g, '');
+    xml = xml.replace(/<(\w+)\b([^>]*?)\sr:id="(rId\d+)"([^>]*?)(\/>|>[\s\S]*?<\/\1>)/g, (whole: string, tag: string, a1: string, id: string, a2: string, tail: string) => {
+      if (keptIds.has(id)) return whole;
+      if (tag === 'pageSetup') return `<pageSetup${a1}${a2}${tail}`; // keep page setup, drop printer settings binary
+      warnings.push(`<${tag}> referencing ${id} removed (${tag === 'drawing' ? 'charts/images' : tag} are not copied)`);
+      return '';
+    });
+    xml = xml.replace(/<(tableParts|controls|oleObjects|hyperlinks)\b[^>]*>\s*<\/\1>/g, '');
+    const dangling = [...xml.matchAll(/\sr:id="(rId\d+)"/g)].map((m) => m[1]).filter((id) => !keptIds.has(id));
+    if (dangling.length) throw new Error(`Sheet copy would leave dangling relationship ids: ${dangling.join(', ')}`);
+    this.assertStylesResolve(xml, await this.text('xl/styles.xml'));
 
     // 5. register the sheet
     this.zip.file(newPart, xml);
@@ -452,6 +461,19 @@ export class XlsxEditor {
     await this.refreshSheetMap();
     this.log.push(`sheet '${newName}' copied from '${sourceSheet}' (${newPart})${warnings.length ? ' with warnings' : ''}`);
     return { name: newName, partPath: newPart, warnings };
+  }
+
+  /** Every s="n" / dxfId="n" in a sheet must point inside this workbook's style tables. */
+  private assertStylesResolve(sheetXml: string, stylesXml: string): void {
+    const xfCount = listOf(stylesXml, 'cellXfs', 'xf').length;
+    const dxfCount = listOf(stylesXml, 'dxfs', 'dxf').length;
+    let maxS = -1;
+    for (const m of sheetXml.matchAll(/<(?:c|row)\s[^>]*?\ss="(\d+)"/g)) maxS = Math.max(maxS, Number(m[1]));
+    for (const m of sheetXml.matchAll(/<col\s[^>]*?\sstyle="(\d+)"/g)) maxS = Math.max(maxS, Number(m[1]));
+    let maxDxf = -1;
+    for (const m of sheetXml.matchAll(/\sdxfId="(\d+)"/g)) maxDxf = Math.max(maxDxf, Number(m[1]));
+    if (maxS >= xfCount) throw new Error(`Sheet copy references cell style ${maxS} but the workbook has ${xfCount} styles`);
+    if (maxDxf >= dxfCount) throw new Error(`Sheet copy references differential style ${maxDxf} but the workbook has ${dxfCount}`);
   }
 
   private nextRelId(rels: string): number {

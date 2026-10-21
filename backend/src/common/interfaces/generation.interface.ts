@@ -63,9 +63,18 @@ export interface ValidationReport {
     historicalEstimate: number;
   };
   errorCellsTotal: number;
+  /** Error cells per structural sheet: in the template, in the output, and in the cart's own rows. */
+  errorCellsBySheet: SheetErrorCount[];
   summary: string;
   /** sha256 of every source workbook read, proving they were only read. */
   sourceHashes?: Record<string, string>;
+}
+
+export interface SheetErrorCount {
+  sheet: string;
+  template: number;
+  output: number;
+  cartRows: number;
 }
 
 export interface GenerationResult {

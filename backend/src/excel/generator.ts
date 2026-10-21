@@ -44,6 +44,7 @@ export interface PlannedItem {
 
 export interface GenerationOutcome {
   outputFile: string;
+  templatePath: string;
   items: PlannedItem[];
   sheetsCopied: string[];
   sheetsModified: string[];
@@ -221,6 +222,7 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
 
   return {
     outputFile,
+    templatePath,
     items: planned,
     sheetsCopied,
     sheetsModified: [SHEETS.datiGen, SHEETS.elencoCosti, SHEETS.boq, SHEETS.costiParz, SHEETS.quantita, SHEETS.mdo],

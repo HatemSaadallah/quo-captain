@@ -138,6 +138,33 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
     ]);
   });
 
+  it('reports error cells per sheet and proves external links do not reach the cost chain', async () => {
+    const report = await validateGenerated(project, outcome, { performed: false, method: 'none', detail: 'test' }, 'ooxml');
+    expect(report.checks.some((c) => c.check === 'external-links-impact' && c.level === 'ok')).toBe(true);
+    expect(report.errorCellsBySheet.map((e) => e.sheet)).toEqual(expect.arrayContaining([SHEETS.elencoCosti, SHEETS.costiParz, SHEETS.indiretti]));
+    expect(report.errorCellsBySheet.every((e) => e.cartRows === 0)).toBe(true);
+  });
+
+  it('copies a sheet with hyperlinks across workbooks without dangling relationships', async () => {
+    const { XlsxEditor } = await import('../common/utils/xlsx-editor');
+    const JSZip = (await import('jszip')).default;
+    const ed = await XlsxEditor.open(path.join(INPUT_DIR, TEMPLATE));
+    const src = await JSZip.loadAsync(readFileSync(path.join(INPUT_DIR, 'TM2030-00 Analisi.xlsx')));
+    const res = await ed.copySheet(src, '123', '6');
+    expect(res.warnings.filter((w) => /dangling|hyperlink/.test(w))).toEqual([]);
+    const file = path.join(outDir, 'hyperlink-copy.xlsx');
+    await ed.save(file);
+    const out = await XlsxWorkbook.open(file);
+    const sheetXml = (await out.sheet('6')).xml;
+    const hl = /<hyperlink\s[^>]*r:id="(rId\d+)"/.exec(sheetXml);
+    expect(hl).not.toBeNull();
+    const rels = await out.zip.file(out.sheetPaths.get('6')!.replace(/worksheets\/(sheet\d+\.xml)$/, 'worksheets/_rels/$1.rels'))!.async('string');
+    expect(rels).toContain(`Id="${hl![1]}"`);
+    expect(rels).toContain('relationships/hyperlink');
+    for (const m of sheetXml.matchAll(/\sr:id="(rId\d+)"/g)) expect(rels).toContain(`Id="${m[1]}"`);
+    expect((await out.sheet('6')).cells.get('R1')?.f).toContain('CELL("FILENAME"');
+  });
+
   it('refuses an item without an analysis sheet', async () => {
     const bad: Project = { ...project, items: [{ id: 'x', ...itemFromCatalog(rec('TM1641-03#178'), 1) }], templateWorkbook: 'TM1641-03 Analisi.xlsx' };
     await expect(generateWorkbook({ project: bad, templatePath: path.join(INPUT_DIR, 'TM1641-03 Analisi.xlsx'), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no source analysis sheet/);
