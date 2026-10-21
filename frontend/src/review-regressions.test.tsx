@@ -32,6 +32,7 @@ vi.mock('./api', async (original) => {
       project: vi.fn(),
       updateProject: vi.fn(),
       me: vi.fn(),
+      login: vi.fn(),
       facets: vi.fn(),
       projects: vi.fn(),
       addItem: vi.fn(),
@@ -424,5 +425,32 @@ describe('web cost sheet request scope', () => {
     await act(async () => fireEvent.submit(screen.getByRole('form', { name: 'new row' })));
     expect(onError).toHaveBeenCalledWith('Invalid BOQ line');
     expect(screen.getByDisplayValue('Retain my BOQ description')).toBeTruthy();
+  });
+});
+
+describe('session request isolation', () => {
+  it('does not expose the previous user projects when a request finishes after logout and a new login', async () => {
+    const oldList = deferred<Project[]>(),
+      newList = deferred<Project[]>();
+    vi.mocked(api.projects).mockReturnValueOnce(oldList.promise).mockReturnValueOnce(newList.promise);
+    vi.mocked(api.me).mockResolvedValue({
+      id: 'old-user',
+      name: 'First user',
+      email: 'old@example.test',
+      role: 'estimator',
+    });
+    vi.mocked(api.facets).mockResolvedValue(facets);
+    vi.mocked(api.login).mockResolvedValue({
+      token: 'new-token',
+      user: { id: 'new-user', name: 'Second user', email: 'new@example.test', role: 'estimator' },
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-pass' } });
+    await act(async () => fireEvent.submit(screen.getByRole('form', { name: 'login form' })));
+    await act(async () => newList.resolve([{ ...project('B'), ownerId: 'new-user' }]));
+    await act(async () => oldList.resolve([{ ...project('A'), ownerId: 'old-user' }]));
+    expect(screen.queryByRole('option', { name: /Review A/ })).toBeNull();
+    expect(screen.getByRole('option', { name: /Review B/ })).toBeTruthy();
   });
 });

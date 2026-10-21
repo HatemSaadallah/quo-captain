@@ -22,11 +22,14 @@ export default function App() {
   const [current, setCurrent] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'elenco' | 'cart'>('elenco');
+  const projectsRequest = useRef(0);
   const currentId = useRef(current?.id);
   currentId.current = current?.id;
 
   useEffect(() => {
     onUnauthorized(() => {
+      projectsRequest.current++;
+      setProjectsLoaded(false);
       setUser(null);
       setCurrent(null);
       setProjects([]);
@@ -43,11 +46,14 @@ export default function App() {
   }, []);
 
   const loadProjects = useCallback(async (): Promise<void> => {
+    const request = ++projectsRequest.current;
     try {
-      setProjects(await api.projects());
+      const next = await api.projects();
+      if (request !== projectsRequest.current) return;
+      setProjects(next);
       setProjectsLoaded(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (request === projectsRequest.current) setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -96,6 +102,9 @@ export default function App() {
   };
 
   const logout = (): void => {
+    projectsRequest.current++;
+    setProjectsLoaded(false);
+    setError(null);
     api.logout();
     setUser(null);
     setCurrent(null);
