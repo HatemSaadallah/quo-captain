@@ -46,12 +46,19 @@ export interface RecalcResult {
 /** Open the file in Excel, recalculate everything, save in place. */
 export async function recalculateWithExcel(file: string, timeoutMs = 20 * 60_000): Promise<RecalcResult> {
   const posix = file.replace(/"/g, '\\"');
+  const name = file.split('/').pop()!.replace(/"/g, '\\"');
+  // The standard `open` (odoc) event is the only way a sandboxed Excel may read a file outside its
+  // container; Excel's own `open workbook workbook file name` silently does nothing for such paths.
+  // The first time, Excel asks to grant access to the folder: one click, remembered afterwards.
+  // `display alerts false` suppresses the external-links prompt (the linked .xlsb files are missing).
   const script = `with timeout of ${Math.ceil(timeoutMs / 1000)} seconds
 tell application "Microsoft Excel"
   try
     set display alerts to false
   end try
-  set wb to open workbook workbook file name "${posix}" update links do not update links
+  open (POSIX file "${posix}")
+  set wb to workbook "${name}"
+  set t0 to current date
   try
     calculate full rebuild
   on error
@@ -61,10 +68,11 @@ tell application "Microsoft Excel"
       calculate
     end try
   end try
+  set secs to (current date) - t0
   save wb
   set n to count of worksheets of wb
   close wb saving no
-  return "recalculated " & n & " sheets"
+  return "recalculated " & n & " sheets in " & secs & " s"
 end tell
 end timeout`;
   try {
