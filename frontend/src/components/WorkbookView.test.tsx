@@ -39,7 +39,7 @@ describe('WorkbookView', () => {
     const tabs = await screen.findAllByRole('tab');
     expect(tabs.map((t) => t.textContent)).toEqual(['ELENCO COSTI', '6']);
     const grid = screen.getByTestId('sheet-ELENCO COSTI');
-    await userEvent.click(within(grid).getByText('54.855', { exact: false }));
+    await userEvent.click(within(grid).getAllByText('54.855', { exact: false })[0]);
     expect(screen.getByText('=J6*E6')).toBeInTheDocument();
     await userEvent.click(within(grid).getByText('1.097,1'));
     expect(screen.getByText("=ROUND('costi parz.'!$BE6,1)")).toBeInTheDocument();
