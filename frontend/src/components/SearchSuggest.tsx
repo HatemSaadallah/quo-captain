@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, fmtMoney, type CatalogRecord } from '../api';
-import { cleanTitle, dims, imageOf, sourceOf, typologyOf, TYPOLOGIES, type Typology } from '../product';
+import { cleanTitle, dims, imageOf, isProduct, sourceOf, typologyOf, TYPOLOGIES, type Typology } from '../product';
 import { navigate } from '../route';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
   onTypology: (key: string) => void;
 }
 
-const POPULAR = ['glass windscreen h2000', 'divider with door', 'prefabricated balcony', 'teak decking', 'stainless steel handrail', 'jacuzzi installation'];
+const POPULAR = ['glass windscreen h2000', 'divider with door', 'prefabricated balcony', 'teak decking', 'glass sliding door', 'aluminium handrail'];
 
 type Item = { kind: 'query'; text: string } | { kind: 'typology'; t: Typology } | { kind: 'product'; r: CatalogRecord };
 
@@ -36,14 +36,14 @@ export function SearchSuggest({ q, setQ, busy, onSubmit, onTypology }: Props) {
     setLoading(true);
     const timer = setTimeout(() => {
       api
-        .search(query, { limit: 20 })
+        .search(query, { limit: 40 })
         .then((res) => {
           if (id !== seq.current) return;
           const seen = new Set<string>();
           setProducts(
             res.hits
               .map((h) => h.record)
-              .filter((r) => r.sheet && !seen.has(cleanTitle(r)) && seen.add(cleanTitle(r)))
+              .filter((r) => r.sheet && isProduct(r) && !seen.has(cleanTitle(r)) && seen.add(cleanTitle(r)))
               .slice(0, 6),
           );
         })

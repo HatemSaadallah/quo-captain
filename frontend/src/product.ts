@@ -8,8 +8,7 @@ export interface Typology {
 }
 
 // Order matters: the first match wins (piping before balcony, because "PIPING FOR BALCONY AREAS").
-export const TYPOLOGIES: Typology[] = [
-  { key: 'jacuzzi', label: 'Jacuzzi & Pool', test: /jacuzzi|whirlpool|swimming pool|waterslide|\bpool\b|\bspa\b/i },
+const ALL_TYPOLOGIES: Typology[] = [
   { key: 'piping', label: 'Piping & Drainage', test: /piping|\bpipe|scupper|drain|washing outlet|plumbing/i },
   { key: 'windscreen', label: 'Windscreen', test: /wind ?screen|windbreak/i },
   { key: 'door', label: 'Sliding Door', test: /\bdoors?\b/i },
@@ -19,11 +18,17 @@ export const TYPOLOGIES: Typology[] = [
   { key: 'hatch', label: 'Service Hatch', test: /hatch/i },
   { key: 'ceiling', label: 'Ceiling', test: /ceiling/i },
   { key: 'canopy', label: 'Canopy & Catwalk', test: /canop|catwalk|shelter|awning/i },
-  { key: 'deck', label: 'Deck Covering', test: /floor|deck cover|decking|teak|raised/i },
+  { key: 'deck', label: 'Flooring', test: /floor|deck cover|decking|teak|raised/i },
   { key: 'balcony', label: 'Pre-fab Balcony', test: /balcon|platform|pre-?fab/i },
+  { key: 'jacuzzi', label: 'Jacuzzi & Pool', test: /jacuzzi|whirlpool|swimming pool|waterslide|\bpool\b|\bspa\b/i },
   { key: 'electrical', label: 'Electrical & Lighting', test: /loudspeaker|\bled\b|light|electric|cabl/i },
   { key: 'cleaning', label: 'Protection & Cleaning', test: /clean|protection|washing|hand ?over/i },
 ];
+/** Somec's product range in these workbooks: glass envelope and flooring. Other workbook rows (piping, electrical, cleaning, pool works…) are services, not catalog products. */
+const PRODUCT_KEYS = new Set(['windscreen', 'balustrade', 'handrail', 'divider', 'door', 'balcony', 'deck']);
+export const TYPOLOGIES: Typology[] = ALL_TYPOLOGIES.filter((t) => PRODUCT_KEYS.has(t.key));
+const NOT_A_PRODUCT = /deduct|extra (cost|price|for)|^\s*option|addition of|only install|installation (works|of)|design|access equipment|shower|ice bar|light|electric|outlet|systems passing|positioning|temporary|weather cover|mock ?up|fixing points|sealing|blast/i;
+export const isProduct = (r: CatalogRecord): boolean => PRODUCT_KEYS.has(typologyOf(r).key) && !NOT_A_PRODUCT.test(r.title ?? '');
 const OUTFITTING: Typology = { key: 'outfitting', label: 'Outfitting Works', test: /$^/ };
 
 // Images: Wikimedia Commons, downloaded into public/products. Typologies without a dedicated photo reuse a close one.
@@ -43,10 +48,10 @@ export const MATERIALS: Array<{ label: string; test: RegExp }> = [
 
 const hash = (s: string): number => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
-export function typologyOf(r: CatalogRecord): Typology {
+export function typologyOf(r: Pick<CatalogRecord, "title" | "categoryName" | "description">): Typology {
   for (const text of [r.title, r.categoryName, (r.description ?? '').slice(0, 400)]) {
     if (!text) continue;
-    const t = TYPOLOGIES.find((ty) => ty.test.test(text));
+    const t = ALL_TYPOLOGIES.find((ty) => ty.test.test(text));
     if (t) return t;
   }
   return OUTFITTING;
@@ -94,6 +99,7 @@ export function rankSimilar(target: CatalogRecord, hits: SearchHit[]): SimilarPr
   const seen = new Set([`${cleanTitle(target)}|${target.unitCost}`]);
   return hits
     .filter((h) => {
+      if (!isProduct(h.record)) return false;
       const k = `${cleanTitle(h.record)}|${h.record.unitCost}`;
       if (seen.has(k)) return false;
       seen.add(k);

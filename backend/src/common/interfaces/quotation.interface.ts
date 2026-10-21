@@ -45,9 +45,13 @@ export interface GenerationSummary {
   engine: string;
 }
 
+export type QuotationStatus = 'draft' | 'active';
+
 export interface Quotation {
   id: string;
   ownerId: string;
+  projectId: string;
+  projectName: string;
   name: string;
   customer: string;
   /** Offer number: becomes the file name and DATI GEN.!C5 (e.g. TM2099-00). */
@@ -55,6 +59,8 @@ export interface Quotation {
   date: string;
   estimator: string;
   templateWorkbook: string;
+  /** draft = cart being built; active = confirmed. */
+  status: QuotationStatus;
   items: QuotationItem[];
   createdAt: string;
   updatedAt: string;
@@ -79,14 +85,15 @@ export interface QuotationValidation {
 
 export interface CreateQuotationDto {
   name: string;
-  customer?: string;
-  reference?: string;
-  date?: string;
-  estimator?: string;
-  templateWorkbook?: string;
+  projectId: string;
+  reference: string;
+  date: string;
+  estimator: string;
+  templateWorkbook: string;
+  status?: QuotationStatus;
 }
 
-export type UpdateQuotationDto = Partial<Pick<Quotation, 'name' | 'customer' | 'reference' | 'date' | 'estimator' | 'templateWorkbook'>>;
+export type UpdateQuotationDto = Partial<Pick<Quotation, 'name' | 'projectId' | 'reference' | 'date' | 'estimator' | 'templateWorkbook' | 'status'>>;
 
 export interface AddItemDto {
   catalogId: string;

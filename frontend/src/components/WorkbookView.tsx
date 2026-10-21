@@ -20,7 +20,6 @@ export function WorkbookView({ quotation, onQuotation, onError }: Props) {
   const [active, setActive] = useState(0);
   const [selected, setSelected] = useState<GridCell | null>(null);
   const [editing, setEditing] = useState<{ cell: GridCell; draft: string } | null>(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const quotationId = quotation.id;
@@ -75,17 +74,6 @@ export function WorkbookView({ quotation, onQuotation, onError }: Props) {
     if (e.key === 'Escape') setEditing(null);
   };
 
-  const exportPdf = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      await api.downloadPdf(quotation.id, quotation.reference);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (!wb || !sheet) return <section className="panel muted">Generating the web workbook…</section>;
   const selectedItemId = selected?.edit?.itemId ?? (sheet.kind === 'analysis' ? sheet.itemId : undefined);
 
@@ -96,9 +84,6 @@ export function WorkbookView({ quotation, onQuotation, onError }: Props) {
           Generated quotation <span className="muted small">{wb.reference} · web workbook, clickable like Excel</span>
         </h2>
         <span style={{ flex: 1 }} />
-        <button className="primary" onClick={() => void exportPdf()} disabled={busy}>
-          {busy ? '…' : '⬇ Export PDF'}
-        </button>
         <button onClick={() => window.print()}>Print</button>
       </div>
       <div className="formula-bar">

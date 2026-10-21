@@ -25,11 +25,11 @@ import { elencoCostiPdf } from './pdf';
 import { analysisSheet, elencoCostiSheet } from './workbook-view';
 import { attachTab, blankRow, itemFromCatalog, validateQuotation, type NewItem } from './quotation.rules';
 
-type QuotationRow = Prisma.QuotationGetPayload<{ include: { items: true; generations: true } }>;
+type QuotationRow = Prisma.QuotationGetPayload<{ include: { items: true; generations: true; project: { include: { customer: true } } } }>;
 type ItemRow = Prisma.QuotationItemGetPayload<Record<string, never>>;
 type GenerationRow = Prisma.GenerationGetPayload<Record<string, never>>;
 
-const INCLUDE = { items: { orderBy: { sortOrder: 'asc' } }, generations: { orderBy: { createdAt: 'desc' } } } as const;
+const INCLUDE = { items: { orderBy: { sortOrder: 'asc' } }, generations: { orderBy: { createdAt: 'desc' } }, project: { include: { customer: true } } } as const;
 
 function toItem(r: ItemRow): QuotationItem {
   return {
@@ -77,15 +77,19 @@ function toGeneration(g: GenerationRow): GenerationSummary {
 }
 
 function toQuotation(p: QuotationRow): Quotation {
+  if (!p.project) throw new Error(`Quotation ${p.id} has no project`);
   return {
     id: p.id,
     ownerId: p.ownerId,
+    projectId: p.projectId!,
+    projectName: p.project.name,
     name: p.name,
-    customer: p.customer,
+    customer: p.project.customer.name,
     reference: p.reference,
     date: p.date,
     estimator: p.estimator,
     templateWorkbook: p.templateWorkbook,
+    status: p.status === 'active' ? 'active' : 'draft',
     items: p.items.map(toItem),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -141,13 +145,16 @@ export class QuotationsService {
     const name = requireText(input.name ?? '', 'name');
     if (!name) throw new BadRequestException('name is required');
     const templates = this.catalog.workbooks.map((w) => w.workbook);
-    const templateWorkbook = String(input.templateWorkbook ?? templates[0] ?? '');
+    const templateWorkbook = requireText(input.templateWorkbook ?? '', 'templateWorkbook');
     if (templateWorkbook && !templates.includes(templateWorkbook)) throw new BadRequestException(`Unknown template workbook ${templateWorkbook}`);
+    const project = await this.prisma.project.findFirst({ where: { id: input.projectId, ownerId: userId }, include: { customer: true } });
+    if (!project) throw new BadRequestException('A project attached to a customer is required');
     const row = await this.prisma.quotation.create({
       data: {
         ownerId: userId,
         name,
-        customer: requireText(input.customer ?? '', 'customer'),
+        customer: project.customer.name,
+        projectId: project.id,
         reference: requireText(input.reference ?? '', 'reference'),
         date: requireText(input.date ?? new Date().toISOString().slice(0, 10), 'date'),
         estimator: requireText(input.estimator ?? '', 'estimator'),
@@ -161,12 +168,22 @@ export class QuotationsService {
   async update(id: string, patch: UpdateQuotationDto, userId: string): Promise<Quotation> {
     await this.get(id, userId);
     const data: Prisma.QuotationUpdateInput = {};
-    for (const k of ['name', 'customer', 'reference', 'date', 'estimator', 'templateWorkbook'] as const) {
+    for (const k of ['name', 'reference', 'date', 'estimator', 'templateWorkbook'] as const) {
       const v = patch[k];
       if (v !== undefined) data[k] = requireText(v, k);
     }
+    if (patch.projectId !== undefined) {
+      const project = await this.prisma.project.findFirst({ where: { id: patch.projectId, ownerId: userId }, include: { customer: true } });
+      if (!project) throw new BadRequestException('Project not found');
+      data.project = { connect: { id: project.id } };
+      data.customer = project.customer.name;
+    }
     if (data.templateWorkbook && !this.catalog.workbooks.some((w) => w.workbook === data.templateWorkbook)) {
       throw new BadRequestException(`Unknown template workbook ${String(data.templateWorkbook)}`);
+    }
+    if (patch.status !== undefined) {
+      if (patch.status !== 'draft' && patch.status !== 'active') throw new BadRequestException('status must be draft or active');
+      data.status = patch.status;
     }
     const row = await this.prisma.quotation.update({ where: { id }, data, include: INCLUDE });
     return toQuotation(row);
@@ -202,7 +219,9 @@ export class QuotationsService {
       if (v !== undefined) overrides[k] = requireText(v, k);
     }
     const q = input.quantity === undefined ? (rec.quantity ?? 1) : requirePositive(input.quantity, 'quantity');
-    const item = itemFromCatalog(rec, q, overrides);
+    const item = rec.custom
+      ? blankRow({ position: undefined, itemCode: rec.itemCode ?? undefined, description: rec.description ?? rec.title ?? '', unit: rec.unit ?? undefined, quantity: q, L: rec.L, H: rec.H })
+      : itemFromCatalog(rec, q, overrides);
     item.referenceTabId = await this.referenceTabIdFor(item.catalogId);
     await this.prisma.quotationItem.create({ data: { ...itemData(item), sortOrder: await this.nextSortOrder(id), quotationId: id } });
     await this.touch(id);

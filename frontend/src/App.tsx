@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Quotation } from './api';
+import { CartWorkspace } from './components/CartWorkspace';
+import { ContactsPage } from './components/ContactsPage';
+import { ProjectsPage } from './components/ProjectsPage';
 import { ProductHome } from './components/ProductHome';
 import { ProductPage } from './components/ProductPage';
 import { Login } from './components/Login';
 import { NewQuotation } from './components/NewQuotation';
 import { QuotationList } from './components/QuotationList';
 import { QuotationPage } from './components/QuotationPage';
+import { WorkspaceAssistant } from './components/WorkspaceAssistant';
 import { navigate, useRoute } from './route';
 
 export default function App() {
@@ -14,6 +18,23 @@ export default function App() {
   const [facets, setFacets] = useState<CatalogFacets | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [cartId, setCartIdState] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('somec.cart');
+    } catch {
+      return null;
+    }
+  });
+  const [toast, setToast] = useState<{ text: string; quotationId: string } | null>(null);
+  const [globalQuery, setGlobalQuery] = useState('');
+  const setCartId = (id: string): void => {
+    setCartIdState(id);
+    try {
+      localStorage.setItem('somec.cart', id);
+    } catch {
+      // per-browser convenience only
+    }
+  };
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -54,18 +75,25 @@ export default function App() {
     [loadQuotations],
   );
 
-  const addTo = async (quotationId: string, record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>): Promise<void> => {
+  const addTo = async (quotationId: string, record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>): Promise<boolean> => {
     try {
       let p = await api.addItem(quotationId, { catalogId: record.id, quantity });
       const added = p.items[p.items.length - 1];
       const changed = params.filter((x) => added.params.find((ap) => ap.cell === x.cell)?.value !== x.value);
       if (changed.length) p = await api.updateItem(p.id, added.id, { params: changed });
       onQuotation(p);
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      void api.quotation(quotationId).then(onQuotation).catch(() => undefined);
+      return false;
     }
   };
 
+  /** The selected draft quotation is the current working quotation. */
+  const drafts = quotations.filter((q) => q.status === 'draft').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const cart = drafts.find((q) => q.id === cartId) ?? drafts[0] ?? null;
+  const [workspaceTab, setWorkspaceTab] = useState('elenco');
   const deleteQuotation = async (p: Quotation): Promise<void> => {
     if (!confirm(`Delete quotation "${p.reference || p.name}" and its rows?`)) return;
     try {
@@ -87,8 +115,8 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const current = route.page === 'quotation' || route.page === 'new' ? (quotations.find((p) => p.id === route.id) ?? null) : null;
-  const navItem = (page: 'catalog' | 'quotations' | 'new', label: string, icon: string, active: boolean): ReactElement => (
-    <button className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(page === 'new' ? { page: 'new', step: 1 } : { page })}>
+  const navItem = (page: 'catalog' | 'quotations' | 'contacts' | 'projects', label: string, icon: string, active: boolean): ReactElement => (
+    <button className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(page === 'quotations' ? { page: 'quotations' } : { page })}>
       <span className="icon">{icon}</span> {label}
     </button>
   );
@@ -104,22 +132,44 @@ export default function App() {
           </div>
         </div>
         <nav>
+          {navItem('projects', 'Projects', '⌂', route.page === 'projects')}
           {navItem('catalog', 'Catalog', '▦', route.page === 'catalog' || route.page === 'product')}
-          {navItem('quotations', 'Quotations', '≣', route.page === 'quotations' || route.page === 'quotation')}
-          {navItem('new', 'New quotation', '＋', route.page === 'new')}
+          {navItem('quotations', 'Quotations', '≣', route.page === 'quotations' || route.page === 'quotation' || route.page === 'new')}
+          {navItem('contacts', 'Contacts', '☎', route.page === 'contacts')}
         </nav>
-        <div className="sidebar-foot small">
-          <div>{facets ? `${facets.recordCount} analyses · ${facets.workbooks.length} workbooks` : 'loading catalog…'}</div>
-          <div className="muted">costs are estimated costs, not selling prices</div>
-          <div style={{ marginTop: 8 }}>
-            {user.name} <span className="muted">({user.role})</span>
-          </div>
-          <button onClick={logout} style={{ marginTop: 4, padding: '2px 8px' }}>
-            Sign out
-          </button>
+        <div className="carts-nav">
+          <div className="carts-head">Draft Quotations</div>
+          {drafts.slice(0, 6).map((d) => (
+            <button
+              key={d.id}
+              className={`cart-nav ${cart?.id === d.id ? 'active' : ''}`}
+              onClick={() => {
+                setCartId(d.id);
+                navigate({ page: 'quotations' });
+              }}
+            >
+              <span className="icon">🛒</span>
+              <span className="cart-text">
+                {d.reference || '(no ref)'}
+                <small>{d.name}</small>
+              </span>
+              <span className="cart-badge">{d.items.length}</span>
+            </button>
+          ))}
+          {drafts.length > 6 && (
+            <button className="carts-more" onClick={() => navigate({ page: 'quotations', status: 'draft' })}>
+              +{drafts.length - 6} more drafts
+            </button>
+          )}
+          <button className="carts-new" onClick={() => navigate({ page: 'quotations' })}>View Draft Quotations</button>
+        </div>
+        <div className="sidebar-foot">
+          <div className="sidebar-account"><span className="sidebar-user-avatar">{user.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span className="sidebar-user-copy"><strong>{user.name}</strong><small>{user.role}</small></span></div>
+          <button className="sidebar-signout" onClick={logout}><span aria-hidden="true">↪</span> Sign out</button>
         </div>
       </aside>
       <main className="content">
+        <div className="global-search"><span>⌕</span><input value={globalQuery} onChange={(e) => setGlobalQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && globalQuery.trim()) navigate({ page: 'catalog', q: globalQuery.trim() }); }} placeholder="Search products, materials, codes…" aria-label="Global catalog search" /><button onClick={() => globalQuery.trim() && navigate({ page: 'catalog', q: globalQuery.trim() })}>Search</button></div>
         {error && (
           <div className="error-box" style={{ marginBottom: 12 }}>
             {error}{' '}
@@ -128,12 +178,54 @@ export default function App() {
             </button>
           </div>
         )}
-        {route.page === 'catalog' && <ProductHome facets={facets} onError={setError} />}
-        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} onAdd={(qid, r, q) => addTo(qid, r, q, [])} onError={setError} />}
-        {route.page === 'quotations' && <QuotationList quotations={quotations} onDelete={(p) => void deleteQuotation(p)} />}
-        {route.page === 'quotation' && (current ? <QuotationPage quotation={current} facets={facets} tab={route.tab} onQuotation={onQuotation} onAdd={(r, q, prm) => addTo(current.id, r, q, prm)} onError={setError} /> : <section className="panel muted">{quotations.length ? 'Quotation not found.' : 'Loading…'}</section>)}
-        {route.page === 'new' && <NewQuotation facets={facets} quotation={current} step={route.step} onQuotation={onQuotation} onAdd={(r, q, prm) => (current ? addTo(current.id, r, q, prm) : Promise.resolve())} onError={setError} />}
+        {route.page === 'catalog' && <ProductHome facets={facets} quotations={quotations} estimator={user.name} initialQuery={route.q} initialCreate={route.create} onError={setError} onAddToQuotation={(r, id) => addTo(id, r, 1, [])} />}
+        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity) => addTo(id, r, quantity, [])} onError={setError} />}
+        {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
+        {route.page === 'projects' && <ProjectsPage onError={setError} />}
+        {route.page === 'quotations' && !route.status && (
+          <CartWorkspace drafts={drafts} current={cart} facets={facets} estimator={user.name} onError={setError} onSelect={setCartId} onCreated={(q) => { onQuotation(q); setCartId(q.id); }}>
+            {cart && (
+              <QuotationPage
+                quotation={cart}
+                isCart
+                onMakeCart={() => undefined}
+                onConfirmed={(q) => {
+                  setToast({ text: `${q.reference || q.name} confirmed · now an active quotation`, quotationId: q.id });
+                  window.setTimeout(() => setToast(null), 4500);
+                }}
+                facets={facets}
+                tab={workspaceTab}
+                onTab={setWorkspaceTab}
+                onQuotation={onQuotation}
+                onAdd={async (r, q, prm) => { await addTo(cart.id, r, q, prm); }}
+                onError={setError}
+              />
+            )}
+          </CartWorkspace>
+        )}
+        {route.page === 'quotations' && route.status && <QuotationList quotations={quotations} cartId={cart?.id ?? null} status={route.status} onDelete={(p) => void deleteQuotation(p)} />}
+        {route.page === 'quotation' && (current ? <QuotationPage quotation={current} isCart={cart?.id === current.id} onMakeCart={() => setCartId(current.id)}
+            onConfirmed={(q) => {
+              setToast({ text: `${q.reference || q.name} confirmed · now an active quotation`, quotationId: q.id });
+              window.setTimeout(() => setToast(null), 4500);
+            }} facets={facets} tab={route.tab} onQuotation={onQuotation} onAdd={async (r, q, prm) => { await addTo(current.id, r, q, prm); }} onError={setError} /> : <section className="panel muted">{quotations.length ? 'Quotation not found.' : 'Loading…'}</section>)}
+        {route.page === 'new' && <NewQuotation facets={facets} quotation={current} step={route.step} onQuotation={onQuotation} onAdd={async (r, q, prm) => { if (current) await addTo(current.id, r, q, prm); }} onError={setError} />}
       </main>
+      <WorkspaceAssistant quotations={quotations} facets={facets} onError={setError} />
+      {toast && (
+        <div className="toast" role="status">
+          <span className="toast-ok">✓</span>
+          <span>{toast.text}</span>
+          <button
+            onClick={() => {
+              setCartId(toast.quotationId);
+            navigate(quotations.find((q) => q.id === toast.quotationId)?.status === 'draft' ? { page: 'quotations' } : { page: 'quotation', id: toast.quotationId, tab: 'elenco' });
+            }}
+          >
+            View quotation →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
