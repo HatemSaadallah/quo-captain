@@ -1,10 +1,10 @@
-/** Pure business rules for quotation projects (the cart / web ELENCO COSTI). No I/O. */
+/** Pure business rules for quotations (the cart / web ELENCO COSTI). No I/O. */
 import type { CatalogRecord, WorkbookSummary } from '../../common/interfaces/catalog.interface';
-import type { AddRowDto, ItemParam, Project, ProjectItem, ProjectValidation, ValidationIssue } from '../../common/interfaces/project.interface';
+import type { AddRowDto, ItemParam, Quotation, QuotationItem, QuotationValidation, ValidationIssue } from '../../common/interfaces/quotation.interface';
 import { SHEETS } from '../../excel/somec-schema';
 import { unitCostOf, unitsCompatible } from './elenco-costi';
 
-export type NewItem = Omit<ProjectItem, 'id'>;
+export type NewItem = Omit<QuotationItem, 'id'>;
 
 export function itemFromCatalog(r: CatalogRecord, quantity: number, overrides: Partial<NewItem> = {}): NewItem {
   const params: ItemParam[] = r.params
@@ -60,7 +60,7 @@ export function blankRow(input: AddRowDto): NewItem {
 }
 
 /** Attach a reference tab to a row: provenance, historical cost and parameters come from the tab; the row keeps its own text unless `overwrite`. */
-export function attachTab(row: ProjectItem, tab: CatalogRecord, overwrite: boolean): NewItem {
+export function attachTab(row: QuotationItem, tab: CatalogRecord, overwrite: boolean): NewItem {
   const fromTab = itemFromCatalog(tab, row.quantity);
   const keep = (own: string, tabValue: string): string => (overwrite || !own.trim() ? tabValue : own);
   return {
@@ -83,12 +83,12 @@ export function isValidReference(ref: string): boolean {
   return REFERENCE_RE.test(ref) && !/\.xls/i.test(ref);
 }
 
-export function validateProject(p: Project, template: WorkbookSummary | null, tabUnitOf?: (catalogId: string) => string | null | undefined): ProjectValidation {
+export function validateQuotation(p: Quotation, template: WorkbookSummary | null, tabUnitOf?: (catalogId: string) => string | null | undefined): QuotationValidation {
   const issues: ValidationIssue[] = [];
   const push = (level: ValidationIssue['level'], message: string, itemId?: string): void => {
     issues.push(itemId ? { level, itemId, message } : { level, message });
   };
-  if (!p.name?.trim()) push('error', 'Project name is required');
+  if (!p.name?.trim()) push('error', 'Quotation name is required');
   if (!p.reference?.trim()) push('error', 'Reference number is required (it becomes the offer number and file name)');
   else if (!isValidReference(p.reference)) push('error', 'Reference may only contain letters, digits, spaces, "-", "_" and "."');
   if (!p.customer?.trim()) push('warning', 'Customer is empty');

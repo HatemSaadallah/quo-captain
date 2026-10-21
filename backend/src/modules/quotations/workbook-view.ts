@@ -2,7 +2,7 @@
  * Builds the web workbook: the ELENCO COSTI sheet laid out like the original (same columns and
  * formulas, rows starting at 6) and one evaluated analysis sheet per cost row.
  */
-import type { ElencoCosti, Project, ProjectItem } from '../../common/interfaces/project.interface';
+import type { ElencoCosti, Quotation, QuotationItem } from '../../common/interfaces/quotation.interface';
 import type { GridCell, GridSheet } from '../../common/interfaces/workbook-view.interface';
 import type { Value } from '../../common/utils/formula-engine';
 import { ExcelError } from '../../common/utils/formula-engine';
@@ -10,23 +10,23 @@ import { EC } from '../../excel/somec-schema';
 
 const EC_COLS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
 
-export function elencoCostiSheet(project: Project, ec: ElencoCosti): GridSheet {
+export function elencoCostiSheet(quotation: Quotation, ec: ElencoCosti): GridSheet {
   const cells: GridCell[] = [];
   const header: Record<string, string> = { A: 'Pos.', B: 'Item', C: 'DESCRIPTION', D: 'M.U.', E: 'Q.ty', F: 'L (mm)', G: 'H (mm)', H: 'm² unit', I: 'm² total', J: 'Unit Cost €', K: 'Total Cost €', L: 'Detail sheet', M: 'Lotto' };
-  cells.push({ addr: 'A1', v: 'Offer N°:', kind: 'label' }, { addr: 'C1', v: project.reference, kind: 'formula', f: "'DATI GEN.'!$C$5", source: 'project' }, { addr: 'D1', v: 'Date:', kind: 'label' }, { addr: 'E1', v: project.date, kind: 'formula', f: "'DATI GEN.'!$C$6", source: 'project' }, { addr: 'F1', v: 'Client:', kind: 'label' }, { addr: 'G1', v: project.customer, kind: 'formula', f: "'DATI GEN.'!$C$7", source: 'project' }, { addr: 'I1', v: 'Project:', kind: 'label' }, { addr: 'J1', v: project.name, kind: 'formula', f: "'DATI GEN.'!$C$8", source: 'project' });
+  cells.push({ addr: 'A1', v: 'Offer N°:', kind: 'label' }, { addr: 'C1', v: quotation.reference, kind: 'formula', f: "'DATI GEN.'!$C$5", source: 'quotation' }, { addr: 'D1', v: 'Date:', kind: 'label' }, { addr: 'E1', v: quotation.date, kind: 'formula', f: "'DATI GEN.'!$C$6", source: 'quotation' }, { addr: 'F1', v: 'Client:', kind: 'label' }, { addr: 'G1', v: quotation.customer, kind: 'formula', f: "'DATI GEN.'!$C$7", source: 'quotation' }, { addr: 'I1', v: 'Quotation:', kind: 'label' }, { addr: 'J1', v: quotation.name, kind: 'formula', f: "'DATI GEN.'!$C$8", source: 'quotation' });
   for (const [c, h] of Object.entries(header)) cells.push({ addr: `${c}${EC.headerRow}`, v: h, kind: 'header' });
   const rowOf = new Map<string, number>();
   ec.rows.forEach((r, i) => {
     const row = EC.firstRow + i;
     rowOf.set(r.itemId, row);
-    const item = project.items.find((it) => it.id === r.itemId) as ProjectItem;
+    const item = quotation.items.find((it) => it.id === r.itemId) as QuotationItem;
     const edit = (field: NonNullable<GridCell['edit']>['field']): GridCell['edit'] => ({ itemId: r.itemId, field });
     cells.push(
       { addr: `A${row}`, v: r.position, kind: 'input', edit: edit('position') },
       { addr: `B${row}`, v: r.itemCode, kind: 'input', edit: edit('itemCode') },
       { addr: `C${row}`, v: r.description, kind: 'input', edit: edit('description') },
       { addr: `D${row}`, v: r.unit, kind: 'input', edit: edit('unit') },
-      { addr: `E${row}`, v: r.quantity, kind: 'input', f: `BOQ!I${row + 2}`, edit: edit('quantity'), source: 'project (BOQ quantity)' },
+      { addr: `E${row}`, v: r.quantity, kind: 'input', f: `BOQ!I${row + 2}`, edit: edit('quantity'), source: 'quotation (BOQ quantity)' },
       { addr: `F${row}`, v: r.L, kind: 'input', edit: edit('L') },
       { addr: `G${row}`, v: r.H, kind: 'input', edit: edit('H') },
       { addr: `H${row}`, v: r.m2Unit, kind: 'formula', f: `IF(AND(D${row}="m",G${row}<>0),G${row}/1000,G${row}*F${row}/1000000)` },
@@ -61,7 +61,7 @@ export function elencoCostiSheet(project: Project, ec: ElencoCosti): GridSheet {
 
 const toGridValue = (v: Value): { v: GridCell['v']; err?: string } => (v instanceof ExcelError ? { v: v.code, err: v.code } : { v });
 
-export function analysisSheet(item: ProjectItem, row: number, grid: { cells: Array<{ addr: string; v: Value; f?: string }>; maxRow: number }, title: string): GridSheet {
+export function analysisSheet(item: QuotationItem, row: number, grid: { cells: Array<{ addr: string; v: Value; f?: string }>; maxRow: number }, title: string): GridSheet {
   const cells: GridCell[] = [];
   const rowsSet = new Set<number>();
   const colsSet = new Set<string>();
@@ -73,7 +73,7 @@ export function analysisSheet(item: ProjectItem, row: number, grid: { cells: Arr
     const isParam = paramCells.has(c.addr);
     const cell: GridCell = { addr: c.addr, v: gv.v, kind: c.f ? 'formula' : isParam ? 'input' : typeof gv.v === 'string' ? 'label' : 'input', ...(c.f ? { f: c.f } : {}), ...(gv.err ? { err: gv.err } : {}) };
     if (isParam) cell.edit = { itemId: item.id, field: 'param', cell: c.addr };
-    if (c.addr === 'T3') cell.source = 'project quantity';
+    if (c.addr === 'T3') cell.source = 'quotation quantity';
     if (/^[DGHRS]\d+$/.test(c.addr) && c.f && /DATI GEN/.test(c.f)) cell.source = `${item.sourceWorkbook} price list`;
     cells.push(cell);
     rowsSet.add(r);
@@ -81,5 +81,5 @@ export function analysisSheet(item: ProjectItem, row: number, grid: { cells: Arr
   }
   const cols = [...colsSet].sort((a, b) => a.length - b.length || a.localeCompare(b));
   const rows = [...rowsSet].sort((a, b) => a - b);
-  return { name: String(row), kind: 'analysis', itemId: item.id, title, cols, rows, cells, widths: { B: 34, C: 10, D: 9, J: 26, K: 8, P: 24 }, note: `Evaluated from the stored logic of ${item.sourceOfferNo ?? item.sourceWorkbook} sheet ${item.sourceSheet} with this project's quantity (${item.quantity}) and parameters; price list of ${item.sourceWorkbook}.` };
+  return { name: String(row), kind: 'analysis', itemId: item.id, title, cols, rows, cells, widths: { B: 34, C: 10, D: 9, J: 26, K: 8, P: 24 }, note: `Evaluated from the stored logic of ${item.sourceOfferNo ?? item.sourceWorkbook} sheet ${item.sourceSheet} with this quotation's quantity (${item.quantity}) and parameters; price list of ${item.sourceWorkbook}.` };
 }

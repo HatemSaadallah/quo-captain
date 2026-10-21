@@ -11,16 +11,16 @@ export interface GridCell {
   kind: GridCellKind;
   /** Error code when the evaluation produced an Excel error. */
   err?: string;
-  /** For editable inputs: which project field the cell maps to. */
+  /** For editable inputs: which quotation field the cell maps to. */
   edit?: { itemId: string; field: 'quantity' | 'unitCostOverride' | 'param' | 'position' | 'itemCode' | 'description' | 'unit' | 'L' | 'H'; cell?: string };
-  /** Where the value comes from (source workbook/sheet/cell or 'project'). */
+  /** Where the value comes from (source workbook/sheet/cell or 'quotation'). */
   source?: string;
 }
 
 export interface GridSheet {
   name: string;
   kind: 'elenco' | 'analysis';
-  /** Project item behind an analysis sheet. */
+  /** Quotation item behind an analysis sheet. */
   itemId?: string;
   title?: string;
   cols: string[];
@@ -32,7 +32,7 @@ export interface GridSheet {
 }
 
 export interface WorkbookView {
-  projectId: string;
+  quotationId: string;
   reference: string;
   generatedAt: string;
   sheets: GridSheet[];
@@ -71,7 +71,7 @@ export interface Benchmark {
   query: string;
   examples: BenchmarkExample[];
   categories: BenchmarkCategoryRow[];
-  /** Historical projects (workbooks) ranked by how many comparable tabs they contribute. */
-  projects: Array<{ workbook: string; offerNo: string | null; client: string | null; projectName: string | null; projectDate: string | null; matches: number }>;
+  /** Historical quotations (workbooks) ranked by how many comparable tabs they contribute. */
+  quotations: Array<{ workbook: string; offerNo: string | null; client: string | null; projectName: string | null; projectDate: string | null; matches: number }>;
   stats: { min: number | null; median: number | null; max: number | null; own: number | null; unit: string | null };
 }

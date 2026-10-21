@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import type { Project, ProjectItem } from '../../common/interfaces/project.interface';
+import type { Quotation, QuotationItem } from '../../common/interfaces/quotation.interface';
 import { computeElencoCosti } from './elenco-costi';
 import { elencoCostiSheet } from './workbook-view';
 
-const item = (id: string, over: Partial<ProjectItem> = {}): ProjectItem => ({
+const item = (id: string, over: Partial<QuotationItem> = {}): QuotationItem => ({
   id,
   catalogId: 'TM1643-06#10',
   referenceTabId: null,
@@ -27,10 +27,10 @@ const item = (id: string, over: Partial<ProjectItem> = {}): ProjectItem => ({
   ...over,
 });
 
-const project: Project = { id: 'p', ownerId: 'u', name: 'Nave 4', customer: 'APEXA', reference: 'TM2099-00', date: '2026-10-21', estimator: 'e', templateWorkbook: 'TM1643-06 Analisi.xlsx', items: [item('a'), item('b', { itemCode: '01-02', quantity: 5, unitCostOverride: 1200 })], createdAt: '', updatedAt: '', generations: [] };
+const quotation: Quotation = { id: 'p', ownerId: 'u', name: 'Nave 4', customer: 'APEXA', reference: 'TM2099-00', date: '2026-10-21', estimator: 'e', templateWorkbook: 'TM1643-06 Analisi.xlsx', items: [item('a'), item('b', { itemCode: '01-02', quantity: 5, unitCostOverride: 1200 })], createdAt: '', updatedAt: '', generations: [] };
 
 describe('web workbook: ELENCO COSTI sheet layout', () => {
-  const sheet = elencoCostiSheet(project, computeElencoCosti(project));
+  const sheet = elencoCostiSheet(quotation, computeElencoCosti(quotation));
   const cell = (a: string) => sheet.cells.find((c) => c.addr === a);
 
   it('lays the rows out from row 6 with the sheet formulas and editable inputs', () => {

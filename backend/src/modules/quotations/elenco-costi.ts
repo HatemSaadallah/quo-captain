@@ -11,7 +11,7 @@
  * J is a historical cached value: it is NOT recomputed when parameters change.
  * Recomputing an analysis sheet is Excel's job (export + recalculation).
  */
-import type { ElencoCosti, ElencoCostiRow, ElencoCostiSummaryRow, Project, ProjectItem, UnitCostSource } from '../../common/interfaces/project.interface';
+import type { ElencoCosti, ElencoCostiRow, ElencoCostiSummaryRow, Quotation, QuotationItem, UnitCostSource } from '../../common/interfaces/quotation.interface';
 
 export const ELENCO_COSTI_FORMULAS: Record<string, string> = {
   'H (m² unit)': 'IF(AND(D="m",G<>0),G/1000,G*F/1000000)',
@@ -61,14 +61,14 @@ export interface ComputedUnitCost {
   unsupported: number;
 }
 
-export function unitCostOf(item: Pick<ProjectItem, 'unitCostOverride' | 'historicalUnitCost'>, computed?: ComputedUnitCost | null): { value: number | null; source: UnitCostSource } {
+export function unitCostOf(item: Pick<QuotationItem, 'unitCostOverride' | 'historicalUnitCost'>, computed?: ComputedUnitCost | null): { value: number | null; source: UnitCostSource } {
   if (item.unitCostOverride !== null && item.unitCostOverride !== undefined) return { value: round(item.unitCostOverride, 1), source: 'override' };
   if (computed && computed.unitCost !== null && computed.unsupported === 0) return { value: round(computed.unitCost, 1), source: 'computed' };
   if (item.historicalUnitCost !== null && item.historicalUnitCost !== undefined) return { value: round(item.historicalUnitCost, 1), source: 'historical' };
   return { value: null, source: 'none' };
 }
 
-export function computeRow(item: ProjectItem, line: number, templateWorkbook: string, computed?: ComputedUnitCost | null): ElencoCostiRow {
+export function computeRow(item: QuotationItem, line: number, templateWorkbook: string, computed?: ComputedUnitCost | null): ElencoCostiRow {
   const warnings: string[] = [];
   const h = m2Unit(item.unit, item.L, item.H);
   const i = m2Total(item.unit, item.quantity, h);
@@ -106,8 +106,8 @@ export function computeRow(item: ProjectItem, line: number, templateWorkbook: st
   };
 }
 
-export function computeElencoCosti(project: Project, computed: Map<string, ComputedUnitCost | null> = new Map()): ElencoCosti {
-  const rows = project.items.map((it, idx) => computeRow(it, idx + 1, project.templateWorkbook, computed.get(it.id)));
+export function computeElencoCosti(quotation: Quotation, computed: Map<string, ComputedUnitCost | null> = new Map()): ElencoCosti {
+  const rows = quotation.items.map((it, idx) => computeRow(it, idx + 1, quotation.templateWorkbook, computed.get(it.id)));
   let m2 = 0;
   let total = 0;
   let without = 0;
@@ -128,8 +128,8 @@ export function computeElencoCosti(project: Project, computed: Map<string, Compu
     .map((s) => ({ ...s, unitCost: s.m2Total !== 0 ? s.totalCost / s.m2Total : null }))
     .sort((a, b) => a.position.localeCompare(b.position));
   return {
-    projectId: project.id,
-    reference: project.reference,
+    quotationId: quotation.id,
+    reference: quotation.reference,
     rows,
     totals: { m2Total: m2, totalCost: total, rowsWithoutCost: without, complete: without === 0 },
     summary,

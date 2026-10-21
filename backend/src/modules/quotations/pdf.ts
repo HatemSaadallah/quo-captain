@@ -1,13 +1,13 @@
 /** PDF export of the web ELENCO COSTI (landscape A4) with pdfkit. */
 import PDFDocument from 'pdfkit';
-import type { ElencoCosti, Project } from '../../common/interfaces/project.interface';
+import type { ElencoCosti, Quotation } from '../../common/interfaces/quotation.interface';
 
 const eur = (v: number | null): string => (v === null ? '—' : v.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const num = (v: number | null, d = 0): string => (v === null ? '' : v.toLocaleString('it-IT', { maximumFractionDigits: d }));
 
-export function elencoCostiPdf(project: Project, ec: ElencoCosti): Promise<Buffer> {
+export function elencoCostiPdf(quotation: Quotation, ec: ElencoCosti): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 28, info: { Title: `${project.reference} ELENCO COSTI`, Author: 'Somec quotation generator' } });
+    const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 28, info: { Title: `${quotation.reference} ELENCO COSTI`, Author: 'Somec quotation generator' } });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -15,8 +15,8 @@ export function elencoCostiPdf(project: Project, ec: ElencoCosti): Promise<Buffe
 
     const left = doc.page.margins.left;
     const width = doc.page.width - left - doc.page.margins.right;
-    doc.fontSize(14).font('Helvetica-Bold').text(`ELENCO COSTI — Offer n° ${project.reference}`, left, doc.y);
-    doc.fontSize(9).font('Helvetica').text(`Client: ${project.customer}   Project: ${project.name}   Date: ${project.date}   Estimator: ${project.estimator}   Template: ${project.templateWorkbook}`);
+    doc.fontSize(14).font('Helvetica-Bold').text(`ELENCO COSTI — Offer n° ${quotation.reference}`, left, doc.y);
+    doc.fontSize(9).font('Helvetica').text(`Client: ${quotation.customer}   Quotation: ${quotation.name}   Date: ${quotation.date}   Estimator: ${quotation.estimator}   Template: ${quotation.templateWorkbook}`);
     doc.moveDown(0.3).fontSize(7).fillColor('#555').text('Estimated costs computed from historical analyses (reference tabs); not selling prices. J = unit cost of the attached analysis (computed / historical / manual override); H = m² unit; I = m² total; K = J × Q.ty.', { width });
     doc.fillColor('#000').moveDown(0.6);
 

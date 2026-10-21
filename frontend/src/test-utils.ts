@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import type { CatalogRecord } from '../../backend/src/common/interfaces/catalog.interface';
-import type { Project, ProjectItem } from '../../backend/src/common/interfaces/project.interface';
+import type { Quotation, QuotationItem } from '../../backend/src/common/interfaces/quotation.interface';
 
 /** Minimal catalog record resembling TM1643-06#10 (balcony 1600x2560). */
 export function record(over: Partial<CatalogRecord> = {}): CatalogRecord {
@@ -50,7 +50,7 @@ export function record(over: Partial<CatalogRecord> = {}): CatalogRecord {
   };
 }
 
-export function item(over: Partial<ProjectItem> = {}): ProjectItem {
+export function item(over: Partial<QuotationItem> = {}): QuotationItem {
   return {
     id: 'i1',
     catalogId: 'TM1643-06#10',
@@ -76,7 +76,7 @@ export function item(over: Partial<ProjectItem> = {}): ProjectItem {
   };
 }
 
-export function project(items: ProjectItem[] = [item()], over: Partial<Project> = {}): Project {
+export function quotation(items: QuotationItem[] = [item()], over: Partial<Quotation> = {}): Quotation {
   return {
     id: 'p1',
     ownerId: 'u1',

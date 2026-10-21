@@ -2,7 +2,7 @@
  * Evaluates a stored analysis sheet ("reference tab") with the formula engine,
  * without touching the workbook: cells (inputs + formulas) come from the tab's
  * stored cell map, external sheets (DATI GEN. price list, BDG Costi, indiretti,
- * ELENCO COSTI / costi parz. rows) from value snapshots plus the project's own
+ * ELENCO COSTI / costi parz. rows) from value snapshots plus the quotation's own
  * inputs (quantity, description), and the result is the sheet's unit cost (E67)
  * with its category breakdown.
  */
@@ -21,7 +21,7 @@ export interface SheetSnapshot {
 }
 
 export interface EvaluationInputs {
-  /** ELENCO COSTI!E<row>: quantity of the item in the project. */
+  /** ELENCO COSTI!E<row>: quantity of the item in the quotation. */
   quantity: number;
   /** ELENCO COSTI!B/C/D/M of the row (item code, description, unit, lotto) seen by the sheet's lookups. */
   itemCode: string;
@@ -171,7 +171,7 @@ export class SheetEvaluator {
     return i;
   }
 
-  private projectRowValue(sheet: string, col: string, row: number): Value | undefined {
+  private quotationRowValue(sheet: string, col: string, row: number): Value | undefined {
     if (sheet === SHEETS.elencoCosti && row === this.row) {
       if (col === 'A') return this.inputs.itemCode.split('-')[0] ?? '';
       if (col === 'B') return this.inputs.itemCode;
@@ -196,7 +196,7 @@ export class SheetEvaluator {
       rangeRows: (s, c1, c2, r1, r2) => {
         const name = s ?? sheet;
         if (name === SHEETS.elencoCosti || name === SHEETS.costiParz) {
-          // lookups into the item list see only the project's own row
+          // lookups into the item list see only the quotation's own row
           const snap = this.snapshots.sheets.get(name);
           const rows = new Set<number>([this.row]);
           if (snap) for (const r of this.index(name, snap).rows(c1, c2, r1, r2)) if (r < 6 || r > 400) rows.add(r);
@@ -219,7 +219,7 @@ export class SheetEvaluator {
   /** Value of any cell of any sheet (memoised). */
   get(sheet: string, col: string, row: number): Value {
     const addr = col + row;
-    const override = this.projectRowValue(sheet, col, row);
+    const override = this.quotationRowValue(sheet, col, row);
     if (override !== undefined) return override;
     if (sheet === this.sheetName) {
       if (addr in this.inputs.overrides) return this.inputs.overrides[addr];

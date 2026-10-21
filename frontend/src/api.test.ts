@@ -7,10 +7,10 @@ describe('api client', () => {
     setToken('tok');
     const fetch = mockFetch((method, path) => {
       expect(method).toBe('GET');
-      expect(path).toBe('/api/projects');
+      expect(path).toBe('/api/quotations');
       return [];
     });
-    await api.projects();
+    await api.quotations();
     const init = fetch.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok');
   });

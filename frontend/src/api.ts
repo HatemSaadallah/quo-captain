@@ -2,11 +2,11 @@
 import type { AuthUser, LoginResponse } from '../../backend/src/common/interfaces/auth.interface';
 import type { CatalogFacets, CatalogRecord, SearchHit, SearchResult } from '../../backend/src/common/interfaces/catalog.interface';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../backend/src/common/interfaces/generation.interface';
-import type { AddItemDto, AddRowDto, CreateProjectDto, ElencoCosti, Project, ProjectValidation, UpdateItemDto, UpdateProjectDto } from '../../backend/src/common/interfaces/project.interface';
+import type { AddItemDto, AddRowDto, CreateQuotationDto, ElencoCosti, Quotation, QuotationValidation, UpdateItemDto, UpdateQuotationDto } from '../../backend/src/common/interfaces/quotation.interface';
 import type { Benchmark, GridCell, GridSheet, WorkbookView } from '../../backend/src/common/interfaces/workbook-view.interface';
 
-export type { AuthUser, CatalogFacets, CatalogRecord, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Project, ProjectValidation, AddItemDto, AddRowDto, ElencoCosti, UpdateItemDto, Benchmark, GridCell, GridSheet, WorkbookView };
-export type ProjectItem = Project['items'][number];
+export type { AuthUser, CatalogFacets, CatalogRecord, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Quotation, QuotationValidation, AddItemDto, AddRowDto, ElencoCosti, UpdateItemDto, Benchmark, GridCell, GridSheet, WorkbookView };
+export type QuotationItem = Quotation['items'][number];
 
 export class ApiError extends Error {
   readonly status: number;
@@ -51,11 +51,12 @@ function headers(extra: Record<string, string> = {}): Record<string, string> {
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: headers() });
   if (!res.ok) {
-    let body: unknown = null;
+    const text = await res.text();
+    let body: unknown = text;
     try {
-      body = await res.json();
+      body = JSON.parse(text);
     } catch {
-      body = await res.text();
+      // plain-text error body
     }
     const msg = typeof body === 'object' && body && 'message' in body ? String((body as { message: unknown }).message) : res.statusText;
     if (res.status === 401 && !url.endsWith('/auth/login')) {
@@ -89,30 +90,30 @@ export const api = {
   record: (id: string): Promise<CatalogRecord> => request(`/api/catalog/${enc(id)}`),
   similar: (id: string, limit = 6): Promise<SearchHit[]> => request(`/api/catalog/${enc(id)}/similar?limit=${limit}`),
 
-  projects: (): Promise<Project[]> => request('/api/projects'),
-  project: (id: string): Promise<Project> => request(`/api/projects/${enc(id)}`),
-  createProject: (dto: CreateProjectDto): Promise<Project> => request('/api/projects', { method: 'POST', ...json(dto) }),
-  updateProject: (id: string, dto: UpdateProjectDto): Promise<Project> => request(`/api/projects/${enc(id)}`, { method: 'PATCH', ...json(dto) }),
-  deleteProject: (id: string): Promise<{ ok: true }> => request(`/api/projects/${enc(id)}`, { method: 'DELETE' }),
-  validation: (id: string): Promise<ProjectValidation> => request(`/api/projects/${enc(id)}/validation`),
-  addItem: (id: string, dto: AddItemDto): Promise<Project> => request(`/api/projects/${enc(id)}/items`, { method: 'POST', ...json(dto) }),
-  updateItem: (id: string, itemId: string, dto: UpdateItemDto): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}`, { method: 'PATCH', ...json(dto) }),
-  removeItem: (id: string, itemId: string): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}`, { method: 'DELETE' }),
-  elencoCosti: (id: string): Promise<ElencoCosti> => request(`/api/projects/${enc(id)}/elenco-costi`),
-  workbook: (id: string): Promise<WorkbookView> => request(`/api/projects/${enc(id)}/workbook`),
-  benchmark: (id: string, itemId: string, limit = 6): Promise<Benchmark> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/benchmark?limit=${limit}`),
+  quotations: (): Promise<Quotation[]> => request('/api/quotations'),
+  quotation: (id: string): Promise<Quotation> => request(`/api/quotations/${enc(id)}`),
+  createQuotation: (dto: CreateQuotationDto): Promise<Quotation> => request('/api/quotations', { method: 'POST', ...json(dto) }),
+  updateQuotation: (id: string, dto: UpdateQuotationDto): Promise<Quotation> => request(`/api/quotations/${enc(id)}`, { method: 'PATCH', ...json(dto) }),
+  deleteQuotation: (id: string): Promise<{ ok: true }> => request(`/api/quotations/${enc(id)}`, { method: 'DELETE' }),
+  validation: (id: string): Promise<QuotationValidation> => request(`/api/quotations/${enc(id)}/validation`),
+  addItem: (id: string, dto: AddItemDto): Promise<Quotation> => request(`/api/quotations/${enc(id)}/items`, { method: 'POST', ...json(dto) }),
+  updateItem: (id: string, itemId: string, dto: UpdateItemDto): Promise<Quotation> => request(`/api/quotations/${enc(id)}/items/${enc(itemId)}`, { method: 'PATCH', ...json(dto) }),
+  removeItem: (id: string, itemId: string): Promise<Quotation> => request(`/api/quotations/${enc(id)}/items/${enc(itemId)}`, { method: 'DELETE' }),
+  elencoCosti: (id: string): Promise<ElencoCosti> => request(`/api/quotations/${enc(id)}/elenco-costi`),
+  workbook: (id: string): Promise<WorkbookView> => request(`/api/quotations/${enc(id)}/workbook`),
+  benchmark: (id: string, itemId: string, limit = 6): Promise<Benchmark> => request(`/api/quotations/${enc(id)}/items/${enc(itemId)}/benchmark?limit=${limit}`),
   /** Downloads the ELENCO COSTI as PDF (bearer token, blob). */
   downloadPdf: async (id: string, reference: string): Promise<void> => {
-    const res = await fetch(`/api/projects/${enc(id)}/elenco-costi.pdf`, { headers: headers() });
+    const res = await fetch(`/api/quotations/${enc(id)}/elenco-costi.pdf`, { headers: headers() });
     if (!res.ok) throw new ApiError(res.status, `PDF export failed (${res.status})`, null);
     saveBlob(await res.blob(), `${reference || 'quotation'} ELENCO COSTI.pdf`);
   },
-  addRow: (id: string, dto: AddRowDto): Promise<Project> => request(`/api/projects/${enc(id)}/rows`, { method: 'POST', ...json(dto) }),
-  suggestions: (id: string, itemId: string, limit = 6): Promise<SearchHit[]> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/suggestions?limit=${limit}`),
-  attach: (id: string, itemId: string, referenceTabId: string, overwrite = false): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/attach`, { method: 'POST', ...json(overwrite ? { referenceTabId, overwrite } : { referenceTabId }) }),
-  detach: (id: string, itemId: string): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/attach`, { method: 'DELETE' }),
+  addRow: (id: string, dto: AddRowDto): Promise<Quotation> => request(`/api/quotations/${enc(id)}/rows`, { method: 'POST', ...json(dto) }),
+  suggestions: (id: string, itemId: string, limit = 6): Promise<SearchHit[]> => request(`/api/quotations/${enc(id)}/items/${enc(itemId)}/suggestions?limit=${limit}`),
+  attach: (id: string, itemId: string, referenceTabId: string, overwrite = false): Promise<Quotation> => request(`/api/quotations/${enc(id)}/items/${enc(itemId)}/attach`, { method: 'POST', ...json(overwrite ? { referenceTabId, overwrite } : { referenceTabId }) }),
+  detach: (id: string, itemId: string): Promise<Quotation> => request(`/api/quotations/${enc(id)}/items/${enc(itemId)}/attach`, { method: 'DELETE' }),
 
-  generate: (id: string): Promise<GenerationResult> => request(`/api/projects/${enc(id)}/generate`, { method: 'POST' }),
+  generate: (id: string): Promise<GenerationResult> => request(`/api/quotations/${enc(id)}/generate`, { method: 'POST' }),
   excelStatus: (refresh = false): Promise<ExcelStatus> => request(`/api/generation/excel-status${refresh ? '?refresh=1' : ''}`),
   outputUrl: (relativeFile: string): string => `/api/outputs/${relativeFile.split('/').map(enc).join('/')}`,
   /** Downloads a generated file with the bearer token (plain links cannot carry the header). */
