@@ -1,14 +1,27 @@
-import { useEffect, useState } from 'react';
-import { api, fmtMoney, fmtNum, type CatalogFacets, type CatalogRecord, type SearchHit, type SearchResult } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import {
+  api,
+  fmtMoney,
+  fmtNum,
+  type CatalogFacets,
+  type CatalogRecord,
+  type SearchHit,
+  type SearchResult,
+} from '../api';
 
 interface Props {
   facets: CatalogFacets | null;
   canAdd: boolean;
-  onAdd: (record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>) => Promise<void>;
+  onAdd: (
+    record: CatalogRecord,
+    quantity: number,
+    params: Array<{ cell: string; value: number | string | null }>,
+  ) => Promise<void>;
   onError: (msg: string) => void;
 }
 
-const scoreLabel = (h: SearchHit): string => (h.semanticScore !== null ? `${Math.round(h.score * 100)}% match` : `${Math.round(h.lexicalScore * 100)}% text`);
+const scoreLabel = (h: SearchHit): string =>
+  h.semanticScore !== null ? `${Math.round(h.score * 100)}% match` : `${Math.round(h.lexicalScore * 100)}% text`;
 
 export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
   const [q, setQ] = useState('prefabricated balcony 1600x2560');
@@ -21,14 +34,27 @@ export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
   const [quantity, setQuantity] = useState<string>('1');
   const [params, setParams] = useState<Record<string, string>>({});
 
+  const searchRequest = useRef(0);
+  const similarRequest = useRef(0);
+  const [adding, setAdding] = useState(false);
+  useEffect(
+    () => () => {
+      searchRequest.current++;
+      similarRequest.current++;
+    },
+    [],
+  );
+
   const run = async (query = q): Promise<void> => {
+    const request = ++searchRequest.current;
     setBusy(true);
     try {
-      setResult(await api.search(query, { workbook: workbook || undefined, category: category || undefined }));
+      const next = await api.search(query, { workbook: workbook || undefined, category: category || undefined });
+      if (request === searchRequest.current) setResult(next);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      if (request === searchRequest.current) onError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (request === searchRequest.current) setBusy(false);
     }
   };
 
@@ -38,25 +64,47 @@ export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
   }, [workbook, category]);
 
   const select = async (r: CatalogRecord): Promise<void> => {
+    const request = ++similarRequest.current;
     setSelected(r);
     setQuantity(String(r.quantity ?? 1));
-    setParams(Object.fromEntries(r.params.filter((p) => p.editable).map((p) => [p.cell, p.value === null ? '' : String(p.value)])));
+    setParams(
+      Object.fromEntries(
+        r.params.filter((p) => p.editable).map((p) => [p.cell, p.value === null ? '' : String(p.value)]),
+      ),
+    );
     setSimilar([]);
     try {
-      setSimilar(await api.similar(r.id, 6));
+      const next = await api.similar(r.id, 6);
+      if (request === similarRequest.current) setSimilar(next);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      if (request === similarRequest.current) onError(e instanceof Error ? e.message : String(e));
     }
   };
 
   const add = async (): Promise<void> => {
     if (!selected) return;
     const qty = Number(quantity);
-    if (!(qty > 0)) return onError('Quantity must be a positive number');
+    if (!(qty > 0) || !Number.isFinite(qty)) return onError('Quantity must be a positive number');
+    for (const p of selected.params.filter((p) => p.editable)) {
+      const raw = params[p.cell] ?? '';
+      if (typeof p.value === 'number' || p.unit === 'MM') {
+        const value = Number(raw);
+        if (!raw.trim() || !Number.isFinite(value) || value <= 0)
+          return onError(`${p.label} must be a positive number`);
+      }
+    }
     const prms = selected.params
       .filter((p) => p.editable)
-      .map((p) => ({ cell: p.cell, value: params[p.cell] === '' ? null : typeof p.value === 'number' ? Number(params[p.cell]) : params[p.cell] }));
-    await onAdd(selected, qty, prms);
+      .map((p) => ({
+        cell: p.cell,
+        value: params[p.cell] === '' ? null : typeof p.value === 'number' ? Number(params[p.cell]) : params[p.cell],
+      }));
+    setAdding(true);
+    try {
+      await onAdd(selected, qty, prms);
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -231,7 +279,7 @@ export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
                 ))}
             </div>
             <div className="row" style={{ marginTop: 8 }}>
-              <button className="primary" onClick={() => void add()} disabled={!canAdd || !selected.sheet}>
+              <button className="primary" onClick={() => void add()} disabled={adding || !canAdd || !selected.sheet}>
                 Add to cart
               </button>
               {!selected.sheet && <span className="small" style={{ color: 'var(--err)' }}>This row has no analysis sheet in its workbook; it cannot be copied.</span>}

@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Project } from './api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  api,
+  getToken,
+  onUnauthorized,
+  type AuthUser,
+  type CatalogFacets,
+  type CatalogRecord,
+  type Project,
+} from './api';
 import { Cart } from './components/Cart';
 import { ElencoCosti } from './components/ElencoCosti';
 import { Login } from './components/Login';
@@ -14,6 +22,8 @@ export default function App() {
   const [current, setCurrent] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'elenco' | 'cart'>('elenco');
+  const currentId = useRef(current?.id);
+  currentId.current = current?.id;
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -43,26 +53,45 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    api.facets().then(setFacets).catch((e: unknown) => setError(`Backend not reachable: ${e instanceof Error ? e.message : String(e)}`));
+    api
+      .facets()
+      .then(setFacets)
+      .catch((e: unknown) => setError(`Backend not reachable: ${e instanceof Error ? e.message : String(e)}`));
     void loadProjects();
   }, [user, loadProjects]);
 
-  const onAdd = async (record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>): Promise<void> => {
+  const onAdd = async (
+    record: CatalogRecord,
+    quantity: number,
+    params: Array<{ cell: string; value: number | string | null }>,
+  ): Promise<void> => {
     if (!current) return;
+    const projectId = current.id;
+    let added = false;
     try {
-      let p = await api.addItem(current.id, { catalogId: record.id, quantity });
-      const added = p.items[p.items.length - 1];
-      const changed = params.filter((x) => added.params.find((ap) => ap.cell === x.cell)?.value !== x.value);
-      if (changed.length) p = await api.updateItem(p.id, added.id, { params: changed });
-      setCurrent(p);
+      let p = await api.addItem(projectId, { catalogId: record.id, quantity });
+      added = true;
+      const newItem = p.items[p.items.length - 1];
+      const changed = params.filter((x) => newItem.params.find((ap) => ap.cell === x.cell)?.value !== x.value);
+      if (changed.length) p = await api.updateItem(p.id, newItem.id, { params: changed });
+      if (currentId.current === projectId) setCurrent(p);
       void loadProjects();
     } catch (e) {
+      if (added) {
+        try {
+          const persisted = await api.project(projectId);
+          if (currentId.current === projectId) setCurrent(persisted);
+        } catch {
+          /* The error below still reports that customization failed. */
+        }
+        void loadProjects();
+      }
       setError(e instanceof Error ? e.message : String(e));
     }
   };
 
   const onProject = (p: Project): void => {
-    setCurrent(p);
+    if (currentId.current === p.id) setCurrent(p);
     void loadProjects();
   };
 
