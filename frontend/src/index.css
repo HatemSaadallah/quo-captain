@@ -377,6 +377,26 @@ table.data textarea {
   }
 }
 
+.login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.login .panel {
+  width: 360px;
+  max-width: 100%;
+}
+
+.topbar .user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 @media (max-width: 1000px) {
   .layout {
     grid-template-columns: 1fr;

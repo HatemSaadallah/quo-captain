@@ -11,8 +11,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  /// scrypt$<salt>$<hash>, see src/common/utils/password.ts
+  passwordHash String
+  /// estimator | admin
+  role         String    @default("estimator")
+  createdAt    DateTime  @default(now())
+  projects     Project[]
+}
+
 model Project {
   id               String        @id @default(cuid())
+  ownerId          String
+  owner            User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name             String
   customer         String        @default("")
   /// Offer number: becomes the output file name and DATI GEN.!C5
@@ -26,6 +40,8 @@ model Project {
   updatedAt        DateTime      @updatedAt
   items            ProjectItem[]
   generations      Generation[]
+
+  @@index([ownerId, updatedAt])
 }
 
 model ProjectItem {

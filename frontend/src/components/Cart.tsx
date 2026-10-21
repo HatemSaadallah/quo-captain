@@ -194,11 +194,36 @@ export function Cart({ project, onProject, onError }: Props) {
   );
 }
 
+function DownloadButton({ file, label, primary = false }: { file: string; label: string; primary?: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (): Promise<void> => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.download(file);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button className={primary ? 'primary' : ''} onClick={() => void run()} disabled={busy}>
+        {busy ? '…' : label}
+      </button>
+      {err && <span style={{ color: 'var(--err)' }}>{err}</span>}
+    </>
+  );
+}
+
 function LastGeneration({ gen }: { gen: Project['generations'][number] }) {
   return (
-    <div className="small">
-      Last generation {new Date(gen.at).toLocaleString()} · <span className={`badge ${gen.status === 'validated' ? 'ok' : gen.status === 'failed' ? 'err' : 'warn'}`}>{gen.status}</span> ·{' '}
-      <a href={api.downloadUrl(gen.file)}>download .xlsx</a> · <a href={api.downloadUrl(gen.reportFile)}>validation report</a>
+    <div className="small row">
+      Last generation {new Date(gen.at).toLocaleString()} · <span className={`badge ${gen.status === 'validated' ? 'ok' : gen.status === 'failed' ? 'err' : 'warn'}`}>{gen.status}</span>
+      <DownloadButton file={gen.file} label="download .xlsx" />
+      <DownloadButton file={gen.reportFile} label="validation report" />
     </div>
   );
 }
@@ -210,10 +235,8 @@ function ReportView({ result }: { result: GenerationResult }) {
     <>
       <div className="row">
         <span className={`badge ${badge}`}>{r.status.replace('_', ' ')}</span>
-        <a className="primary" href={api.downloadUrl(result.outputFile)} style={{ fontWeight: 600 }}>
-          ⬇ Download {result.outputFile.split('/').pop()}
-        </a>
-        <a href={api.downloadUrl(result.reportFile)}>validation_report.json</a>
+        <DownloadButton file={result.outputFile} label={`⬇ Download ${result.outputFile.split('/').pop() ?? 'workbook'}`} primary />
+        <DownloadButton file={result.reportFile} label="validation_report.json" />
       </div>
       <div>{r.summary}</div>
       <div className="small muted">
