@@ -41,7 +41,7 @@ describe('WorkbookView', () => {
     const grid = screen.getByTestId('sheet-ELENCO COSTI');
     await userEvent.click(within(grid).getAllByText('54.855', { exact: false })[0]);
     expect(screen.getByText('=J6*E6')).toBeInTheDocument();
-    await userEvent.click(within(grid).getByText('1.097,1'));
+    await userEvent.click(within(grid).getByTitle("=ROUND('costi parz.'!$BE6,1)"));
     expect(screen.getByText("=ROUND('costi parz.'!$BE6,1)")).toBeInTheDocument();
     expect(screen.getByText('computed: TM1643-06 sheet 10')).toBeInTheDocument();
     await userEvent.click(tabs[1]);
