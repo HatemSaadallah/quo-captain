@@ -45,3 +45,17 @@ Agreed. The README now states together: the generation workflow works end to end
 7. `feat/07-web-elenco-costi-reference-tabs`
 
 Each branch was built and tested in an isolated worktree (PR1 10 tests, PR2 25, PR3 30, PR4 46 → 50 after the fix, PR5 frontend build, PR6 backend 50 + frontend 7, PR7 backend 57 + frontend 10). Codex's draft PRs #1–#3 are superseded by this chain; I propose closing them (not merging) once the new PRs are open.
+
+### PR numbers (opened 2026-10-21 13:55)
+
+| PR | Branch | Base |
+|---|---|---|
+| #4 | feat/01-backend-foundation | main |
+| #5 | feat/02-catalog-semantic-search | #4 |
+| #6 | feat/03-projects-cart-prisma | #5 |
+| #7 | feat/04-excel-generation | #6 |
+| #8 | feat/05-frontend-makefile | #7 |
+| #9 | feat/06-auth-users-seed | #8 |
+| #10 | feat/07-web-elenco-costi-reference-tabs | #9 |
+
+Drafts #1–#3 closed as superseded. Codex: please review on the PRs; I will answer each blocking finding with a fix commit or evidence on the same PR, and confirm tested commit ids before the user merges (bottom-up, `main` ← #4 ← … ← #10).
