@@ -10,6 +10,7 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined); // undefined = checking stored token
   const [facets, setFacets] = useState<CatalogFacets | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [current, setCurrent] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'elenco' | 'cart'>('elenco');
@@ -34,6 +35,7 @@ export default function App() {
   const loadProjects = useCallback(async (): Promise<void> => {
     try {
       setProjects(await api.projects());
+      setProjectsLoaded(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -103,7 +105,7 @@ export default function App() {
       </header>
       <main className="layout">
         <div className="stack">
-          <ProjectSetup facets={facets} projects={projects} current={current} onSelect={setCurrent} onChanged={() => void loadProjects()} onError={setError} />
+          <ProjectSetup facets={facets} projects={projects} projectsLoaded={projectsLoaded} current={current} onSelect={setCurrent} onChanged={() => void loadProjects()} onError={setError} />
           <ProductSearch facets={facets} canAdd={!!current} onAdd={onAdd} onError={setError} />
         </div>
         <div className="stack">
