@@ -4,6 +4,8 @@ import { api, type CatalogFacets, type Project } from '../api';
 interface Props {
   facets: CatalogFacets | null;
   projects: Project[];
+  /** true once the project list has been fetched at least once (drives the first-run create form). */
+  projectsLoaded: boolean;
   current: Project | null;
   onSelect: (p: Project | null) => void;
   onChanged: () => void;
@@ -12,18 +14,18 @@ interface Props {
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-export function ProjectSetup({ facets, projects, current, onSelect, onChanged, onError }: Props) {
+export function ProjectSetup({ facets, projects, projectsLoaded, current, onSelect, onChanged, onError }: Props) {
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({ name: '', customer: '', reference: '', date: today(), estimator: '', templateWorkbook: '' });
   const templates = facets?.workbooks ?? [];
   const [seenProjects, setSeenProjects] = useState(false);
   useEffect(() => {
     // open the form automatically only for a first-time user with no projects at all
-    if (!seenProjects && facets) {
+    if (!seenProjects && projectsLoaded) {
       setSeenProjects(true);
       if (projects.length === 0) setCreating(true);
     }
-  }, [facets, projects, seenProjects]);
+  }, [projectsLoaded, projects, seenProjects]);
 
   const create = async (): Promise<void> => {
     try {
