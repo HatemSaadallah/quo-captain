@@ -53,6 +53,7 @@ async function main(): Promise<void> {
 
   if (!existsSync(CATALOG_FILE)) {
     console.log(`catalog not found (${CATALOG_FILE}); run "npm run extract" and seed again to get the sample quotation`);
+    await attachExistingQuotations();
     return;
   }
   const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as Catalog;

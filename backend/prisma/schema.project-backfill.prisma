@@ -1,0 +1,233 @@
+// Quotations (the "cart") and their generation history.
+// The product catalog itself is derived from the Excel workbooks and lives in
+// data/processed/*.json (read-only index, rebuilt with `npm run extract`).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String
+  /// scrypt$<salt>$<hash>, see src/common/utils/password.ts
+  passwordHash String
+  /// salesman | admin
+  role         String      @default("salesman")
+  createdAt    DateTime    @default(now())
+  quotations   Quotation[]
+  customers    Customer[]
+  projects     Project[]
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  ownerId   String
+  owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  projects  Project[]
+  createdAt DateTime  @default(now())
+
+  @@unique([ownerId, name])
+}
+
+model Project {
+  id         String           @id @default(cuid())
+  ownerId    String
+  owner      User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name       String
+  quotations Quotation[]
+  contacts   ProjectContact[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([ownerId, customerId, name])
+  @@index([ownerId, updatedAt])
+}
+
+model Contact {
+  id        String           @id
+  name      String
+  role      String
+  company   String
+  email     String           @unique
+  createdAt DateTime         @default(now())
+  projects  ProjectContact[]
+}
+
+model ProjectContact {
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, contactId])
+}
+
+model Quotation {
+  id               String          @id @default(cuid())
+  ownerId          String
+  owner            User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  projectId        String?
+  project          Project?        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  name             String
+  customer         String          @default("")
+  /// Offer number: becomes the output file name and DATI GEN.!C5
+  reference        String          @default("")
+  /// ISO date (YYYY-MM-DD)
+  date             String
+  estimator        String          @default("")
+  /// File name of the workbook used as template (data/input)
+  templateWorkbook String
+  /// draft = the cart being built; active = confirmed quotation
+  status           String          @default("draft")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  items            QuotationItem[]
+  generations      Generation[]
+
+  @@index([ownerId, updatedAt])
+}
+
+/// A historical product analysis sheet ("reference tab") extracted from a workbook,
+/// stored with its provenance, inputs and embedding so cart rows can attach to it by similarity.
+model ReferenceTab {
+  /// `<offer n°>#<ELENCO COSTI row>`, e.g. TM1643-06#10 (same id as the JSON catalog)
+  id               String          @id
+  workbook         String
+  offerNo          String?
+  client           String?
+  projectName      String?
+  estimator        String?
+  projectDate      String?
+  row              Int
+  sheet            String?
+  position         String?
+  categoryName     String?
+  itemCode         String?
+  title            String?
+  description      String?
+  unit             String?
+  quantity         Float?
+  L                Float?
+  H                Float?
+  m2Unit           Float?
+  unitCost         Float?
+  totalCost        Float?
+  lotto            String?
+  analysisUnit     String?
+  productClass     String?
+  sheetUnitCost    Float?
+  sheetTotalCost   Float?
+  unitWeightKg     Float?
+  params           Json
+  costBreakdown    Json
+  codesUsed        Json
+  dependsOnSheets  Json
+  sourceCells      Json
+  warnings         Json
+  lineItemCount    Int             @default(0)
+  errorCells       Int             @default(0)
+  hasExternalRefs  Boolean         @default(false)
+  searchText       String
+  embedding        Float[]
+  embeddingModel   String?
+  /// sha256 of model + embedded text (see embeddingFingerprint)
+  fingerprint      String?
+  /// The sheet's logic: every non-empty cell as [address, value, formula?] (inputs + formulas)
+  cells            Json?
+  /// Unit cost recomputed by the app's formula engine with the historical inputs
+  computedUnitCost Float?
+  /// exact | off | n/a : does the app engine reproduce Excel's cached E67 for this tab?
+  fidelity         String?
+  extractedAt      DateTime
+  items            QuotationItem[]
+
+  @@index([workbook, sheet])
+  @@index([categoryName])
+}
+
+/// User-created reusable catalog products. Embeddings are generated locally when each record is created.
+model CustomProduct {
+  id             String   @id
+  title          String
+  description    String
+  categoryName   String
+  itemCode       String?
+  unit           String
+  L              Float?
+  H              Float?
+  createdBy      String
+  embedding      Float[]
+  embeddingModel String
+  fingerprint    String
+  createdAt      DateTime @default(now())
+
+  @@index([categoryName])
+}
+
+/// Cached values of the workbook sheets an analysis sheet reads (DATI GEN. price list,
+/// BDG Costi, indiretti, ELENCO COSTI, costi parz.), so the engine never opens Excel files.
+model WorkbookSnapshot {
+  id          String   @id @default(cuid())
+  workbook    String
+  sheet       String
+  cells       Json
+  extractedAt DateTime
+
+  @@unique([workbook, sheet])
+}
+
+model QuotationItem {
+  id                 String        @id @default(cuid())
+  quotationId        String
+  quotation          Quotation     @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  sortOrder          Int           @default(0)
+  /// null for a free row typed by the estimator (no reference analysis attached yet)
+  catalogId          String?
+  referenceTabId     String?
+  referenceTab       ReferenceTab? @relation(fields: [referenceTabId], references: [id], onDelete: SetNull)
+  sourceWorkbook     String?
+  sourceSheet        String?
+  /// estimator's manual unit cost; when set it replaces the historical unit cost in the web ELENCO COSTI
+  unitCostOverride   Float?
+  sourceOfferNo      String?
+  position           String        @default("")
+  itemCode           String        @default("")
+  description        String        @default("")
+  unit               String        @default("Pcs")
+  quantity           Float         @default(1)
+  L                  Float?
+  H                  Float?
+  lotto              String?
+  /// JSON: ItemParam[]
+  params             String        @default("[]")
+  historicalUnitCost Float?
+  historicalQuantity Float?
+  /// JSON: string[]
+  dependsOnSheets    String        @default("[]")
+  notes              String        @default("")
+  createdAt          DateTime      @default(now())
+
+  @@index([quotationId, sortOrder])
+}
+
+model Generation {
+  id          String    @id @default(cuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  file        String
+  reportFile  String
+  status      String
+  engine      String
+  createdAt   DateTime  @default(now())
+
+  @@index([quotationId, createdAt])
+}
