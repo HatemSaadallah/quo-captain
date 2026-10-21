@@ -104,6 +104,25 @@ model ReferenceTab {
   @@index([categoryName])
 }
 
+/// User-created reusable catalog products. Embeddings are generated locally when each record is created.
+model CustomProduct {
+  id             String   @id
+  title          String
+  description    String
+  categoryName   String
+  itemCode       String?
+  unit           String
+  L              Float?
+  H              Float?
+  createdBy      String
+  embedding      Float[]
+  embeddingModel String
+  fingerprint    String
+  createdAt      DateTime @default(now())
+
+  @@index([categoryName])
+}
+
 /// Cached values of the workbook sheets an analysis sheet reads (DATI GEN. price list,
 /// BDG Costi, indiretti, ELENCO COSTI, costi parz.), so the engine never opens Excel files.
 model WorkbookSnapshot {

@@ -83,11 +83,11 @@ export interface QuotationValidation {
 
 export interface CreateQuotationDto {
   name: string;
-  customer?: string;
-  reference?: string;
-  date?: string;
-  estimator?: string;
-  templateWorkbook?: string;
+  customer: string;
+  reference: string;
+  date: string;
+  estimator: string;
+  templateWorkbook: string;
   status?: QuotationStatus;
 }
 

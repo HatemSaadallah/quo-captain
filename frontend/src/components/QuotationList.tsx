@@ -83,7 +83,7 @@ export function QuotationList({ quotations, cartId, status, onDelete }: Props) {
           </div>
         </div>
         <button className="primary" onClick={() => navigate({ page: 'quotations' })}>
-          🛒 Open carts
+          🛒 Open Draft Quotations
         </button>
       </div>
 
@@ -91,7 +91,7 @@ export function QuotationList({ quotations, cartId, status, onDelete }: Props) {
         {[
           { id: 'all', label: 'All quotations' },
           { id: 'active', label: 'Active' },
-          { id: 'draft', label: 'Carts (drafts)' },
+          { id: 'draft', label: 'Draft Quotations' },
         ].map((t) => (
           <button key={t.label} role="tab" aria-selected={status === t.id} className={status === t.id ? 'on' : ''} onClick={() => navigate({ page: 'quotations', status: t.id })}>
             {t.label} <span>{count(t.id)}</span>
@@ -174,7 +174,7 @@ export function QuotationList({ quotations, cartId, status, onDelete }: Props) {
               <tr key={q.id} onClick={() => navigate({ page: 'quotation', id: q.id, tab: 'elenco' })}>
                 <td>
                   <b>{q.reference || '(no ref)'}</b>
-                  {q.id === cartId && <span className="cart-pill">cart</span>}
+                  {q.id === cartId && <span className="cart-pill">Draft Quotation</span>}
                 </td>
                 <td>
                   <span className={`status-badge ${q.status}`}>{q.status === 'active' ? 'Active' : 'Draft'}</span>
@@ -217,7 +217,7 @@ export function QuotationList({ quotations, cartId, status, onDelete }: Props) {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={10} className="muted" style={{ padding: 20 }}>
-                  {quotations.length ? 'No quotation matches these filters.' : 'No quotation yet. Add a product to the cart from the catalog to start one.'}
+                  {quotations.length ? 'No quotation matches these filters.' : 'No quotation yet. Add a product from the catalog to start a draft quotation.'}
                 </td>
               </tr>
             )}

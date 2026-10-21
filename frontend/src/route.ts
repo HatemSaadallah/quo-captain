@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export type Route =
-  | { page: 'catalog' }
+  | { page: 'catalog'; q?: string; create?: boolean }
   | { page: 'product'; id: string }
   | { page: 'quotations'; status?: string }
   | { page: 'contacts' }
@@ -18,13 +18,13 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'contacts') return { page: 'contacts' };
   if (parts[0] === 'product' && parts[1]) return { page: 'product', id: decodeURIComponent(parts[1]) };
   if (parts[0] === 'new') return { page: 'new', id: parts[1], step: parts[2] ? Number(parts[2]) : 1 };
-  return { page: 'catalog' };
+  return { page: 'catalog', q: params.get('q') ?? undefined, create: params.get('create') === '1' };
 }
 
 export function toHash(r: Route): string {
   switch (r.page) {
     case 'catalog':
-      return '#/catalog';
+      return r.q || r.create ? `#/catalog${r.q ? `?q=${encodeURIComponent(r.q)}${r.create ? '&create=1' : ''}` : '?create=1'}` : '#/catalog';
     case 'product':
       return `#/product/${encodeURIComponent(r.id)}`;
     case 'quotations':
