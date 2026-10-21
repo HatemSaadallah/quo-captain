@@ -1,26 +1,24 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Project } from './api';
-import { Cart } from './components/Cart';
-import { ElencoCosti } from './components/ElencoCosti';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Quotation } from './api';
+import { ProductHome } from './components/ProductHome';
+import { ProductPage } from './components/ProductPage';
 import { Login } from './components/Login';
-import { ProductSearch } from './components/ProductSearch';
-import { ProjectSetup } from './components/ProjectSetup';
-import { WorkbookView } from './components/WorkbookView';
+import { NewQuotation } from './components/NewQuotation';
+import { QuotationList } from './components/QuotationList';
+import { QuotationPage } from './components/QuotationPage';
+import { navigate, useRoute } from './route';
 
 export default function App() {
+  const route = useRoute();
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined); // undefined = checking stored token
   const [facets, setFacets] = useState<CatalogFacets | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsLoaded, setProjectsLoaded] = useState(false);
-  const [current, setCurrent] = useState<Project | null>(null);
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<'elenco' | 'workbook' | 'cart'>('elenco');
 
   useEffect(() => {
     onUnauthorized(() => {
       setUser(null);
-      setCurrent(null);
-      setProjects([]);
+      setQuotations([]);
     });
     if (!getToken()) {
       setUser(null);
@@ -33,10 +31,9 @@ export default function App() {
     return () => onUnauthorized(null);
   }, []);
 
-  const loadProjects = useCallback(async (): Promise<void> => {
+  const loadQuotations = useCallback(async (): Promise<void> => {
     try {
-      setProjects(await api.projects());
-      setProjectsLoaded(true);
+      setQuotations(await api.quotations());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -45,93 +42,98 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     api.facets().then(setFacets).catch((e: unknown) => setError(`Backend not reachable: ${e instanceof Error ? e.message : String(e)}`));
-    void loadProjects();
-  }, [user, loadProjects]);
+    void loadQuotations();
+  }, [user, loadQuotations]);
 
-  const onAdd = async (record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>): Promise<void> => {
-    if (!current) return;
+  /** Replace one quotation in the list (and refresh the list in the background). */
+  const onQuotation = useCallback(
+    (p: Quotation): void => {
+      setQuotations((list) => (list.some((x) => x.id === p.id) ? list.map((x) => (x.id === p.id ? p : x)) : [p, ...list]));
+      void loadQuotations();
+    },
+    [loadQuotations],
+  );
+
+  const addTo = async (quotationId: string, record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>): Promise<void> => {
     try {
-      let p = await api.addItem(current.id, { catalogId: record.id, quantity });
+      let p = await api.addItem(quotationId, { catalogId: record.id, quantity });
       const added = p.items[p.items.length - 1];
       const changed = params.filter((x) => added.params.find((ap) => ap.cell === x.cell)?.value !== x.value);
       if (changed.length) p = await api.updateItem(p.id, added.id, { params: changed });
-      setCurrent(p);
-      void loadProjects();
+      onQuotation(p);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const onProject = (p: Project): void => {
-    setCurrent(p);
-    void loadProjects();
+  const deleteQuotation = async (p: Quotation): Promise<void> => {
+    if (!confirm(`Delete quotation "${p.reference || p.name}" and its rows?`)) return;
+    try {
+      await api.deleteQuotation(p.id);
+      setQuotations((list) => list.filter((x) => x.id !== p.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const logout = (): void => {
     api.logout();
     setUser(null);
-    setCurrent(null);
-    setProjects([]);
+    setQuotations([]);
     setFacets(null);
   };
 
   if (user === undefined) return <main className="login muted">Checking session…</main>;
   if (!user) return <Login onLogin={setUser} />;
 
+  const current = route.page === 'quotation' || route.page === 'new' ? (quotations.find((p) => p.id === route.id) ?? null) : null;
+  const navItem = (page: 'catalog' | 'quotations' | 'new', label: string, icon: string, active: boolean): ReactElement => (
+    <button className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(page === 'new' ? { page: 'new', step: 1 } : { page })}>
+      <span className="icon">{icon}</span> {label}
+    </button>
+  );
+
   return (
-    <>
-      <header className="topbar">
-        <div>
-          <h1>Somec · Quotation cost-analysis generator</h1>
-          <div className="sub">
-            {facets ? `${facets.recordCount} historical analyses from ${facets.workbooks.length} workbooks · embeddings ${facets.embeddings.status}` : 'loading catalog…'} · costs are estimated costs, not selling prices
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="logo">S</div>
+          <div>
+            <div className="title">Somec</div>
+            <div className="sub">Quotation cost analysis</div>
           </div>
         </div>
+        <nav>
+          {navItem('catalog', 'Catalog', '▦', route.page === 'catalog' || route.page === 'product')}
+          {navItem('quotations', 'Quotations', '≣', route.page === 'quotations' || route.page === 'quotation')}
+          {navItem('new', 'New quotation', '＋', route.page === 'new')}
+        </nav>
+        <div className="sidebar-foot small">
+          <div>{facets ? `${facets.recordCount} analyses · ${facets.workbooks.length} workbooks` : 'loading catalog…'}</div>
+          <div className="muted">costs are estimated costs, not selling prices</div>
+          <div style={{ marginTop: 8 }}>
+            {user.name} <span className="muted">({user.role})</span>
+          </div>
+          <button onClick={logout} style={{ marginTop: 4, padding: '2px 8px' }}>
+            Sign out
+          </button>
+        </div>
+      </aside>
+      <main className="content">
         {error && (
-          <div className="error-box" style={{ marginLeft: 'auto', maxWidth: 600 }}>
+          <div className="error-box" style={{ marginBottom: 12 }}>
             {error}{' '}
             <button onClick={() => setError(null)} style={{ padding: '0 6px' }}>
               ×
             </button>
           </div>
         )}
-        <div className="user" style={{ marginLeft: error ? 16 : 'auto' }}>
-          <span className="small">
-            {user.name} <span className="sub">({user.role})</span>
-          </span>{' '}
-          <button onClick={logout} style={{ padding: '2px 8px' }}>
-            Sign out
-          </button>
-        </div>
-      </header>
-      <main className="layout">
-        <div className="stack">
-          <ProjectSetup facets={facets} projects={projects} projectsLoaded={projectsLoaded} current={current} onSelect={setCurrent} onChanged={() => void loadProjects()} onError={setError} />
-          <ProductSearch facets={facets} canAdd={!!current} onAdd={onAdd} onError={setError} />
-        </div>
-        <div className="stack">
-          {current ? (
-            <>
-              <div className="tabs" role="tablist">
-                <button role="tab" aria-selected={view === 'elenco'} className={view === 'elenco' ? 'active' : ''} onClick={() => setView('elenco')}>
-                  ELENCO COSTI (web)
-                </button>
-                <button role="tab" aria-selected={view === 'workbook'} className={view === 'workbook' ? 'active' : ''} onClick={() => setView('workbook')}>
-                  Generated workbook & PDF
-                </button>
-                <button role="tab" aria-selected={view === 'cart'} className={view === 'cart' ? 'active' : ''} onClick={() => setView('cart')}>
-                  Cart & Excel export
-                </button>
-              </div>
-              {view === 'elenco' && <ElencoCosti project={current} onProject={onProject} onError={setError} />}
-              {view === 'workbook' && <WorkbookView project={current} onProject={onProject} onError={setError} />}
-              {view === 'cart' && <Cart project={current} onProject={onProject} onError={setError} />}
-            </>
-          ) : (
-            <section className="panel muted">Create or select a project to start its ELENCO COSTI.</section>
-          )}
-        </div>
+        {route.page === 'catalog' && <ProductHome facets={facets} onError={setError} />}
+        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} onAdd={(qid, r, q) => addTo(qid, r, q, [])} onError={setError} />}
+        {route.page === 'quotations' && <QuotationList quotations={quotations} onDelete={(p) => void deleteQuotation(p)} />}
+        {route.page === 'quotation' && (current ? <QuotationPage quotation={current} facets={facets} tab={route.tab} onQuotation={onQuotation} onAdd={(r, q, prm) => addTo(current.id, r, q, prm)} onError={setError} /> : <section className="panel muted">{quotations.length ? 'Quotation not found.' : 'Loading…'}</section>)}
+        {route.page === 'new' && <NewQuotation facets={facets} quotation={current} step={route.step} onQuotation={onQuotation} onAdd={(r, q, prm) => (current ? addTo(current.id, r, q, prm) : Promise.resolve())} onError={setError} />}
       </main>
-    </>
+    </div>
   );
 }

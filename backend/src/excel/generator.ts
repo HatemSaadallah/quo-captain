@@ -3,7 +3,7 @@
  *
  * Strategy (all at OOXML level, Excel is used afterwards only to recalculate):
  *  1. start from a copy of the template (the original is never written to);
- *  2. write the project header into DATI GEN.;
+ *  2. write the quotation header into DATI GEN.;
  *  3. empty the template's own items (ELENCO COSTI rows, BOQ rows, pasted values in
  *     costi parz./quantità/MDO) so the output contains exactly the cart;
  *  4. for every cart item: copy the historical analysis sheet into the output under the
@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Project, ProjectItem } from '../common/interfaces/project.interface';
+import type { Quotation, QuotationItem } from '../common/interfaces/quotation.interface';
 import type { SheetData } from '../common/interfaces/xlsx.interface';
 import { colRange, shiftFormula } from '../common/utils/a1';
 import { XlsxEditor } from '../common/utils/xlsx-editor';
@@ -26,7 +26,7 @@ import { freeItemRows } from './catalog-extractor';
 import { AGG, ANALYSIS, BOQ, DATI_GEN, EC, REQUIRED_SHEETS, SHEETS } from './somec-schema';
 
 export interface GenerationInput {
-  project: Project;
+  quotation: Quotation;
   templatePath: string;
   /** Resolves a source workbook file name (data/input) to its path. */
   sourcePathOf: (workbook: string) => string;
@@ -34,7 +34,7 @@ export interface GenerationInput {
 }
 
 export interface PlannedItem {
-  item: ProjectItem;
+  item: QuotationItem;
   row: number;
   sheet: string;
   boqRow: number;
@@ -93,7 +93,7 @@ async function writeTemplateFormulas(ed: XlsxEditor, tpl: XlsxWorkbook, sheetNam
 }
 
 export async function generateWorkbook(input: GenerationInput): Promise<GenerationOutcome> {
-  const { project, templatePath, outputDir } = input;
+  const { quotation, templatePath, outputDir } = input;
   const templateBuf = await readFile(templatePath);
   const tpl = await XlsxWorkbook.fromBuffer(templateBuf, templatePath);
   for (const s of REQUIRED_SHEETS) if (!tpl.hasSheet(s)) throw new Error(`Template lacks required sheet '${s}'`);
@@ -103,19 +103,19 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
   // --- plan rows
   const ec = await tpl.sheet(SHEETS.elencoCosti);
   const free = freeItemRows(tpl.sheetNames, ec);
-  if (project.items.length > free.length) throw new Error(`Template has ${free.length} free item rows, cart has ${project.items.length}`);
-  const planned: PlannedItem[] = project.items.map((item, i) => ({ item, row: free[i], sheet: String(free[i]), boqRow: BOQ.firstRow + i, paramsWritten: [], warnings: [] }));
+  if (quotation.items.length > free.length) throw new Error(`Template has ${free.length} free item rows, cart has ${quotation.items.length}`);
+  const planned: PlannedItem[] = quotation.items.map((item, i) => ({ item, row: free[i], sheet: String(free[i]), boqRow: BOQ.firstRow + i, paramsWritten: [], warnings: [] }));
   for (const p of planned) {
     if (!p.item.catalogId || !p.item.sourceWorkbook) throw new Error(`Item ${p.item.itemCode} has no reference analysis attached, there is no source analysis sheet to copy`);
     if (!p.item.sourceSheet) throw new Error(`Item ${p.item.itemCode} has no source analysis sheet`);
   }
 
-  // --- 1. project header
+  // --- 1. quotation header
   await ed.setCells(SHEETS.datiGen, {
-    [DATI_GEN.date]: { v: excelSerial(project.date) },
-    [DATI_GEN.client]: { v: project.customer },
-    [DATI_GEN.project]: { v: project.name },
-    [DATI_GEN.estimator]: { v: project.estimator },
+    [DATI_GEN.date]: { v: excelSerial(quotation.date) },
+    [DATI_GEN.client]: { v: quotation.customer },
+    [DATI_GEN.quotation]: { v: quotation.name },
+    [DATI_GEN.estimator]: { v: quotation.estimator },
   });
 
   // --- 2. empty the template's own items (fresh workbook: output == cart)
@@ -154,9 +154,9 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
 
   for (const p of planned) {
     const { item, row, sheet, boqRow } = p;
-    const sourceWorkbook = item.sourceWorkbook ?? project.templateWorkbook;
+    const sourceWorkbook = item.sourceWorkbook ?? quotation.templateWorkbook;
     let src: JSZip;
-    if (sourceWorkbook === project.templateWorkbook) src = ed.zip;
+    if (sourceWorkbook === quotation.templateWorkbook) src = ed.zip;
     else {
       let z = sourceZips.get(sourceWorkbook);
       if (!z) {
@@ -221,7 +221,7 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
   ed.setFullCalcOnLoad();
   await ed.removeCalcChain();
   mkdirSync(outputDir, { recursive: true });
-  const outputFile = path.join(outputDir, `${safeFileStem(project.reference)} Analisi.xlsx`);
+  const outputFile = path.join(outputDir, `${safeFileStem(quotation.reference)} Analisi.xlsx`);
   await ed.save(outputFile);
 
   return {

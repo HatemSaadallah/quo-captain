@@ -8,7 +8,7 @@ Costs everywhere in this tool are **estimated costs** read from the workbooks. S
 
 | Part | Tech |
 |---|---|
-| Backend | NestJS 11 (CommonJS, strict TypeScript), Prisma 6 on PostgreSQL (users, projects, cart items, generation history), JWT login |
+| Backend | NestJS 11 (CommonJS, strict TypeScript), Prisma 6 on PostgreSQL (users, quotations, cart items, generation history), JWT login |
 | Excel engine | Own OOXML reader/editor on the zip parts (`backend/src/common/utils/xlsx-reader.ts`, `xlsx-editor.ts`); Microsoft Excel via AppleScript for recalculation when scriptable (macOS) |
 | Search | Local embeddings with transformers.js (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`, downloaded once to `data/models`) + lexical/dimension matching, hybrid ranking |
 | Frontend | React 19 + Vite + TypeScript, types shared with the backend |
@@ -22,10 +22,10 @@ data/processed/        product_catalog.json + catalog_embeddings.json (npm run e
 data/output/<ref>_<ts>/<ref> Analisi.xlsx + validation_report.json
 backend/src/common/    utils (xlsx reader/editor, A1 helpers, xml, paths) and shared interfaces
 backend/src/excel/     somec-schema (verified cell map), catalog-extractor, generator, validator, excel-automation
-backend/src/modules/   catalog (search, embeddings), projects (cart, Prisma), generation, prisma
+backend/src/modules/   catalog (search, embeddings), quotations (cart, Prisma), generation, prisma
 backend/src/scripts/   extract-catalog
 backend/prisma/        schema.prisma (PostgreSQL)
-frontend/src/          App, components/{ProjectSetup,ProductSearch,Cart}, api.ts
+frontend/src/          App, components/{CatalogPage,QuotationList,QuotationPage,NewQuotation,QuotationForm,ProductSearch,ElencoCosti,WorkbookView,Benchmark,Cart}, route.ts, api.ts
 docs/                  excel_structure.md, cell_mapping.md, review exchange with Codex
 ```
 
@@ -63,18 +63,18 @@ Or everything at once: `make all` (install, database + seed, catalog extraction,
 
 ## Login and users
 
-Every API route except `POST /api/auth/login` needs `Authorization: Bearer <jwt>`. Projects belong to the user who created them. `npx prisma db seed` (also run by `make db`) creates two mock users and a sample project for the first one:
+Every API route except `POST /api/auth/login` needs `Authorization: Bearer <jwt>`. Quotations belong to the user who created them. `npx prisma db seed` (also run by `make db`) creates two mock users and a sample quotation for the first one:
 
 | User | Password | Role |
 |---|---|---|
-| `estimator@somec.local` | `somec2026` | estimator (owns the seeded project `TM2099-00`, 3 cart lines) |
+| `estimator@somec.local` | `somec2026` | estimator (owns the seeded quotation `TM2099-00`, 3 cart lines) |
 | `admin@somec.local` | `somec2026` | admin |
 
 Passwords are hashed with Node's scrypt; tokens are signed with `JWT_SECRET` from `backend/.env` (12 h by default). `make demo` and the frontend log in with the estimator account.
 
 ## Web ELENCO COSTI and reference tabs
 
-The primary deliverable is the ELENCO COSTI computed in the web (`GET /api/projects/:id/elenco-costi`, right-hand tab in the UI) with the sheet's own formulas, verified in `docs/cell_mapping.md`:
+The primary deliverable is the ELENCO COSTI computed in the web (`GET /api/quotations/:id/elenco-costi`, right-hand tab in the UI) with the sheet's own formulas, verified in `docs/cell_mapping.md`:
 
 | Column | Formula (sheet) | In the web |
 |---|---|---|
@@ -85,15 +85,15 @@ The primary deliverable is the ELENCO COSTI computed in the web (`GET /api/proje
 | TOTAL COST / m² | `SUM(K6:K401)` / `SUM(I6:I400)` | same |
 | Summary by position | `SUMIF(A, pos, I\|K)`, unit = K/I | same |
 
-**Cost engine in the app (no Excel at runtime).** `npm run extract` also stores each tab's logic (every input and formula cell, `ReferenceTab.cells`) and the sheets a tab reads (`WorkbookSnapshot`: DATI GEN. price list, BDG Costi, indiretti, ELENCO COSTI, costi parz.). `backend/src/common/utils/formula-engine.ts` evaluates the Excel subset those sheets use (IF, VLOOKUP, IFERROR, SUMIF, SUM, INT, CEILING, INDIRECT, CELL, ROUND, CONCATENATE, OR, MID, FIND, VALUE, TRIM, COUNTIF(S), LEFT/RIGHT, SUMPRODUCT, PRODUCT, FLOOR(.MATH), AND, MAX, TRUNC) and `sheet-evaluator.ts` runs a stored tab with the project's quantity, text and parameter overrides. Rows whose tab logic is stored get `unitCostSource: "computed"`: J is recalculated for the row's quantity and parameters (fixed engineering/management costs spread over the new quantity, material quantities from the new dimensions), with the tab's own workbook price list. Fidelity, measured at extraction with each tab's historical inputs (`npx tsx src/scripts/fidelity/fidelity.ts`): 508 of 538 checkable tabs reproduce Excel's cached E67 to the cent (TM1643-06 83/84, TM1823-03 90/91, TM1837-02 54/55, TM2030-00 215/216, TM2086-01 57/80, TM1641-03 9/12; the other TM1641-03 tabs have no cached E67 because Excel never computed them). Tabs marked `off` are flagged in the row; rows without an attached tab show no cost (never 0) and count as incomplete.
+**Cost engine in the app (no Excel at runtime).** `npm run extract` also stores each tab's logic (every input and formula cell, `ReferenceTab.cells`) and the sheets a tab reads (`WorkbookSnapshot`: DATI GEN. price list, BDG Costi, indiretti, ELENCO COSTI, costi parz.). `backend/src/common/utils/formula-engine.ts` evaluates the Excel subset those sheets use (IF, VLOOKUP, IFERROR, SUMIF, SUM, INT, CEILING, INDIRECT, CELL, ROUND, CONCATENATE, OR, MID, FIND, VALUE, TRIM, COUNTIF(S), LEFT/RIGHT, SUMPRODUCT, PRODUCT, FLOOR(.MATH), AND, MAX, TRUNC) and `sheet-evaluator.ts` runs a stored tab with the quotation's quantity, text and parameter overrides. Rows whose tab logic is stored get `unitCostSource: "computed"`: J is recalculated for the row's quantity and parameters (fixed engineering/management costs spread over the new quantity, material quantities from the new dimensions), with the tab's own workbook price list. Fidelity, measured at extraction with each tab's historical inputs (`npx tsx src/scripts/fidelity/fidelity.ts`): 508 of 538 checkable tabs reproduce Excel's cached E67 to the cent (TM1643-06 83/84, TM1823-03 90/91, TM1837-02 54/55, TM2030-00 215/216, TM2086-01 57/80, TM1641-03 9/12; the other TM1641-03 tabs have no cached E67 because Excel never computed them). Tabs marked `off` are flagged in the row; rows without an attached tab show no cost (never 0) and count as incomplete.
 
 **Reference tabs** (the numbered analysis sheets) are extracted into `data/processed/product_catalog.json` and stored in Postgres (`ReferenceTab`, 589 rows) with provenance (workbook, sheet, row, item code), inputs (parameters, codes used, cost breakdown), dependencies, warnings, source cells, the embedding vector (384-d, multilingual MiniLM) and a content fingerprint. `npm run extract` rebuilds and re-syncs them; the API loads them from the database (`facets.source = "database"`), falling back to the JSON index.
 
-A cost row is either a tab added from search, or a **free row** typed from the customer's BOQ (`POST /api/projects/:id/rows`). `GET .../items/:itemId/suggestions` ranks reference tabs by similarity to the row's description and dimensions; `POST .../items/:itemId/attach {referenceTabId}` attaches one (provenance, parameters and historical unit cost come from the tab; the row keeps its own text unless `overwrite: true`); `DELETE .../attach` detaches. A high similarity score is a suggestion, not proof of technical compatibility: the UI shows the tab's source, specs and cost before attaching.
+A cost row is either a tab added from search, or a **free row** typed from the customer's BOQ (`POST /api/quotations/:id/rows`). `GET .../items/:itemId/suggestions` ranks reference tabs by similarity to the row's description and dimensions; `POST .../items/:itemId/attach {referenceTabId}` attaches one (provenance, parameters and historical unit cost come from the tab; the row keeps its own text unless `overwrite: true`); `DELETE .../attach` detaches. A high similarity score is a suggestion, not proof of technical compatibility: the UI shows the tab's source, specs and cost before attaching.
 
 ## Workflow
 
-1. **Project setup** – create a project (name, customer, reference = offer number such as `TM2099-00`, date, estimator) and pick the template workbook. The template provides the price list (`DATI GEN.`), budget and indirect-cost structure; its own items are emptied in the output.
+1. **Quotation setup** – create a quotation (name, customer, reference = offer number such as `TM2099-00`, date, estimator) and pick the template workbook. The template provides the price list (`DATI GEN.`), budget and indirect-cost structure; its own items are emptied in the output.
 2. **Find an analysis** – type a description (e.g. `prefabricated balcony 1600x2560`, `glass railing for cabin balcony`); results are ranked by embedding similarity plus text/dimension matching and show the source workbook, sheet, item code, historical quantity and unit cost. Selecting one shows its description, cost breakdown, source cells, extraction notes and **similar analyses**.
 3. **Cart** – add the analysis with a new quantity and the permitted technical parameters (the literal input cells of the sheet, e.g. `INTERASSE BALCONY N3`, `PROFONDITA' BALCONY N4`). Edit position, item code, description, unit, quantity, dimensions inline. Validation runs on every change: missing/invalid quantities, missing sheets, incompatible sheets (analysis sheets that reference other analysis sheets copied from another workbook), cross-workbook price-list warnings, duplicate codes.
 4. **Generate Excel Analysis** – the backend copies the template, writes DATI GEN., ELENCO COSTI and BOQ rows, copies each analysis sheet under its new row number, writes the workbook's own row-401 `INDIRECT` formulas into `costi parz.`/`quantità`/`MDO`, sets `fullCalcOnLoad`, recalculates with Excel when scriptable, validates and saves `data/output/<ref>_<timestamp>/<ref> Analisi.xlsx` + `validation_report.json`. The UI shows the report and download links.
@@ -106,10 +106,10 @@ A cost row is either a tab added from search, or a **free row** typed from the c
 | GET | `/api/catalog/facets` | workbooks, categories, embedding status |
 | GET | `/api/catalog/search?q=&workbook=&category=&limit=&mode=lexical` | hybrid search (`semantic:false` + `embeddingStatus` while the index warms up) |
 | GET | `/api/catalog/:id` · `/api/catalog/:id/similar` | record, nearest neighbours |
-| GET/POST/PATCH/DELETE | `/api/projects[/:id]` | projects |
-| POST/PATCH/DELETE | `/api/projects/:id/items[/:itemId]` | cart lines (only position, item code, description, unit, notes, quantity, L/H, params are editable; provenance comes from the catalog) |
-| GET | `/api/projects/:id/validation` | issues + indicative total |
-| POST | `/api/projects/:id/generate` | generate + validate |
+| GET/POST/PATCH/DELETE | `/api/quotations[/:id]` | quotations |
+| POST/PATCH/DELETE | `/api/quotations/:id/items[/:itemId]` | cart lines (only position, item code, description, unit, notes, quantity, L/H, params are editable; provenance comes from the catalog) |
+| GET | `/api/quotations/:id/validation` | issues + indicative total |
+| POST | `/api/quotations/:id/generate` | generate + validate |
 | GET | `/api/generation/excel-status?refresh=1` | Excel automation availability |
 | GET | `/api/outputs` · `/api/outputs/:folder/:file` · `/api/outputs/:folder/report` | list / download |
 
@@ -137,6 +137,6 @@ Not verified in this environment:
 
 ## Generated workbook on the web, benchmarking and PDF
 
-The "Generated workbook & PDF" tab renders the quotation as a clickable web workbook instead of an Excel file: sheet tabs at the bottom (ELENCO COSTI plus one evaluated analysis sheet per row), a formula bar showing the clicked cell's formula, value and source, yellow input cells editable in place (quantity, dimensions, parameters such as `N3`/`N4`, manual unit cost), and the computed cells refreshed through the app engine. **Export PDF** downloads the ELENCO COSTI as a landscape PDF (`GET /api/projects/:id/elenco-costi.pdf`); **Print** uses the browser's print view of the current sheet. `GET /api/projects/:id/workbook` returns the grid.
+The "Generated workbook & PDF" tab renders the quotation as a clickable web workbook instead of an Excel file: sheet tabs at the bottom (ELENCO COSTI plus one evaluated analysis sheet per row), a formula bar showing the clicked cell's formula, value and source, yellow input cells editable in place (quantity, dimensions, parameters such as `N3`/`N4`, manual unit cost), and the computed cells refreshed through the app engine. **Export PDF** downloads the ELENCO COSTI as a landscape PDF (`GET /api/quotations/:id/elenco-costi.pdf`); **Print** uses the browser's print view of the current sheet. `GET /api/quotations/:id/workbook` returns the grid.
 
-Selecting a row shows the **historical benchmark** (`GET /api/projects/:id/items/:itemId/benchmark`): the most similar reference analyses with their source workbook/sheet/cell, client, date, quantity, dimensions, parameters and unit cost, min/median/max against this row's cost, a per-category cost comparison (materials, labour, installation…) and the historical projects they come from.
+Selecting a row shows the **historical benchmark** (`GET /api/quotations/:id/items/:itemId/benchmark`): the most similar reference analyses with their source workbook/sheet/cell, client, date, quantity, dimensions, parameters and unit cost, min/median/max against this row's cost, a per-category cost comparison (materials, labour, installation…) and the historical quotations they come from.

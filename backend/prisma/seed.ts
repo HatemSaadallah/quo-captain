@@ -1,5 +1,5 @@
 /**
- * Seed: a mock estimator user and a sample project (cart) built from the
+ * Seed: a mock estimator user and a sample quotation (cart) built from the
  * extracted catalog. Idempotent. Run with `npm run db:seed` (after `npm run extract`).
  *
  *   login: estimator@somec.local / somec2026   (role estimator)
@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import type { Catalog } from '../src/common/interfaces/catalog.interface';
 import { hashPassword } from '../src/common/utils/password';
 import { CATALOG_FILE } from '../src/common/utils/paths';
-import { itemFromCatalog } from '../src/modules/projects/project.rules';
+import { itemFromCatalog } from '../src/modules/quotations/quotation.rules';
 
 const prisma = new PrismaClient();
 
@@ -33,14 +33,14 @@ async function main(): Promise<void> {
   const owner = users[0];
 
   if (!existsSync(CATALOG_FILE)) {
-    console.log(`catalog not found (${CATALOG_FILE}); run "npm run extract" and seed again to get the sample project`);
+    console.log(`catalog not found (${CATALOG_FILE}); run "npm run extract" and seed again to get the sample quotation`);
     return;
   }
   const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as Catalog;
   const reference = 'TM2099-00';
-  const existing = await prisma.project.findFirst({ where: { ownerId: owner.id, reference } });
+  const existing = await prisma.quotation.findFirst({ where: { ownerId: owner.id, reference } });
   if (existing) {
-    console.log(`sample project ${reference} already exists (${existing.id})`);
+    console.log(`sample quotation ${reference} already exists (${existing.id})`);
     return;
   }
   const lines: Array<{ id: string; quantity: number; params?: Record<string, number> }> = [
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
     { id: 'TM1643-06#12', quantity: 8 }, // balcony next to steel
     { id: 'TM1643-06#45', quantity: 120 }, // balustrade (ML)
   ];
-  const project = await prisma.project.create({
+  const quotation = await prisma.quotation.create({
     data: { name: 'Nave 4 - Balcony (seed)', customer: 'APEXA', reference, date: new Date().toISOString().slice(0, 10), estimator: owner.name, templateWorkbook: 'TM1643-06 Analisi.xlsx', ownerId: owner.id },
   });
   let order = 0;
@@ -60,9 +60,9 @@ async function main(): Promise<void> {
     }
     const item = itemFromCatalog(rec, line.quantity);
     for (const p of item.params) if (line.params && p.cell in line.params) p.value = line.params[p.cell];
-    await prisma.projectItem.create({
+    await prisma.quotationItem.create({
       data: {
-        projectId: project.id,
+        quotationId: quotation.id,
         sortOrder: ++order,
         catalogId: item.catalogId,
         sourceWorkbook: item.sourceWorkbook,
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
     });
     console.log(`  item ${item.itemCode} x${item.quantity} from ${item.sourceOfferNo} sheet ${item.sourceSheet} (${item.historicalUnitCost} EUR)`);
   }
-  console.log(`sample project ${reference} created (${project.id}) for ${owner.email}`);
+  console.log(`sample quotation ${reference} created (${quotation.id}) for ${owner.email}`);
 }
 
 main()

@@ -31,12 +31,12 @@ export const REQUIRED_SHEETS = [
 /** A live product-analysis sheet is named exactly by its ELENCO COSTI row number. */
 export const isAnalysisSheetName = (name: string): boolean => /^\d+$/.test(name);
 
-/** DATI GEN.: project header cells (B = label, C = value). */
+/** DATI GEN.: quotation header cells (B = label, C = value). */
 export const DATI_GEN = {
   offerNo: 'C5', // formula: derived from the file name via CELL("FILENAME")
   date: 'C6',
   client: 'C7',
-  project: 'C8',
+  quotation: 'C8',
   estimator: 'C9',
   country: 'C10',
   classSociety: 'C11',

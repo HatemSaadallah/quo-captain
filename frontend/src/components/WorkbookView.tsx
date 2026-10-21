@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
-import { api, type GridCell, type GridSheet, type Project, type WorkbookView as WorkbookData } from '../api';
+import { api, type GridCell, type GridSheet, type Quotation, type WorkbookView as WorkbookData } from '../api';
 import { Benchmark } from './Benchmark';
 
 interface Props {
-  project: Project;
-  onProject: (p: Project) => void;
+  quotation: Quotation;
+  onQuotation: (p: Quotation) => void;
   onError: (msg: string) => void;
 }
 
@@ -15,7 +15,7 @@ const fmt = (v: GridCell['v']): string => {
   return v;
 };
 
-export function WorkbookView({ project, onProject, onError }: Props) {
+export function WorkbookView({ quotation, onQuotation, onError }: Props) {
   const [wb, setWb] = useState<WorkbookData | null>(null);
   const [active, setActive] = useState(0);
   const [selected, setSelected] = useState<GridCell | null>(null);
@@ -23,14 +23,14 @@ export function WorkbookView({ project, onProject, onError }: Props) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const projectId = project.id;
+    const quotationId = quotation.id;
     api
-      .workbook(projectId)
+      .workbook(quotationId)
       .then((w) => {
-        if (w.projectId === projectId) setWb(w);
+        if (w.quotationId === quotationId) setWb(w);
       })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
-  }, [project, onError]);
+  }, [quotation, onError]);
 
   const sheet: GridSheet | undefined = wb?.sheets[Math.min(active, (wb?.sheets.length ?? 1) - 1)];
   const cellMap = useMemo(() => {
@@ -46,25 +46,25 @@ export function WorkbookView({ project, onProject, onError }: Props) {
     if (!cell.edit) return;
     const num = draft.trim() === '' ? null : Number(draft);
     try {
-      let p: Project;
+      let p: Quotation;
       switch (cell.edit.field) {
         case 'quantity':
-          p = await api.updateItem(project.id, cell.edit.itemId, { quantity: Number(draft) });
+          p = await api.updateItem(quotation.id, cell.edit.itemId, { quantity: Number(draft) });
           break;
         case 'unitCostOverride':
-          p = await api.updateItem(project.id, cell.edit.itemId, { unitCostOverride: num });
+          p = await api.updateItem(quotation.id, cell.edit.itemId, { unitCostOverride: num });
           break;
         case 'param':
-          p = await api.updateItem(project.id, cell.edit.itemId, { params: [{ cell: cell.edit.cell ?? cell.addr, value: num }] });
+          p = await api.updateItem(quotation.id, cell.edit.itemId, { params: [{ cell: cell.edit.cell ?? cell.addr, value: num }] });
           break;
         case 'L':
         case 'H':
-          p = await api.updateItem(project.id, cell.edit.itemId, { [cell.edit.field]: num });
+          p = await api.updateItem(quotation.id, cell.edit.itemId, { [cell.edit.field]: num });
           break;
         default:
-          p = await api.updateItem(project.id, cell.edit.itemId, { [cell.edit.field]: draft });
+          p = await api.updateItem(quotation.id, cell.edit.itemId, { [cell.edit.field]: draft });
       }
-      onProject(p);
+      onQuotation(p);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     }
@@ -78,7 +78,7 @@ export function WorkbookView({ project, onProject, onError }: Props) {
   const exportPdf = async (): Promise<void> => {
     setBusy(true);
     try {
-      await api.downloadPdf(project.id, project.reference);
+      await api.downloadPdf(quotation.id, quotation.reference);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -160,7 +160,7 @@ export function WorkbookView({ project, onProject, onError }: Props) {
         ))}
       </div>
       {sheet.note && <div className="small muted">{sheet.note}</div>}
-      {selectedItemId && <Benchmark projectId={project.id} itemId={selectedItemId} onError={onError} />}
+      {selectedItemId && <Benchmark quotationId={quotation.id} itemId={selectedItemId} onError={onError} />}
     </section>
   );
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { Project, ProjectItem } from '../../common/interfaces/project.interface';
+import type { Quotation, QuotationItem } from '../../common/interfaces/quotation.interface';
 import { computeElencoCosti, m2Total, m2Unit } from './elenco-costi';
 
-function item(over: Partial<ProjectItem>): ProjectItem {
+function item(over: Partial<QuotationItem>): QuotationItem {
   return {
     id: 'i',
     catalogId: 'TM1643-06#10',
@@ -28,11 +28,11 @@ function item(over: Partial<ProjectItem>): ProjectItem {
   };
 }
 
-const project = (items: ProjectItem[]): Project => ({ id: 'p', ownerId: 'u', name: 'n', customer: 'c', reference: 'TM2099-00', date: '2026-10-21', estimator: 'e', templateWorkbook: 'TM1643-06 Analisi.xlsx', items, createdAt: '', updatedAt: '', generations: [] });
+const quotation = (items: QuotationItem[]): Quotation => ({ id: 'p', ownerId: 'u', name: 'n', customer: 'c', reference: 'TM2099-00', date: '2026-10-21', estimator: 'e', templateWorkbook: 'TM1643-06 Analisi.xlsx', items, createdAt: '', updatedAt: '', generations: [] });
 
 describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 10, 30 and 45)', () => {
   it('row 10: pieces, 2560x1600 -> 4.096 m² unit, 2916.352 m² total, 1090.7 x 712 = 776578.4', () => {
-    const ec = computeElencoCosti(project([item({})]));
+    const ec = computeElencoCosti(quotation([item({})]));
     const r = ec.rows[0];
     expect(r.m2Unit).toBe(4.096);
     expect(r.m2Total).toBeCloseTo(2916.352, 6);
@@ -46,7 +46,7 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
   it('row 30: unit m² -> I = quantity, no dimensions', () => {
     expect(m2Unit('m²', null, null)).toBe(0);
     expect(m2Total('m²', 4901, 0)).toBe(4901);
-    const r = computeElencoCosti(project([item({ id: 'f', unit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8, position: '03', itemCode: '03-01' })])).rows[0];
+    const r = computeElencoCosti(quotation([item({ id: 'f', unit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8, position: '03', itemCode: '03-01' })])).rows[0];
     expect(r.m2Total).toBe(4901);
     expect(r.totalCost).toBeCloseTo(601842.8, 2);
   });
@@ -58,20 +58,20 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
 
   it('free rows have no unit cost until a tab or an override is set; overrides win', () => {
     const free = item({ id: 'free', catalogId: null, sourceWorkbook: null, sourceSheet: null, sourceOfferNo: null, historicalUnitCost: null, historicalQuantity: null, quantity: 10 });
-    const ec = computeElencoCosti(project([item({}), free]));
+    const ec = computeElencoCosti(quotation([item({}), free]));
     expect(ec.rows[1].unitCost).toBeNull();
     expect(ec.rows[1].totalCost).toBeNull();
     expect(ec.rows[1].warnings[0]).toMatch(/no reference analysis attached/);
     expect(ec.totals.rowsWithoutCost).toBe(1);
     expect(ec.totals.complete).toBe(false);
-    const withOverride = computeElencoCosti(project([item({ ...free, unitCostOverride: 999.96 })]));
+    const withOverride = computeElencoCosti(quotation([item({ ...free, unitCostOverride: 999.96 })]));
     expect(withOverride.rows[0].unitCost).toBe(1000); // ROUND(,1)
     expect(withOverride.rows[0].unitCostSource).toBe('override');
     expect(withOverride.rows[0].totalCost).toBe(10000);
   });
 
   it('sums by position like the SUMMARY block', () => {
-    const ec = computeElencoCosti(project([item({}), item({ id: 'b', itemCode: '01-02', quantity: 129, L: 2710, historicalUnitCost: 1128.6 }), item({ id: 'c', position: '03', itemCode: '03-01', unit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8 })]));
+    const ec = computeElencoCosti(quotation([item({}), item({ id: 'b', itemCode: '01-02', quantity: 129, L: 2710, historicalUnitCost: 1128.6 }), item({ id: 'c', position: '03', itemCode: '03-01', unit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8 })]));
     const s01 = ec.summary.find((s) => s.position === '01')!;
     expect(s01.rows).toBe(2);
     expect(s01.totalCost).toBeCloseTo(776578.4 + 145589.4, 2);
@@ -83,7 +83,7 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
 
   it('keeps intermediate precision: K = J*E and SUM(K) are not rounded per line', () => {
     const rows = [1, 2, 3].map((n) => item({ id: `r${n}`, itemCode: `01-0${n}`, quantity: 0.125, historicalUnitCost: 1.1 }));
-    const ec = computeElencoCosti(project(rows));
+    const ec = computeElencoCosti(quotation(rows));
     expect(ec.rows[0].totalCost).toBeCloseTo(0.1375, 10);
     expect(ec.totals.totalCost).toBeCloseTo(0.4125, 10);
     expect(ec.summary[0].totalCost).toBeCloseTo(0.4125, 10);
@@ -104,7 +104,7 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
   it('warns when parameters changed or the price list differs', () => {
     const changed = item({ params: [{ cell: 'N4', label: 'PROFONDITA', unit: 'MM', value: 1700, original: 1594 }] });
     const other = item({ id: 'o', sourceWorkbook: 'TM1823-03 Analisi.xlsx', sourceOfferNo: 'TM1823-03' });
-    const ec = computeElencoCosti(project([changed, other]));
+    const ec = computeElencoCosti(quotation([changed, other]));
     expect(ec.rows[0].warnings.some((w) => /not recomputed/.test(w))).toBe(true);
     expect(ec.rows[1].warnings.some((w) => /different price list/.test(w))).toBe(true);
   });

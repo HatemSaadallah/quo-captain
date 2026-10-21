@@ -25,7 +25,7 @@ describe('app-side cost engine on TM1643-06 (logic extracted from the workbook)'
     expect(t10.cachedUnitCost).toBeCloseTo(1090.74, 2);
   });
 
-  it('recomputes the unit cost when the project quantity or a parameter changes', () => {
+  it('recomputes the unit cost when the quotation quantity or a parameter changes', () => {
     const snap = ws.sheets.get('10')!;
     const base = inputsForRow(ws, 10);
     const same = new SheetEvaluator('10', snap, ws, base, 10).evaluate();

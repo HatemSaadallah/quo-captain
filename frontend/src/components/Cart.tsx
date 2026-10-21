@@ -1,49 +1,49 @@
 import { useEffect, useState } from 'react';
-import { api, ApiError, fmtMoney, fmtNum, type ExcelStatus, type GenerationResult, type Project, type ProjectItem, type ProjectValidation, type UpdateItemDto } from '../api';
+import { api, ApiError, fmtMoney, fmtNum, type ExcelStatus, type GenerationResult, type Quotation, type QuotationItem, type QuotationValidation, type UpdateItemDto } from '../api';
 
 interface Props {
-  project: Project;
-  onProject: (p: Project) => void;
+  quotation: Quotation;
+  onQuotation: (p: Quotation) => void;
   onError: (msg: string) => void;
 }
 
-export function Cart({ project, onProject, onError }: Props) {
-  const [validation, setValidation] = useState<ProjectValidation | null>(null);
+export function Cart({ quotation, onQuotation, onError }: Props) {
+  const [validation, setValidation] = useState<QuotationValidation | null>(null);
   const [excel, setExcel] = useState<ExcelStatus | null>(null);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    api.validation(project.id).then(setValidation).catch(() => setValidation(null));
-  }, [project]);
+    api.validation(quotation.id).then(setValidation).catch(() => setValidation(null));
+  }, [quotation]);
 
   useEffect(() => {
     api.excelStatus().then(setExcel).catch(() => setExcel(null));
   }, []);
 
-  const patch = async (item: ProjectItem, dto: UpdateItemDto): Promise<void> => {
+  const patch = async (item: QuotationItem, dto: UpdateItemDto): Promise<void> => {
     try {
-      onProject(await api.updateItem(project.id, item.id, dto));
+      onQuotation(await api.updateItem(quotation.id, item.id, dto));
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const remove = async (item: ProjectItem): Promise<void> => {
-    onProject(await api.removeItem(project.id, item.id));
+  const remove = async (item: QuotationItem): Promise<void> => {
+    onQuotation(await api.removeItem(quotation.id, item.id));
   };
 
   const generate = async (): Promise<void> => {
     setGenerating(true);
     setResult(null);
     try {
-      const r = await api.generate(project.id);
+      const r = await api.generate(quotation.id);
       setResult(r);
-      onProject(await api.project(project.id));
+      onQuotation(await api.quotation(quotation.id));
     } catch (e) {
       if (e instanceof ApiError && e.body && typeof e.body === 'object' && 'issues' in e.body) {
-        const issues = (e.body as { issues: ProjectValidation['issues'] }).issues;
+        const issues = (e.body as { issues: QuotationValidation['issues'] }).issues;
         onError(`Not generated: ${issues.filter((i) => i.level === 'error').map((i) => i.message).join(' · ')}`);
       } else onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -51,15 +51,15 @@ export function Cart({ project, onProject, onError }: Props) {
     }
   };
 
-  const issuesFor = (item: ProjectItem) => validation?.issues.filter((i) => i.itemId === item.id) ?? [];
-  const total = project.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * (it.quantity > 0 ? it.quantity : 0), 0);
-  const lastGen = project.generations[0];
+  const issuesFor = (item: QuotationItem) => validation?.issues.filter((i) => i.itemId === item.id) ?? [];
+  const total = quotation.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * (it.quantity > 0 ? it.quantity : 0), 0);
+  const lastGen = quotation.generations[0];
 
   return (
     <section className="panel">
       <h2>
         C · Cart — quotation cost-analysis items
-        <span className="muted small">{project.reference || '(no reference)'} · template {project.templateWorkbook}</span>
+        <span className="muted small">{quotation.reference || '(no reference)'} · template {quotation.templateWorkbook}</span>
       </h2>
       <table className="data">
         <thead>
@@ -75,7 +75,7 @@ export function Cart({ project, onProject, onError }: Props) {
           </tr>
         </thead>
         <tbody>
-          {project.items.map((it) => {
+          {quotation.items.map((it) => {
             const iss = issuesFor(it);
             const err = iss.some((i) => i.level === 'error');
             return (
@@ -137,7 +137,7 @@ export function Cart({ project, onProject, onError }: Props) {
               </tr>
             );
           })}
-          {project.items.length === 0 && (
+          {quotation.items.length === 0 && (
             <tr>
               <td colSpan={8} className="muted">
                 The cart is empty. Search for a historical analysis on the left and add it.
@@ -218,7 +218,7 @@ function DownloadButton({ file, label, primary = false }: { file: string; label:
   );
 }
 
-function LastGeneration({ gen }: { gen: Project['generations'][number] }) {
+function LastGeneration({ gen }: { gen: Quotation['generations'][number] }) {
   return (
     <div className="small row">
       Last generation {new Date(gen.at).toLocaleString()} · <span className={`badge ${gen.status === 'validated' ? 'ok' : gen.status === 'failed' ? 'err' : 'warn'}`}>{gen.status}</span>
