@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../common/interfaces/generation.interface';
 import { INPUT_DIR, OUTPUT_DIR } from '../../common/utils/paths';
@@ -39,9 +40,7 @@ export class GenerationService {
     if (!existsSync(templatePath) || !this.catalog.workbooks.some((w) => w.workbook === project.templateWorkbook)) {
       throw new BadRequestException(`Template workbook ${project.templateWorkbook} not found in data/input`);
     }
-    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', '-');
-    const folder = `${safeFileStem(project.reference)}_${stamp}`;
-    const outputDir = path.join(OUTPUT_DIR, folder);
+    const outputDir = this.allocateOutputDir(project.reference);
     const t0 = Date.now();
     const outcome = await generateWorkbook({
       project,
@@ -70,6 +69,22 @@ export class GenerationService {
     writeFileSync(reportFile, JSON.stringify({ ...report, changes: outcome.changes }, null, 2));
     await this.projects.recordGeneration(projectId, { file: path.relative(OUTPUT_DIR, outcome.outputFile), reportFile: path.relative(OUTPUT_DIR, reportFile), status: report.status, engine });
     return { outputFile: path.relative(OUTPUT_DIR, outcome.outputFile), reportFile: path.relative(OUTPUT_DIR, reportFile), report };
+  }
+
+  /** A directory that did not exist before this call (exclusive create), so concurrent generations never share files. */
+  private allocateOutputDir(reference: string): string {
+    mkdirSync(OUTPUT_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', '-');
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const dir = path.join(OUTPUT_DIR, `${safeFileStem(reference)}_${stamp}_${randomBytes(3).toString('hex')}`);
+      try {
+        mkdirSync(dir); // throws EEXIST if taken
+        return dir;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      }
+    }
+    throw new Error('Could not allocate a unique output directory');
   }
 
   listOutputs(): OutputEntry[] {
