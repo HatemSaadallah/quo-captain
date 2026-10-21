@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import type { AuthUser } from '../../common/interfaces/auth.interface';
 import type { CreateProjectDto, Project } from '../../common/interfaces/project.interface';
 import { CurrentUser } from '../auth/auth.decorators';
@@ -16,4 +16,9 @@ export class ProjectsController {
 
   @Post()
   create(@Body() body: CreateProjectDto, @CurrentUser() user: AuthUser): Promise<Project> { return this.projects.create(body, user.id); }
+
+  @Patch(':id/contacts')
+  updateContacts(@Param('id') id: string, @Body() body: { contactIds: string[] }, @CurrentUser() user: AuthUser): Promise<Project> {
+    return this.projects.updateContacts(id, body.contactIds, user.id);
+  }
 }
