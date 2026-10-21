@@ -70,7 +70,7 @@ describe('extractWorkbook TM1643-06', () => {
 });
 
 describe('extractWorkbook other workbooks', () => {
-  it('TM1823-03 repeat project has the 1110.00 unit cost', async () => {
+  it('TM1823-03 repeat quotation has the 1110.00 unit cost', async () => {
     const { records } = await extractWorkbook(file('TM1823-03 Analisi.xlsx'));
     const b = records.find((r) => r.itemCode === '01-01');
     expect(b?.unitCost).toBe(1110);

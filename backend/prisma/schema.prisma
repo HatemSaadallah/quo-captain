@@ -1,4 +1,4 @@
-// Quotation projects (the "cart") and their generation history.
+// Quotations (the "cart") and their generation history.
 // The product catalog itself is derived from the Excel workbooks and lives in
 // data/processed/*.json (read-only index, rebuilt with `npm run extract`).
 
@@ -20,10 +20,10 @@ model User {
   /// estimator | admin
   role         String    @default("estimator")
   createdAt    DateTime  @default(now())
-  projects     Project[]
+  quotations     Quotation[]
 }
 
-model Project {
+model Quotation {
   id               String        @id @default(cuid())
   ownerId          String
   owner            User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -38,7 +38,7 @@ model Project {
   templateWorkbook String
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
-  items            ProjectItem[]
+  items            QuotationItem[]
   generations      Generation[]
 
   @@index([ownerId, updatedAt])
@@ -96,7 +96,7 @@ model ReferenceTab {
   /// exact | off | n/a : does the app engine reproduce Excel's cached E67 for this tab?
   fidelity       String?
   extractedAt    DateTime
-  items          ProjectItem[]
+  items          QuotationItem[]
 
   @@index([workbook, sheet])
   @@index([categoryName])
@@ -114,10 +114,10 @@ model WorkbookSnapshot {
   @@unique([workbook, sheet])
 }
 
-model ProjectItem {
+model QuotationItem {
   id                 String   @id @default(cuid())
-  projectId          String
-  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  quotationId          String
+  quotation            Quotation  @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   sortOrder          Int      @default(0)
   /// null for a free row typed by the estimator (no reference analysis attached yet)
   catalogId          String?
@@ -145,18 +145,18 @@ model ProjectItem {
   notes              String   @default("")
   createdAt          DateTime @default(now())
 
-  @@index([projectId, sortOrder])
+  @@index([quotationId, sortOrder])
 }
 
 model Generation {
   id         String   @id @default(cuid())
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  quotationId  String
+  quotation    Quotation  @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   file       String
   reportFile String
   status     String
   engine     String
   createdAt  DateTime @default(now())
 
-  @@index([projectId, createdAt])
+  @@index([quotationId, createdAt])
 }

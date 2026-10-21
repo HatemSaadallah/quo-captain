@@ -9,7 +9,7 @@ import { GenerationService, type OutputEntry } from './generation.service';
 export class GenerationController {
   constructor(private readonly generation: GenerationService) {}
 
-  @Post('projects/:id/generate')
+  @Post('quotations/:id/generate')
   generate(@Param('id') id: string, @CurrentUser() user: AuthUser): Promise<GenerationResult> {
     return this.generation.generate(id, user.id);
   }

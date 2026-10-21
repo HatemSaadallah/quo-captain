@@ -1,9 +1,9 @@
 /**
  * App-side cost engine: evaluates a stored reference tab (its cells + the workbook
- * snapshots from the database) with the project's inputs, without any Excel file.
+ * snapshots from the database) with the quotation's inputs, without any Excel file.
  */
 import { Injectable, Logger } from '@nestjs/common';
-import type { ProjectItem } from '../../common/interfaces/project.interface';
+import type { QuotationItem } from '../../common/interfaces/quotation.interface';
 import type { Value } from '../../common/utils/formula-engine';
 import { SheetEvaluator, snapshotFromStored, type EvaluationResult, type SheetSnapshot, type StoredCell, type WorkbookSnapshots } from '../../excel/sheet-evaluator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,7 +56,7 @@ export class CostingService {
     return (await this.externalSheets(workbook)).size > 0 && (await this.tab(workbook, sheet)) !== null;
   }
 
-  private async evaluatorFor(item: ProjectItem): Promise<{ ev: SheetEvaluator; snap: SheetSnapshot; fidelity: string | null } | null> {
+  private async evaluatorFor(item: QuotationItem): Promise<{ ev: SheetEvaluator; snap: SheetSnapshot; fidelity: string | null } | null> {
     if (!item.sourceWorkbook || !item.sourceSheet) return null;
     const ext = await this.externalSheets(item.sourceWorkbook);
     const t = await this.tab(item.sourceWorkbook, item.sourceSheet);
@@ -75,7 +75,7 @@ export class CostingService {
   }
 
   /** Unit cost of the item's reference tab with the item's own quantity, text and parameter overrides. */
-  async compute(item: ProjectItem): Promise<ComputedCost | null> {
+  async compute(item: QuotationItem): Promise<ComputedCost | null> {
     const e = await this.evaluatorFor(item);
     if (!e) return null;
     try {
@@ -91,7 +91,7 @@ export class CostingService {
    * The evaluated analysis sheet as a grid for the web workbook view: every stored cell up to
    * column W (the sheet's print area) with its computed value and formula.
    */
-  async grid(item: ProjectItem): Promise<{ cells: Array<{ addr: string; v: Value; f?: string }>; maxRow: number } | null> {
+  async grid(item: QuotationItem): Promise<{ cells: Array<{ addr: string; v: Value; f?: string }>; maxRow: number } | null> {
     const e = await this.evaluatorFor(item);
     if (!e) return null;
     const cells: Array<{ addr: string; v: Value; f?: string }> = [];

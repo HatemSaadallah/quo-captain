@@ -5,16 +5,16 @@ import type {
   AddItemDto,
   AddRowDto,
   AttachTabDto,
-  CreateProjectDto,
+  CreateQuotationDto,
   ElencoCosti,
   GenerationSummary,
   ItemParam,
-  Project,
-  ProjectItem,
-  ProjectValidation,
+  Quotation,
+  QuotationItem,
+  QuotationValidation,
   UpdateItemDto,
-  UpdateProjectDto,
-} from '../../common/interfaces/project.interface';
+  UpdateQuotationDto,
+} from '../../common/interfaces/quotation.interface';
 import type { Benchmark, BenchmarkCategoryRow, BenchmarkExample, GridSheet, WorkbookView } from '../../common/interfaces/workbook-view.interface';
 import { EC } from '../../excel/somec-schema';
 import { CatalogService } from '../catalog/catalog.service';
@@ -23,15 +23,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { computeElencoCosti, unitsCompatible, type ComputedUnitCost } from './elenco-costi';
 import { elencoCostiPdf } from './pdf';
 import { analysisSheet, elencoCostiSheet } from './workbook-view';
-import { attachTab, blankRow, itemFromCatalog, validateProject, type NewItem } from './project.rules';
+import { attachTab, blankRow, itemFromCatalog, validateQuotation, type NewItem } from './quotation.rules';
 
-type ProjectRow = Prisma.ProjectGetPayload<{ include: { items: true; generations: true } }>;
-type ItemRow = Prisma.ProjectItemGetPayload<Record<string, never>>;
+type QuotationRow = Prisma.QuotationGetPayload<{ include: { items: true; generations: true } }>;
+type ItemRow = Prisma.QuotationItemGetPayload<Record<string, never>>;
 type GenerationRow = Prisma.GenerationGetPayload<Record<string, never>>;
 
 const INCLUDE = { items: { orderBy: { sortOrder: 'asc' } }, generations: { orderBy: { createdAt: 'desc' } } } as const;
 
-function toItem(r: ItemRow): ProjectItem {
+function toItem(r: ItemRow): QuotationItem {
   return {
     id: r.id,
     catalogId: r.catalogId,
@@ -76,7 +76,7 @@ function toGeneration(g: GenerationRow): GenerationSummary {
   return { at: g.createdAt.toISOString(), file: g.file, reportFile: g.reportFile, status: g.status, engine: g.engine };
 }
 
-function toProject(p: ProjectRow): Project {
+function toQuotation(p: QuotationRow): Quotation {
   return {
     id: p.id,
     ownerId: p.ownerId,
@@ -93,7 +93,7 @@ function toProject(p: ProjectRow): Project {
   };
 }
 
-function itemData(it: NewItem): Prisma.ProjectItemUncheckedCreateWithoutProjectInput {
+function itemData(it: NewItem): Prisma.QuotationItemUncheckedCreateWithoutQuotationInput {
   return {
     catalogId: it.catalogId,
     referenceTabId: it.referenceTabId,
@@ -117,33 +117,33 @@ function itemData(it: NewItem): Prisma.ProjectItemUncheckedCreateWithoutProjectI
   };
 }
 
-/** Every method is scoped to the authenticated user: a project is only visible to its owner. */
+/** Every method is scoped to the authenticated user: a quotation is only visible to its owner. */
 @Injectable()
-export class ProjectsService {
+export class QuotationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: CatalogService,
     private readonly costing: CostingService,
   ) {}
 
-  async list(userId: string): Promise<Project[]> {
-    const rows = await this.prisma.project.findMany({ where: { ownerId: userId }, include: INCLUDE, orderBy: { updatedAt: 'desc' } });
-    return rows.map(toProject);
+  async list(userId: string): Promise<Quotation[]> {
+    const rows = await this.prisma.quotation.findMany({ where: { ownerId: userId }, include: INCLUDE, orderBy: { updatedAt: 'desc' } });
+    return rows.map(toQuotation);
   }
 
-  async get(id: string, userId: string): Promise<Project> {
-    const row = await this.prisma.project.findFirst({ where: { id, ownerId: userId }, include: INCLUDE });
-    if (!row) throw new NotFoundException(`Project ${id} not found`);
-    return toProject(row);
+  async get(id: string, userId: string): Promise<Quotation> {
+    const row = await this.prisma.quotation.findFirst({ where: { id, ownerId: userId }, include: INCLUDE });
+    if (!row) throw new NotFoundException(`Quotation ${id} not found`);
+    return toQuotation(row);
   }
 
-  async create(input: CreateProjectDto, userId: string): Promise<Project> {
+  async create(input: CreateQuotationDto, userId: string): Promise<Quotation> {
     const name = requireText(input.name ?? '', 'name');
     if (!name) throw new BadRequestException('name is required');
     const templates = this.catalog.workbooks.map((w) => w.workbook);
     const templateWorkbook = String(input.templateWorkbook ?? templates[0] ?? '');
     if (templateWorkbook && !templates.includes(templateWorkbook)) throw new BadRequestException(`Unknown template workbook ${templateWorkbook}`);
-    const row = await this.prisma.project.create({
+    const row = await this.prisma.quotation.create({
       data: {
         ownerId: userId,
         name,
@@ -155,12 +155,12 @@ export class ProjectsService {
       },
       include: INCLUDE,
     });
-    return toProject(row);
+    return toQuotation(row);
   }
 
-  async update(id: string, patch: UpdateProjectDto, userId: string): Promise<Project> {
+  async update(id: string, patch: UpdateQuotationDto, userId: string): Promise<Quotation> {
     await this.get(id, userId);
-    const data: Prisma.ProjectUpdateInput = {};
+    const data: Prisma.QuotationUpdateInput = {};
     for (const k of ['name', 'customer', 'reference', 'date', 'estimator', 'templateWorkbook'] as const) {
       const v = patch[k];
       if (v !== undefined) data[k] = requireText(v, k);
@@ -168,17 +168,17 @@ export class ProjectsService {
     if (data.templateWorkbook && !this.catalog.workbooks.some((w) => w.workbook === data.templateWorkbook)) {
       throw new BadRequestException(`Unknown template workbook ${String(data.templateWorkbook)}`);
     }
-    const row = await this.prisma.project.update({ where: { id }, data, include: INCLUDE });
-    return toProject(row);
+    const row = await this.prisma.quotation.update({ where: { id }, data, include: INCLUDE });
+    return toQuotation(row);
   }
 
   async delete(id: string, userId: string): Promise<void> {
     await this.get(id, userId);
-    await this.prisma.project.delete({ where: { id } });
+    await this.prisma.quotation.delete({ where: { id } });
   }
 
-  private async nextSortOrder(projectId: string): Promise<number> {
-    const agg = await this.prisma.projectItem.aggregate({ where: { projectId }, _max: { sortOrder: true } });
+  private async nextSortOrder(quotationId: string): Promise<number> {
+    const agg = await this.prisma.quotationItem.aggregate({ where: { quotationId }, _max: { sortOrder: true } });
     return (agg._max.sortOrder ?? 0) + 1;
   }
 
@@ -190,7 +190,7 @@ export class ProjectsService {
   }
 
   /** Add a historical analysis (reference tab) as a cost row. */
-  async addItem(id: string, input: AddItemDto, userId: string): Promise<Project> {
+  async addItem(id: string, input: AddItemDto, userId: string): Promise<Quotation> {
     await this.get(id, userId);
     if (!input || typeof input.catalogId !== 'string') throw new BadRequestException('catalogId is required');
     const rec = this.catalog.get(input.catalogId);
@@ -204,13 +204,13 @@ export class ProjectsService {
     const q = input.quantity === undefined ? (rec.quantity ?? 1) : requirePositive(input.quantity, 'quantity');
     const item = itemFromCatalog(rec, q, overrides);
     item.referenceTabId = await this.referenceTabIdFor(item.catalogId);
-    await this.prisma.projectItem.create({ data: { ...itemData(item), sortOrder: await this.nextSortOrder(id), projectId: id } });
+    await this.prisma.quotationItem.create({ data: { ...itemData(item), sortOrder: await this.nextSortOrder(id), quotationId: id } });
     await this.touch(id);
     return this.get(id, userId);
   }
 
   /** Add a free ELENCO COSTI row (from the customer's BOQ) with no reference tab yet. */
-  async addRow(id: string, input: AddRowDto, userId: string): Promise<Project> {
+  async addRow(id: string, input: AddRowDto, userId: string): Promise<Quotation> {
     await this.get(id, userId);
     const row = blankRow({
       position: input.position === undefined ? undefined : requireText(input.position, 'position'),
@@ -223,7 +223,7 @@ export class ProjectsService {
       lotto: input.lotto === undefined || input.lotto === null ? null : requireText(input.lotto, 'lotto'),
     });
     if (!row.description) throw new BadRequestException('description is required');
-    await this.prisma.projectItem.create({ data: { ...itemData(row), sortOrder: await this.nextSortOrder(id), projectId: id } });
+    await this.prisma.quotationItem.create({ data: { ...itemData(row), sortOrder: await this.nextSortOrder(id), quotationId: id } });
     await this.touch(id);
     return this.get(id, userId);
   }
@@ -241,7 +241,7 @@ export class ProjectsService {
   }
 
   /** Attach a reference tab to a row: provenance, parameters and historical unit cost come from the tab. */
-  async attach(id: string, itemId: string, input: AttachTabDto, userId: string): Promise<Project> {
+  async attach(id: string, itemId: string, input: AttachTabDto, userId: string): Promise<Quotation> {
     const p = await this.get(id, userId);
     const it = p.items.find((x) => x.id === itemId);
     if (!it) throw new NotFoundException(`Item ${itemId} not found`);
@@ -254,17 +254,17 @@ export class ProjectsService {
     const merged = attachTab(it, tab, input.overwrite === true);
     merged.referenceTabId = await this.referenceTabIdFor(tab.id);
     const { sortOrder: _s, ...data } = { ...itemData(merged), sortOrder: 0 };
-    await this.prisma.projectItem.update({ where: { id: itemId }, data });
+    await this.prisma.quotationItem.update({ where: { id: itemId }, data });
     await this.touch(id);
     return this.get(id, userId);
   }
 
   /** Detach the reference tab: the row becomes a free row again (keeps its text, quantity, dims and override). */
-  async detach(id: string, itemId: string, userId: string): Promise<Project> {
+  async detach(id: string, itemId: string, userId: string): Promise<Quotation> {
     const p = await this.get(id, userId);
     const it = p.items.find((x) => x.id === itemId);
     if (!it) throw new NotFoundException(`Item ${itemId} not found`);
-    await this.prisma.projectItem.update({
+    await this.prisma.quotationItem.update({
       where: { id: itemId },
       data: { catalogId: null, referenceTabId: null, sourceWorkbook: null, sourceSheet: null, sourceOfferNo: null, params: '[]', historicalUnitCost: null, historicalQuantity: null, dependsOnSheets: '[]' },
     });
@@ -272,11 +272,11 @@ export class ProjectsService {
     return this.get(id, userId);
   }
 
-  async updateItem(id: string, itemId: string, patch: UpdateItemDto, userId: string): Promise<Project> {
+  async updateItem(id: string, itemId: string, patch: UpdateItemDto, userId: string): Promise<Quotation> {
     await this.get(id, userId);
-    const row = await this.prisma.projectItem.findFirst({ where: { id: itemId, projectId: id } });
+    const row = await this.prisma.quotationItem.findFirst({ where: { id: itemId, quotationId: id } });
     if (!row) throw new NotFoundException(`Item ${itemId} not found`);
-    const data: Prisma.ProjectItemUpdateInput = {};
+    const data: Prisma.QuotationItemUpdateInput = {};
     for (const k of ['position', 'itemCode', 'description', 'unit', 'notes'] as const) if (patch[k] !== undefined) data[k] = requireText(patch[k], k);
     if (patch.unit !== undefined && row.catalogId && this.catalog.has(row.catalogId)) {
       const tabUnit = this.catalog.get(row.catalogId).unit;
@@ -299,28 +299,28 @@ export class ProjectsService {
       }
       data.params = JSON.stringify(params);
     }
-    await this.prisma.projectItem.update({ where: { id: itemId }, data });
+    await this.prisma.quotationItem.update({ where: { id: itemId }, data });
     await this.touch(id);
     return this.get(id, userId);
   }
 
-  async removeItem(id: string, itemId: string, userId: string): Promise<Project> {
+  async removeItem(id: string, itemId: string, userId: string): Promise<Quotation> {
     await this.get(id, userId);
-    const res = await this.prisma.projectItem.deleteMany({ where: { id: itemId, projectId: id } });
+    const res = await this.prisma.quotationItem.deleteMany({ where: { id: itemId, quotationId: id } });
     if (!res.count) throw new NotFoundException(`Item ${itemId} not found`);
     await this.touch(id);
     return this.get(id, userId);
   }
 
-  async validate(id: string, userId: string): Promise<ProjectValidation> {
-    return this.validateProject(await this.get(id, userId));
+  async validate(id: string, userId: string): Promise<QuotationValidation> {
+    return this.validateQuotation(await this.get(id, userId));
   }
 
-  validateProject(p: Project): ProjectValidation {
-    return validateProject(p, this.catalog.workbooks.find((w) => w.workbook === p.templateWorkbook) ?? null, (id) => (this.catalog.has(id) ? this.catalog.get(id).unit : undefined));
+  validateQuotation(p: Quotation): QuotationValidation {
+    return validateQuotation(p, this.catalog.workbooks.find((w) => w.workbook === p.templateWorkbook) ?? null, (id) => (this.catalog.has(id) ? this.catalog.get(id).unit : undefined));
   }
 
-  /** The web ELENCO COSTI: the sheet's own formulas applied to the project's rows; J from the app engine when the tab's logic is stored. */
+  /** The web ELENCO COSTI: the sheet's own formulas applied to the quotation's rows; J from the app engine when the tab's logic is stored. */
   async elencoCosti(id: string, userId: string): Promise<ElencoCosti> {
     const p = await this.get(id, userId);
     const computed = new Map<string, ComputedUnitCost | null>();
@@ -343,7 +343,7 @@ export class ProjectsService {
       const grid = await this.costing.grid(it);
       if (grid) sheets.push(analysisSheet(it, EC.firstRow + i, grid, `${it.itemCode} ${it.description.split(/\r?\n/)[0]}`));
     }
-    return { projectId: p.id, reference: p.reference, generatedAt: new Date().toISOString(), sheets };
+    return { quotationId: p.id, reference: p.reference, generatedAt: new Date().toISOString(), sheets };
   }
 
   async elencoCostiPdf(id: string, userId: string): Promise<{ file: string; buffer: Buffer }> {
@@ -391,7 +391,7 @@ export class ProjectsService {
     }));
     const byWb = new Map<string, number>();
     for (const h of hits) byWb.set(h.record.workbook, (byWb.get(h.record.workbook) ?? 0) + 1);
-    const projects = [...byWb]
+    const quotations = [...byWb]
       .map(([workbook, matches]) => {
         const w = this.catalog.workbooks.find((x) => x.workbook === workbook);
         return { workbook, offerNo: w?.offerNo ?? null, client: w?.client ?? null, projectName: w?.projectName ?? null, projectDate: w?.projectDate ?? null, matches };
@@ -399,14 +399,14 @@ export class ProjectsService {
       .sort((a, b) => b.matches - a.matches);
     const costs = examples.map((e) => e.unitCost).filter((v): v is number => v !== null).sort((a, b) => a - b);
     const ownCost = computed?.unitCost ?? it.unitCostOverride ?? it.historicalUnitCost;
-    return { itemId, query, examples, categories, projects, stats: { min: costs[0] ?? null, median: costs.length ? costs[Math.floor(costs.length / 2)] : null, max: costs[costs.length - 1] ?? null, own: ownCost, unit: own?.unit ?? it.unit } };
+    return { itemId, query, examples, categories, quotations, stats: { min: costs[0] ?? null, median: costs.length ? costs[Math.floor(costs.length / 2)] : null, max: costs[costs.length - 1] ?? null, own: ownCost, unit: own?.unit ?? it.unit } };
   }
 
   async recordGeneration(id: string, g: Omit<GenerationSummary, 'at'>): Promise<void> {
-    await this.prisma.generation.create({ data: { projectId: id, file: g.file, reportFile: g.reportFile, status: g.status, engine: g.engine } });
+    await this.prisma.generation.create({ data: { quotationId: id, file: g.file, reportFile: g.reportFile, status: g.status, engine: g.engine } });
   }
 
   private async touch(id: string): Promise<void> {
-    await this.prisma.project.update({ where: { id }, data: { updatedAt: new Date() } });
+    await this.prisma.quotation.update({ where: { id }, data: { updatedAt: new Date() } });
   }
 }

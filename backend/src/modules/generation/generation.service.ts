@@ -9,7 +9,7 @@ import { generateWorkbook, safeFileStem } from '../../excel/generator';
 import { validateGenerated } from '../../excel/validator';
 import { CatalogService } from '../catalog/catalog.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProjectsService } from '../projects/projects.service';
+import { QuotationsService } from '../quotations/quotations.service';
 
 export interface OutputEntry {
   folder: string;
@@ -25,7 +25,7 @@ export class GenerationService {
   private readonly log = new Logger(GenerationService.name);
 
   constructor(
-    private readonly projects: ProjectsService,
+    private readonly quotations: QuotationsService,
     private readonly catalog: CatalogService,
     private readonly prisma: PrismaService,
   ) {}
@@ -34,18 +34,18 @@ export class GenerationService {
     return detectExcel(force);
   }
 
-  async generate(projectId: string, userId: string): Promise<GenerationResult> {
-    const project = await this.projects.get(projectId, userId);
-    const validation = this.projects.validateProject(project);
-    if (!validation.ok) throw new BadRequestException({ message: 'Project is not ready for generation', issues: validation.issues });
-    const templatePath = path.join(INPUT_DIR, project.templateWorkbook);
-    if (!existsSync(templatePath) || !this.catalog.workbooks.some((w) => w.workbook === project.templateWorkbook)) {
-      throw new BadRequestException(`Template workbook ${project.templateWorkbook} not found in data/input`);
+  async generate(quotationId: string, userId: string): Promise<GenerationResult> {
+    const quotation = await this.quotations.get(quotationId, userId);
+    const validation = this.quotations.validateQuotation(quotation);
+    if (!validation.ok) throw new BadRequestException({ message: 'Quotation is not ready for generation', issues: validation.issues });
+    const templatePath = path.join(INPUT_DIR, quotation.templateWorkbook);
+    if (!existsSync(templatePath) || !this.catalog.workbooks.some((w) => w.workbook === quotation.templateWorkbook)) {
+      throw new BadRequestException(`Template workbook ${quotation.templateWorkbook} not found in data/input`);
     }
-    const outputDir = this.allocateOutputDir(project.reference);
+    const outputDir = this.allocateOutputDir(quotation.reference);
     const t0 = Date.now();
     const outcome = await generateWorkbook({
-      project,
+      quotation,
       templatePath,
       outputDir,
       sourcePathOf: (wb) => {
@@ -65,11 +65,11 @@ export class GenerationService {
       if (r.ok) engine = 'ooxml+excel';
       else this.log.warn(recalc.detail);
     }
-    const report = await validateGenerated(project, outcome, recalc, engine);
+    const report = await validateGenerated(quotation, outcome, recalc, engine);
     report.sourceHashes = outcome.sourceHashes;
     const reportFile = path.join(outputDir, 'validation_report.json');
     writeFileSync(reportFile, JSON.stringify({ ...report, changes: outcome.changes }, null, 2));
-    await this.projects.recordGeneration(projectId, { file: path.relative(OUTPUT_DIR, outcome.outputFile), reportFile: path.relative(OUTPUT_DIR, reportFile), status: report.status, engine });
+    await this.quotations.recordGeneration(quotationId, { file: path.relative(OUTPUT_DIR, outcome.outputFile), reportFile: path.relative(OUTPUT_DIR, reportFile), status: report.status, engine });
     return { outputFile: path.relative(OUTPUT_DIR, outcome.outputFile), reportFile: path.relative(OUTPUT_DIR, reportFile), report };
   }
 
@@ -89,9 +89,9 @@ export class GenerationService {
     throw new Error('Could not allocate a unique output directory');
   }
 
-  /** Output files of the user's own generations (Generation -> Project.ownerId). */
+  /** Output files of the user's own generations (Generation -> Quotation.ownerId). */
   async listOutputs(userId: string): Promise<OutputEntry[]> {
-    const gens = await this.prisma.generation.findMany({ where: { project: { ownerId: userId } }, orderBy: { createdAt: 'desc' } });
+    const gens = await this.prisma.generation.findMany({ where: { quotation: { ownerId: userId } }, orderBy: { createdAt: 'desc' } });
     const out: OutputEntry[] = [];
     for (const g of gens) {
       for (const rel of [g.file, g.reportFile]) {
@@ -104,10 +104,10 @@ export class GenerationService {
     return out;
   }
 
-  /** Absolute path of an output file: the folder must belong to a generation of one of the user's projects. */
+  /** Absolute path of an output file: the folder must belong to a generation of one of the user's quotations. */
   async resolveOutput(folder: string, file: string, userId: string): Promise<string> {
     if (!SAFE_NAME.test(folder) || !SAFE_NAME.test(file)) throw new BadRequestException('Invalid output name');
-    const owned = await this.prisma.generation.findFirst({ where: { project: { ownerId: userId }, OR: [{ file: { startsWith: `${folder}/` } }, { reportFile: { startsWith: `${folder}/` } }] }, select: { id: true } });
+    const owned = await this.prisma.generation.findFirst({ where: { quotation: { ownerId: userId }, OR: [{ file: { startsWith: `${folder}/` } }, { reportFile: { startsWith: `${folder}/` } }] }, select: { id: true } });
     if (!owned) throw new NotFoundException('Output not found');
     const p = path.resolve(OUTPUT_DIR, folder, file);
     if (!p.startsWith(path.resolve(OUTPUT_DIR, folder) + path.sep) || !existsSync(p)) throw new NotFoundException('Output not found');

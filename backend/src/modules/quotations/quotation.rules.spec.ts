@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { Catalog } from '../../common/interfaces/catalog.interface';
-import type { Project } from '../../common/interfaces/project.interface';
+import type { Quotation } from '../../common/interfaces/quotation.interface';
 import { CATALOG_FILE } from '../../common/utils/paths';
-import { attachTab, blankRow, itemFromCatalog, validateProject } from './project.rules';
+import { attachTab, blankRow, itemFromCatalog, validateQuotation } from './quotation.rules';
 
 const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as Catalog;
 const balcony = catalog.records.find((r) => r.id === 'TM1643-06#10')!;
 const template = catalog.workbooks.find((w) => w.workbook === 'TM1643-06 Analisi.xlsx')!;
 
-function project(items: Project['items'], over: Partial<Project> = {}): Project {
+function quotation(items: Quotation['items'], over: Partial<Quotation> = {}): Quotation {
   return {
     id: 'p1',
     name: 'Nave 4 balconies',
@@ -35,43 +35,43 @@ describe('itemFromCatalog', () => {
   });
 });
 
-describe('validateProject', () => {
-  it('accepts a complete project', () => {
-    const v = validateProject(project([{ id: 'i1', ...itemFromCatalog(balcony, 50) }]), template);
+describe('validateQuotation', () => {
+  it('accepts a complete quotation', () => {
+    const v = validateQuotation(quotation([{ id: 'i1', ...itemFromCatalog(balcony, 50) }]), template);
     expect(v.ok).toBe(true);
     expect(v.estimatedTotal).toBe(54535);
   });
 
   it('rejects missing quantity, bad reference, empty cart and missing sheet', () => {
     const bad = { id: 'i1', ...itemFromCatalog(balcony, 0), sourceSheet: null };
-    const v = validateProject(project([bad], { reference: 'TM/2099' }), template);
+    const v = validateQuotation(quotation([bad], { reference: 'TM/2099' }), template);
     expect(v.ok).toBe(false);
     const msgs = v.issues.filter((i) => i.level === 'error').map((i) => i.message);
     expect(msgs.some((m) => /quantity must be a positive number/.test(m))).toBe(true);
     expect(msgs.some((m) => /Reference may only contain/.test(m))).toBe(true);
     expect(msgs.some((m) => /no analysis sheet/.test(m))).toBe(true);
-    expect(validateProject(project([]), template).issues.some((i) => /cart is empty/.test(i.message))).toBe(true);
+    expect(validateQuotation(quotation([]), template).issues.some((i) => /cart is empty/.test(i.message))).toBe(true);
   });
 
   it('flags incompatible configurations and cross-workbook price lists', () => {
     const r221 = catalog.records.find((r) => r.id === 'TM1643-06#221')!;
-    const crossWb = validateProject(project([{ id: 'i1', ...itemFromCatalog(r221, 1) }], { templateWorkbook: 'TM1823-03 Analisi.xlsx' }), catalog.workbooks[2]);
+    const crossWb = validateQuotation(quotation([{ id: 'i1', ...itemFromCatalog(r221, 1) }], { templateWorkbook: 'TM1823-03 Analisi.xlsx' }), catalog.workbooks[2]);
     expect(crossWb.ok).toBe(false);
     expect(crossWb.issues.some((i) => /incompatible configuration/.test(i.message))).toBe(true);
-    const sameWb = validateProject(project([{ id: 'i1', ...itemFromCatalog(r221, 1) }]), template);
+    const sameWb = validateQuotation(quotation([{ id: 'i1', ...itemFromCatalog(r221, 1) }]), template);
     expect(sameWb.ok).toBe(true);
     expect(sameWb.issues.some((i) => i.level === 'warning' && /references sheets/.test(i.message))).toBe(true);
-    const other = validateProject(project([{ id: 'i1', ...itemFromCatalog(catalog.records.find((r) => r.id === 'TM1823-03#10')!, 1) }]), template);
+    const other = validateQuotation(quotation([{ id: 'i1', ...itemFromCatalog(catalog.records.find((r) => r.id === 'TM1823-03#10')!, 1) }]), template);
     expect(other.ok).toBe(true);
     expect(other.issues.some((i) => /costs will differ/.test(i.message))).toBe(true);
   });
 
   it('free rows need a reference tab for the export, overrides are warned, attach fills blanks only', () => {
     const row = { id: 'r1', ...blankRow({ description: 'Balcony glass railing 2560 long', quantity: 12, unit: 'm', L: 2560, H: null }) };
-    const v = validateProject(project([row]), template);
+    const v = validateQuotation(quotation([row]), template);
     expect(v.ok).toBe(false);
     expect(v.issues.some((i) => /no reference analysis attached/.test(i.message))).toBe(true);
-    const withOverride = validateProject(project([{ ...row, unitCostOverride: 250 }]), template);
+    const withOverride = validateQuotation(quotation([{ ...row, unitCostOverride: 250 }]), template);
     expect(withOverride.estimatedTotal).toBe(3000);
     expect(withOverride.issues.some((i) => /manual unit cost/.test(i.message))).toBe(true);
     const attached = attachTab(row, catalog.records.find((r) => r.id === 'TM1643-06#45')!, false);
@@ -88,15 +88,15 @@ describe('validateProject', () => {
   it('flags a Pcs-priced tab attached to a row measured in metres', () => {
     const row = { id: 'r1', ...blankRow({ description: 'Railing', quantity: 12, unit: 'm', L: 2560, H: 1130 }) };
     const attached = { ...row, ...attachTab(row, balcony, false), id: 'r1' }; // balcony is priced per Pcs, row says m
-    const v = validateProject(project([attached]), template, (id) => (id === balcony.id ? balcony.unit : undefined));
+    const v = validateQuotation(quotation([attached]), template, (id) => (id === balcony.id ? balcony.unit : undefined));
     expect(v.issues.some((i) => i.level === 'error' && /incompatible with the reference tab's unit/.test(i.message))).toBe(true);
-    const ok = validateProject(project([{ ...attached, unit: 'PZ' }]), template, (id) => (id === balcony.id ? balcony.unit : undefined));
+    const ok = validateQuotation(quotation([{ ...attached, unit: 'PZ' }]), template, (id) => (id === balcony.id ? balcony.unit : undefined));
     expect(ok.issues.some((i) => /incompatible/.test(i.message))).toBe(false);
   });
 
   it('rejects an invalid mm parameter', () => {
     const it = { id: 'i1', ...itemFromCatalog(balcony, 1) };
     it.params[0].value = -5;
-    expect(validateProject(project([it]), template).issues.some((i) => /must be a positive number of mm/.test(i.message))).toBe(true);
+    expect(validateQuotation(quotation([it]), template).issues.some((i) => /must be a positive number of mm/.test(i.message))).toBe(true);
   });
 });

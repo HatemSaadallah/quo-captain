@@ -12,7 +12,7 @@ export interface ItemParam {
  * ("reference tab", catalogId set) used as a customizable template, or a free row
  * typed from the customer's BOQ that still needs a reference tab attached.
  */
-export interface ProjectItem {
+export interface QuotationItem {
   id: string;
   catalogId: string | null;
   referenceTabId: string | null;
@@ -45,7 +45,7 @@ export interface GenerationSummary {
   engine: string;
 }
 
-export interface Project {
+export interface Quotation {
   id: string;
   ownerId: string;
   name: string;
@@ -55,7 +55,7 @@ export interface Project {
   date: string;
   estimator: string;
   templateWorkbook: string;
-  items: ProjectItem[];
+  items: QuotationItem[];
   createdAt: string;
   updatedAt: string;
   generations: GenerationSummary[];
@@ -69,7 +69,7 @@ export interface ValidationIssue {
   message: string;
 }
 
-export interface ProjectValidation {
+export interface QuotationValidation {
   ok: boolean;
   issues: ValidationIssue[];
   /** Indicative only: Σ quantity × unit cost (override or historical). Excel is the authority. */
@@ -77,7 +77,7 @@ export interface ProjectValidation {
   itemsWithoutCost: number;
 }
 
-export interface CreateProjectDto {
+export interface CreateQuotationDto {
   name: string;
   customer?: string;
   reference?: string;
@@ -86,7 +86,7 @@ export interface CreateProjectDto {
   templateWorkbook?: string;
 }
 
-export type UpdateProjectDto = Partial<Pick<Project, 'name' | 'customer' | 'reference' | 'date' | 'estimator' | 'templateWorkbook'>>;
+export type UpdateQuotationDto = Partial<Pick<Quotation, 'name' | 'customer' | 'reference' | 'date' | 'estimator' | 'templateWorkbook'>>;
 
 export interface AddItemDto {
   catalogId: string;
@@ -175,7 +175,7 @@ export interface ElencoCostiSummaryRow {
 }
 
 export interface ElencoCosti {
-  projectId: string;
+  quotationId: string;
   reference: string;
   rows: ElencoCostiRow[];
   totals: {

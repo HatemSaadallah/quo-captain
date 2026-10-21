@@ -3,10 +3,10 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { WorkbookView as WorkbookData } from '../api';
 import { WorkbookView } from './WorkbookView';
-import { mockFetch, project } from '../test-utils';
+import { mockFetch, quotation } from '../test-utils';
 
 const wb: WorkbookData = {
-  projectId: 'p1',
+  quotationId: 'p1',
   reference: 'TM2099-00',
   generatedAt: '2026-10-21T12:00:00.000Z',
   sheets: [
@@ -30,12 +30,12 @@ const wb: WorkbookData = {
   ],
 };
 
-const benchmark = { itemId: 'i1', query: 'PRE-FAB BALCONY', examples: [], categories: [], projects: [], stats: { min: null, median: null, max: null, own: 1097.1, unit: 'Pcs' } };
+const benchmark = { itemId: 'i1', query: 'PRE-FAB BALCONY', examples: [], categories: [], quotations: [], stats: { min: null, median: null, max: null, own: 1097.1, unit: 'Pcs' } };
 
 describe('WorkbookView', () => {
   it('renders sheet tabs, shows the formula of a clicked cell and switches sheets', async () => {
     mockFetch((_m, path) => (path.endsWith('/workbook') ? wb : path.includes('/benchmark') ? benchmark : {}));
-    render(<WorkbookView project={project()} onProject={vi.fn()} onError={vi.fn()} />);
+    render(<WorkbookView quotation={quotation()} onQuotation={vi.fn()} onError={vi.fn()} />);
     const tabs = await screen.findAllByRole('tab');
     expect(tabs.map((t) => t.textContent)).toEqual(['ELENCO COSTI', '6']);
     const grid = screen.getByTestId('sheet-ELENCO COSTI');
@@ -50,15 +50,15 @@ describe('WorkbookView', () => {
   });
 
   it('edits an input cell in place and patches the item', async () => {
-    const onProject = vi.fn();
-    const fetch = mockFetch((method, path) => (path.endsWith('/workbook') ? wb : method === 'PATCH' ? project() : path.includes('/benchmark') ? benchmark : {}));
-    render(<WorkbookView project={project()} onProject={onProject} onError={vi.fn()} />);
+    const onQuotation = vi.fn();
+    const fetch = mockFetch((method, path) => (path.endsWith('/workbook') ? wb : method === 'PATCH' ? quotation() : path.includes('/benchmark') ? benchmark : {}));
+    render(<WorkbookView quotation={quotation()} onQuotation={onQuotation} onError={vi.fn()} />);
     const grid = await screen.findByTestId('sheet-ELENCO COSTI');
     await userEvent.dblClick(within(grid).getByText('50'));
     const input = screen.getByLabelText('edit E6');
     await userEvent.clear(input);
     await userEvent.type(input, '60{enter}');
-    await waitFor(() => expect(onProject).toHaveBeenCalled());
+    await waitFor(() => expect(onQuotation).toHaveBeenCalled());
     const patch = fetch.mock.calls.find((c) => (c[1] as RequestInit).method === 'PATCH');
     expect(JSON.parse(String((patch![1] as RequestInit).body))).toEqual({ quantity: 60 });
   });
@@ -66,7 +66,7 @@ describe('WorkbookView', () => {
   it('exports the PDF through the authenticated endpoint', async () => {
     const fetch = mockFetch((_m, path) => (path.endsWith('/workbook') ? wb : path.includes('/benchmark') ? benchmark : {}));
     vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
-    render(<WorkbookView project={project()} onProject={vi.fn()} onError={vi.fn()} />);
+    render(<WorkbookView quotation={quotation()} onQuotation={vi.fn()} onError={vi.fn()} />);
     await userEvent.click(await screen.findByRole('button', { name: /Export PDF/ }));
     await waitFor(() => expect(fetch.mock.calls.some((c) => String(c[0]).endsWith('/elenco-costi.pdf'))).toBe(true));
   });

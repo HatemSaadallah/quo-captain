@@ -136,7 +136,7 @@ export async function extractWorkbook(filePath: string): Promise<WorkbookExtract
   const dg = await wb.sheet(SHEETS.datiGen);
   const offerNo = str(dg.cells.get(DATI_GEN.offerNo));
   const client = str(dg.cells.get(DATI_GEN.client));
-  const projectName = str(dg.cells.get(DATI_GEN.project));
+  const projectName = str(dg.cells.get(DATI_GEN.quotation));
   const estimator = str(dg.cells.get(DATI_GEN.estimator));
   const dateCell = dg.cells.get(DATI_GEN.date);
   const projectDate = excelDateToIso(dateCell && !dateCell.err ? (dateCell.v as number | string | null) : null);

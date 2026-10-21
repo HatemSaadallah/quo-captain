@@ -2,23 +2,23 @@ import { useEffect, useState } from 'react';
 import { api, fmtMoney, fmtNum, type Benchmark as BenchmarkData } from '../api';
 
 interface Props {
-  projectId: string;
+  quotationId: string;
   itemId: string;
   onError: (msg: string) => void;
 }
 
 /** Historical benchmarking next to the row being edited: comparable analyses, their specs, dates, sources and category costs. */
-export function Benchmark({ projectId, itemId, onError }: Props) {
+export function Benchmark({ quotationId, itemId, onError }: Props) {
   const [data, setData] = useState<BenchmarkData | null>(null);
   useEffect(() => {
     setData(null);
     api
-      .benchmark(projectId, itemId)
+      .benchmark(quotationId, itemId)
       .then((b) => {
         if (b.itemId === itemId) setData(b);
       })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
-  }, [projectId, itemId, onError]);
+  }, [quotationId, itemId, onError]);
 
   if (!data) return <div className="muted small">loading comparable analyses…</div>;
   const own = data.stats.own;
@@ -112,7 +112,7 @@ export function Benchmark({ projectId, itemId, onError }: Props) {
         </details>
       )}
       <div className="small muted">
-        Similar projects: {data.projects.map((p) => `${p.offerNo ?? p.workbook} (${p.client}, ${p.projectName}, ${p.projectDate}; ${p.matches} match${p.matches > 1 ? 'es' : ''})`).join(' · ')}
+        Similar quotations: {data.quotations.map((p) => `${p.offerNo ?? p.workbook} (${p.client}, ${p.projectName}, ${p.projectDate}; ${p.matches} match${p.matches > 1 ? 'es' : ''})`).join(' · ')}
       </div>
     </div>
   );

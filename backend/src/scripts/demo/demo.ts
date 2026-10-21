@@ -1,12 +1,12 @@
 /**
- * End-to-end demo against a running API: search the catalog, create a project,
+ * End-to-end demo against a running API: search the catalog, create a quotation,
  * build a cart (balcony 1600x2560 from TM1643-06 + the TM1823-03 repeat), generate
  * the Excel analysis and print the validation report.
  * Usage: npx tsx src/scripts/demo/demo.ts [apiBase] [email] [password]
  */
 import type { CatalogFacets, SearchHit, SearchResult } from '../../common/interfaces/catalog.interface';
 import type { GenerationResult } from '../../common/interfaces/generation.interface';
-import type { Project, ProjectValidation } from '../../common/interfaces/project.interface';
+import type { Quotation, QuotationValidation } from '../../common/interfaces/quotation.interface';
 import type { LoginResponse } from '../../common/interfaces/auth.interface';
 
 const api = process.argv[2] ?? 'http://localhost:3000/api';
@@ -54,20 +54,20 @@ async function main(): Promise<void> {
   const similar = await call<SearchHit[]>('GET', `/catalog/${encodeURIComponent(pick.record.id)}/similar?limit=4`);
   for (const h of similar) console.log(`   ${pct(h.score)}  ${h.record.id.padEnd(14)} ${h.record.title}`);
 
-  console.log('\n4. Project + cart');
+  console.log('\n4. Quotation + cart');
   const ref = 'TM2099-' + String(Date.now() % 100).padStart(2, '0');
-  let project = await call<Project>('POST', '/projects', { name: 'Demo - Nave 4 Balcony', customer: 'APEXA', reference: ref, date: new Date().toISOString().slice(0, 10), estimator, templateWorkbook: 'TM1643-06 Analisi.xlsx' });
-  project = await call<Project>('POST', `/projects/${project.id}/items`, { catalogId: pick.record.id, quantity: 50 });
+  let quotation = await call<Quotation>('POST', '/quotations', { name: 'Demo - Nave 4 Balcony', customer: 'APEXA', reference: ref, date: new Date().toISOString().slice(0, 10), estimator, templateWorkbook: 'TM1643-06 Analisi.xlsx' });
+  quotation = await call<Quotation>('POST', `/quotations/${quotation.id}/items`, { catalogId: pick.record.id, quantity: 50 });
   const repeat = similar.find((h) => h.record.id === 'TM1823-03#10');
-  if (repeat) project = await call<Project>('POST', `/projects/${project.id}/items`, { catalogId: repeat.record.id, quantity: 5 });
-  const first = project.items[0];
-  if (first.params.some((p) => p.cell === 'N4')) project = await call<Project>('PATCH', `/projects/${project.id}/items/${first.id}`, { params: [{ cell: 'N4', value: 1700 }] });
-  const validation = await call<ProjectValidation>('GET', `/projects/${project.id}/validation`);
-  console.log(`   project ${project.id} (${ref}) with ${project.items.length} items, validation ok=${validation.ok}, indicative total ${eur(validation.estimatedTotal)}`);
+  if (repeat) quotation = await call<Quotation>('POST', `/quotations/${quotation.id}/items`, { catalogId: repeat.record.id, quantity: 5 });
+  const first = quotation.items[0];
+  if (first.params.some((p) => p.cell === 'N4')) quotation = await call<Quotation>('PATCH', `/quotations/${quotation.id}/items/${first.id}`, { params: [{ cell: 'N4', value: 1700 }] });
+  const validation = await call<QuotationValidation>('GET', `/quotations/${quotation.id}/validation`);
+  console.log(`   quotation ${quotation.id} (${ref}) with ${quotation.items.length} items, validation ok=${validation.ok}, indicative total ${eur(validation.estimatedTotal)}`);
   for (const i of validation.issues) console.log(`   - [${i.level}] ${i.message}`);
 
   console.log('\n5. Generate Excel analysis');
-  const gen = await call<GenerationResult>('POST', `/projects/${project.id}/generate`);
+  const gen = await call<GenerationResult>('POST', `/quotations/${quotation.id}/generate`);
   const r = gen.report;
   console.log(`   status: ${r.status}  engine: ${r.engine}  recalculated: ${r.recalculation.performed}`);
   console.log(`   ${r.summary}`);

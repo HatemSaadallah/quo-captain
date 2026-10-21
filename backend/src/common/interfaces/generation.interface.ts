@@ -44,7 +44,7 @@ export interface ValidationReport {
   status: ReportStatus;
   engine: GenerationEngine;
   generatedAt: string;
-  projectId: string;
+  quotationId: string;
   reference: string;
   templateWorkbook: string;
   outputFile: string;

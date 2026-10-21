@@ -3,10 +3,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Catalog } from '../common/interfaces/catalog.interface';
-import type { Project } from '../common/interfaces/project.interface';
+import type { Quotation } from '../common/interfaces/quotation.interface';
 import { CATALOG_FILE, INPUT_DIR } from '../common/utils/paths';
 import { XlsxWorkbook } from '../common/utils/xlsx-reader';
-import { itemFromCatalog } from '../modules/projects/project.rules';
+import { itemFromCatalog } from '../modules/quotations/quotation.rules';
 import { generateWorkbook, sha256File, type GenerationOutcome } from './generator';
 import { validateGenerated } from './validator';
 import { SHEETS } from './somec-schema';
@@ -18,7 +18,7 @@ const SOURCE2 = 'TM1823-03 Analisi.xlsx';
 
 describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
   const outDir = mkdtempSync(path.join(os.tmpdir(), 'somec-gen-'));
-  const project: Project = {
+  const quotation: Quotation = {
     id: 'p_test',
     name: 'Nave 4 - Balcony',
     customer: 'APEXA',
@@ -34,14 +34,14 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
     updatedAt: '',
     generations: [],
   };
-  project.items[0].params[1].value = 1700; // PROFONDITA' BALCONY 1594 -> 1700
+  quotation.items[0].params[1].value = 1700; // PROFONDITA' BALCONY 1594 -> 1700
   let outcome: GenerationOutcome;
   let before: Record<string, string>;
   let out: XlsxWorkbook;
 
   beforeAll(async () => {
     before = { t: await sha256File(path.join(INPUT_DIR, TEMPLATE)), s: await sha256File(path.join(INPUT_DIR, SOURCE2)) };
-    outcome = await generateWorkbook({ project, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) });
+    outcome = await generateWorkbook({ quotation, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) });
     out = await XlsxWorkbook.open(outcome.outputFile);
   });
 
@@ -76,7 +76,7 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
     expect(s7.cells.get('C71')?.v).toBeDefined();
   });
 
-  it('writes the project header and the ELENCO COSTI / BOQ rows with live links', async () => {
+  it('writes the quotation header and the ELENCO COSTI / BOQ rows with live links', async () => {
     const dg = await out.sheet(SHEETS.datiGen);
     expect(dg.cells.get('C7')?.v).toBe('APEXA');
     expect(dg.cells.get('C8')?.v).toBe('Nave 4 - Balcony');
@@ -120,7 +120,7 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
   });
 
   it('produces a validation report that is honest about recalculation', async () => {
-    const report = await validateGenerated(project, outcome, { performed: false, method: 'none', detail: 'test' }, 'ooxml');
+    const report = await validateGenerated(quotation, outcome, { performed: false, method: 'none', detail: 'test' }, 'ooxml');
     expect(report.status).toBe('requires_review');
     expect(report.items).toHaveLength(2);
     // same workbook as the template: no code can be missing beyond those already #N/A in the source
@@ -139,7 +139,7 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
   });
 
   it('reports error cells per sheet and proves external links do not reach the cost chain', async () => {
-    const report = await validateGenerated(project, outcome, { performed: false, method: 'none', detail: 'test' }, 'ooxml');
+    const report = await validateGenerated(quotation, outcome, { performed: false, method: 'none', detail: 'test' }, 'ooxml');
     expect(report.checks.some((c) => c.check === 'external-links-impact' && c.level === 'ok')).toBe(true);
     expect(report.errorCellsBySheet.map((e) => e.sheet)).toEqual(expect.arrayContaining([SHEETS.elencoCosti, SHEETS.costiParz, SHEETS.indiretti]));
     expect(report.errorCellsBySheet.every((e) => e.cartRows === 0)).toBe(true);
@@ -166,15 +166,15 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
   });
 
   it('refuses an item without an analysis sheet', async () => {
-    const bad: Project = { ...project, items: [{ id: 'x', ...itemFromCatalog(rec('TM1641-03#178'), 1) }], templateWorkbook: 'TM1641-03 Analisi.xlsx' };
-    await expect(generateWorkbook({ project: bad, templatePath: path.join(INPUT_DIR, 'TM1641-03 Analisi.xlsx'), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no source analysis sheet/);
-    const free: Project = { ...project, items: [{ id: 'f', ...itemFromCatalog(rec('TM1643-06#10'), 1), catalogId: null, sourceWorkbook: null, sourceSheet: null }] };
-    await expect(generateWorkbook({ project: free, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no reference analysis attached/);
+    const bad: Quotation = { ...quotation, items: [{ id: 'x', ...itemFromCatalog(rec('TM1641-03#178'), 1) }], templateWorkbook: 'TM1641-03 Analisi.xlsx' };
+    await expect(generateWorkbook({ quotation: bad, templatePath: path.join(INPUT_DIR, 'TM1641-03 Analisi.xlsx'), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no source analysis sheet/);
+    const free: Quotation = { ...quotation, items: [{ id: 'f', ...itemFromCatalog(rec('TM1643-06#10'), 1), catalogId: null, sourceWorkbook: null, sourceSheet: null }] };
+    await expect(generateWorkbook({ quotation: free, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no reference analysis attached/);
   });
 
   it('flags sheets that depend on other analysis sheets', async () => {
-    const dep: Project = { ...project, items: [{ id: 'd', ...itemFromCatalog(rec('TM1643-06#221'), 2) }] };
-    const o = await generateWorkbook({ project: dep, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: mkdtempSync(path.join(os.tmpdir(), 'somec-dep-')), sourcePathOf: (w) => path.join(INPUT_DIR, w) });
+    const dep: Quotation = { ...quotation, items: [{ id: 'd', ...itemFromCatalog(rec('TM1643-06#221'), 2) }] };
+    const o = await generateWorkbook({ quotation: dep, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: mkdtempSync(path.join(os.tmpdir(), 'somec-dep-')), sourcePathOf: (w) => path.join(INPUT_DIR, w) });
     const r = await validateGenerated(dep, o, { performed: false, method: 'none', detail: 'test' }, 'ooxml');
     expect(r.items[0].warnings.some((w) => /references sheet '134'/.test(w))).toBe(true);
     rmSync(path.dirname(o.outputFile), { recursive: true, force: true });
