@@ -1,6 +1,7 @@
 import { record as makeRecord } from './test-utils';
 import { ProjectSetup } from './components/ProjectSetup';
 import App from './App';
+import { ElencoCosti } from './components/ElencoCosti';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProductSearch } from './components/ProductSearch';
@@ -35,6 +36,8 @@ vi.mock('./api', async (original) => {
       projects: vi.fn(),
       addItem: vi.fn(),
       elencoCosti: vi.fn(),
+      suggestions: vi.fn(),
+      addRow: vi.fn(),
     },
   };
 });
@@ -50,6 +53,7 @@ const hit = (r: CatalogRecord): SearchHit => ({
 const facets: CatalogFacets = {
   generatedAt: '',
   recordCount: 2,
+  source: 'json',
   embeddings: { status: 'ready', model: 'test', error: null },
   workbooks: [],
   categories: [],
@@ -110,7 +114,15 @@ beforeEach(() => {
   });
   vi.mocked(api.similar).mockResolvedValue([hit({ ...other, title: 'Similar reference' })]);
   vi.mocked(api.validation).mockResolvedValue({ ok: true, issues: [], estimatedTotal: 2181.4, itemsWithoutCost: 0 });
-  vi.mocked(api.elencoCosti).mockResolvedValue({projectId:'A',reference:'REVIEW-A',rows:[],totals:{m2Total:0,totalCost:0,rowsWithoutCost:0,complete:true},summary:[],formulas:{},note:''});
+  vi.mocked(api.elencoCosti).mockResolvedValue({
+    projectId: 'A',
+    reference: 'REVIEW-A',
+    rows: [],
+    totals: { m2Total: 0, totalCost: 0, rowsWithoutCost: 0, complete: true },
+    summary: [],
+    formulas: {},
+    note: '',
+  });
   vi.mocked(api.excelStatus).mockResolvedValue({ available: false, platform: 'darwin', detail: 'test mode' });
 });
 describe('frontend behavior review', () => {
@@ -279,7 +291,9 @@ describe('project mutation consistency', () => {
     fireEvent.change(screen.getByLabelText(/cell N4/), { target: { value: '1700' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
     await screen.findByText('Customization rejected');
-    fireEvent.click(screen.getByRole('tab',{name:'Cart & Excel export'}));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'Cart & Excel export' }));
+    });
     expect(screen.getByDisplayValue('01-01')).toBeTruthy();
     expect(api.project).toHaveBeenCalledWith('A');
   });
@@ -321,5 +335,93 @@ describe('request ordering', () => {
     fireEvent.change(select, { target: { value: 'B' } });
     await act(async () => addition.resolve(saved));
     expect((select as HTMLSelectElement).value).toBe('B');
+  });
+});
+
+type CostSheet = Awaited<ReturnType<typeof api.elencoCosti>>;
+function costSheet(id: string): CostSheet {
+  return {
+    projectId: id,
+    reference: 'REVIEW-' + id,
+    rows: [
+      {
+        itemId: 'free-' + id,
+        line: 1,
+        position: '01',
+        itemCode: '01-01',
+        description: 'BOQ row ' + id,
+        unit: 'm',
+        quantity: 12,
+        L: 2560,
+        H: 1130,
+        m2Unit: 1.13,
+        m2Total: 13.56,
+        unitCost: null,
+        totalCost: null,
+        unitCostSource: 'none',
+        historicalUnitCost: null,
+        unitCostOverride: null,
+        tab: null,
+        lotto: null,
+        warnings: [],
+      },
+    ],
+    totals: { m2Total: 13.56, totalCost: 0, rowsWithoutCost: 1, complete: false },
+    summary: [],
+    formulas: {},
+    note: 'Test cost sheet',
+  };
+}
+describe('web cost sheet request scope', () => {
+  it('hides the previous project sheet immediately and ignores old responses', async () => {
+    const a = deferred<CostSheet>(),
+      b = deferred<CostSheet>();
+    vi.mocked(api.elencoCosti).mockImplementation((id) => (id === 'A' ? a.promise : b.promise));
+    const props = { onProject: vi.fn(), onError: vi.fn() };
+    const view = render(<ElencoCosti project={project('A')} {...props} />);
+    view.rerender(<ElencoCosti project={project('B')} {...props} />);
+    await act(async () => b.resolve(costSheet('B')));
+    expect(screen.getByText('BOQ row B')).toBeTruthy();
+    await act(async () => a.resolve(costSheet('A')));
+    expect(screen.queryByText('BOQ row A')).toBeNull();
+    expect(screen.getByText('BOQ row B')).toBeTruthy();
+  });
+  it('does not retain loaded project A rows while project B loads', async () => {
+    const b = deferred<CostSheet>();
+    vi.mocked(api.elencoCosti).mockImplementation((id) => (id === 'A' ? Promise.resolve(costSheet('A')) : b.promise));
+    const props = { onProject: vi.fn(), onError: vi.fn() };
+    const view = render(<ElencoCosti project={project('A')} {...props} />);
+    await screen.findByText('BOQ row A');
+    view.rerender(<ElencoCosti project={project('B')} {...props} />);
+    expect(screen.queryByText('BOQ row A')).toBeNull();
+    expect(screen.getByText('Computing ELENCO COSTI…')).toBeTruthy();
+    await act(async () => b.resolve(costSheet('B')));
+  });
+  it('shows reference suggestions for the active BOQ row only', async () => {
+    const data = costSheet('A');
+    data.rows.push({ ...data.rows[0], itemId: 'other-row', line: 2, itemCode: '01-02', description: 'Second BOQ row' });
+    vi.mocked(api.elencoCosti).mockResolvedValue(data);
+    const first = deferred<SearchHit[]>(),
+      second = deferred<SearchHit[]>();
+    vi.mocked(api.suggestions).mockImplementation((_id, row) => (row === 'free-A' ? first.promise : second.promise));
+    render(<ElencoCosti project={project('A')} onProject={vi.fn()} onError={vi.fn()} />);
+    const buttons = await screen.findAllByRole('button', { name: 'Attach by similarity' });
+    fireEvent.click(buttons[0]);
+    fireEvent.click(buttons[1]);
+    await act(async () => second.resolve([hit({ ...other, title: 'Active BOQ reference' })]));
+    await act(async () => first.resolve([hit({ ...record, title: 'Stale BOQ reference' })]));
+    expect(screen.queryByText(/Stale BOQ reference/)).toBeNull();
+    expect(screen.getByText(/Active BOQ reference/)).toBeTruthy();
+  });
+  it('keeps an entered BOQ draft when saving fails', async () => {
+    vi.mocked(api.elencoCosti).mockResolvedValue(costSheet('A'));
+    vi.mocked(api.addRow).mockRejectedValue(new Error('Invalid BOQ line'));
+    const onError = vi.fn();
+    render(<ElencoCosti project={project('A')} onProject={vi.fn()} onError={onError} />);
+    fireEvent.click(await screen.findByRole('button', { name: '+ Add row from BOQ' }));
+    fireEvent.change(screen.getByLabelText('Description *'), { target: { value: 'Retain my BOQ description' } });
+    await act(async () => fireEvent.submit(screen.getByRole('form', { name: 'new row' })));
+    expect(onError).toHaveBeenCalledWith('Invalid BOQ line');
+    expect(screen.getByDisplayValue('Retain my BOQ description')).toBeTruthy();
   });
 });

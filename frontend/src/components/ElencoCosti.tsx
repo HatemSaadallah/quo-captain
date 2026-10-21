@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, fmtMoney, fmtNum, type ElencoCosti as ElencoCostiData, type Project, type SearchHit } from '../api';
 
 interface Props {
@@ -10,30 +10,46 @@ interface Props {
 const sourceBadge = (s: 'override' | 'historical' | 'none'): string => (s === 'override' ? 'badge warn' : s === 'historical' ? 'badge ok' : 'badge err');
 
 export function ElencoCosti({ project, onProject, onError }: Props) {
-  const [data, setData] = useState<ElencoCostiData | null>(null);
+  const [sheetData, setData] = useState<ElencoCostiData | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ position: '', itemCode: '', description: '', unit: 'Pcs', quantity: '1', L: '', H: '' });
   const [suggestFor, setSuggestFor] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SearchHit[] | null>(null);
 
+  const activeProject = useRef<string | null>(project.id);
+  const suggestionRequest = useRef(0);
+  activeProject.current = project.id;
   useEffect(() => {
+    activeProject.current = project.id;
+    setSuggestFor(null);
+    setSuggestions(null);
+    return () => { activeProject.current = null; suggestionRequest.current++; };
+  }, [project.id]);
+
+  useEffect(() => {
+    let active = true;
     api
       .elencoCosti(project.id)
-      .then(setData)
-      .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+      .then((value) => { if (active) setData(value); })
+      .catch((e: unknown) => { if (active) onError(e instanceof Error ? e.message : String(e)); });
+    return () => { active = false; };
   }, [project, onError]);
 
-  const guard = async (fn: () => Promise<Project>): Promise<void> => {
+  const guard = async (fn: () => Promise<Project>): Promise<boolean> => {
     try {
-      onProject(await fn());
+      const next = await fn();
+      if (activeProject.current !== project.id) return false;
+      onProject(next);
+      return true;
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      if (activeProject.current === project.id) onError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   };
 
   const addRow = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
-    await guard(() =>
+    const saved = await guard(() =>
       api.addRow(project.id, {
         position: draft.position,
         itemCode: draft.itemCode,
@@ -44,27 +60,35 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
         H: draft.H === '' ? null : Number(draft.H),
       }),
     );
+    if (!saved) return;
     setAdding(false);
     setDraft({ position: '', itemCode: '', description: '', unit: 'Pcs', quantity: '1', L: '', H: '' });
   };
 
   const suggest = async (itemId: string): Promise<void> => {
+    const request = ++suggestionRequest.current;
     setSuggestFor(itemId);
     setSuggestions(null);
     try {
-      setSuggestions(await api.suggestions(project.id, itemId, 6));
+      const next = await api.suggestions(project.id, itemId, 6);
+      if (request === suggestionRequest.current && activeProject.current === project.id) setSuggestions(next);
     } catch (e) {
+      if (request !== suggestionRequest.current || activeProject.current !== project.id) return;
       onError(e instanceof Error ? e.message : String(e));
       setSuggestFor(null);
     }
   };
 
   const attach = async (itemId: string, tabId: string): Promise<void> => {
-    await guard(() => api.attach(project.id, itemId, tabId));
-    setSuggestFor(null);
-    setSuggestions(null);
+    const request = suggestionRequest.current;
+    const saved = await guard(() => api.attach(project.id, itemId, tabId));
+    if (saved && request === suggestionRequest.current) {
+      setSuggestFor(null);
+      setSuggestions(null);
+    }
   };
 
+  const data = sheetData?.projectId === project.id ? sheetData : null;
   if (!data) return <section className="panel muted">Computing ELENCO COSTI…</section>;
 
   return (
