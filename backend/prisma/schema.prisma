@@ -1,0 +1,71 @@
+// Quotation projects (the "cart") and their generation history.
+// The product catalog itself is derived from the Excel workbooks and lives in
+// data/processed/*.json (read-only index, rebuilt with `npm run extract`).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id               String        @id @default(cuid())
+  name             String
+  customer         String        @default("")
+  /// Offer number: becomes the output file name and DATI GEN.!C5
+  reference        String        @default("")
+  /// ISO date (YYYY-MM-DD)
+  date             String
+  estimator        String        @default("")
+  /// File name of the workbook used as template (data/input)
+  templateWorkbook String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  items            ProjectItem[]
+  generations      Generation[]
+}
+
+model ProjectItem {
+  id                 String   @id @default(cuid())
+  projectId          String
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sortOrder          Int      @default(0)
+  catalogId          String
+  sourceWorkbook     String
+  sourceSheet        String?
+  sourceOfferNo      String?
+  position           String   @default("")
+  itemCode           String   @default("")
+  description        String   @default("")
+  unit               String   @default("Pcs")
+  quantity           Float    @default(1)
+  L                  Float?
+  H                  Float?
+  lotto              String?
+  /// JSON: ItemParam[]
+  params             String   @default("[]")
+  historicalUnitCost Float?
+  historicalQuantity Float?
+  /// JSON: string[]
+  dependsOnSheets    String   @default("[]")
+  notes              String   @default("")
+  createdAt          DateTime @default(now())
+
+  @@index([projectId, sortOrder])
+}
+
+model Generation {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  file       String
+  reportFile String
+  status     String
+  engine     String
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}

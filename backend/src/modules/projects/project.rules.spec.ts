@@ -1,0 +1,74 @@
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import type { Catalog } from '../../common/interfaces/catalog.interface';
+import type { Project } from '../../common/interfaces/project.interface';
+import { CATALOG_FILE } from '../../common/utils/paths';
+import { itemFromCatalog, validateProject } from './project.rules';
+
+const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as Catalog;
+const balcony = catalog.records.find((r) => r.id === 'TM1643-06#10')!;
+const template = catalog.workbooks.find((w) => w.workbook === 'TM1643-06 Analisi.xlsx')!;
+
+function project(items: Project['items'], over: Partial<Project> = {}): Project {
+  return {
+    id: 'p1',
+    name: 'Nave 4 balconies',
+    customer: 'APEXA',
+    reference: 'TM2099-00',
+    date: '2026-10-21',
+    estimator: 'Test',
+    templateWorkbook: 'TM1643-06 Analisi.xlsx',
+    items,
+    createdAt: '',
+    updatedAt: '',
+    generations: [],
+    ...over,
+  };
+}
+
+describe('itemFromCatalog', () => {
+  it('copies the historical analysis as an editable cart line', () => {
+    const it = itemFromCatalog(balcony, 50);
+    expect(it).toMatchObject({ catalogId: 'TM1643-06#10', sourceSheet: '10', itemCode: '01-01', quantity: 50, unit: 'Pcs', L: 2560, H: 1600, historicalUnitCost: 1090.7 });
+    expect(it.params.map((p) => p.cell)).toEqual(['N3', 'N4']);
+    expect(it.params[0]).toMatchObject({ label: 'INTERASSE BALCONY', value: 2560, original: 2560 });
+  });
+});
+
+describe('validateProject', () => {
+  it('accepts a complete project', () => {
+    const v = validateProject(project([{ id: 'i1', ...itemFromCatalog(balcony, 50) }]), template);
+    expect(v.ok).toBe(true);
+    expect(v.estimatedTotal).toBe(54535);
+  });
+
+  it('rejects missing quantity, bad reference, empty cart and missing sheet', () => {
+    const bad = { id: 'i1', ...itemFromCatalog(balcony, 0), sourceSheet: null };
+    const v = validateProject(project([bad], { reference: 'TM/2099' }), template);
+    expect(v.ok).toBe(false);
+    const msgs = v.issues.filter((i) => i.level === 'error').map((i) => i.message);
+    expect(msgs.some((m) => /quantity must be a positive number/.test(m))).toBe(true);
+    expect(msgs.some((m) => /Reference may only contain/.test(m))).toBe(true);
+    expect(msgs.some((m) => /no analysis sheet/.test(m))).toBe(true);
+    expect(validateProject(project([]), template).issues.some((i) => /cart is empty/.test(i.message))).toBe(true);
+  });
+
+  it('flags incompatible configurations and cross-workbook price lists', () => {
+    const r221 = catalog.records.find((r) => r.id === 'TM1643-06#221')!;
+    const crossWb = validateProject(project([{ id: 'i1', ...itemFromCatalog(r221, 1) }], { templateWorkbook: 'TM1823-03 Analisi.xlsx' }), catalog.workbooks[2]);
+    expect(crossWb.ok).toBe(false);
+    expect(crossWb.issues.some((i) => /incompatible configuration/.test(i.message))).toBe(true);
+    const sameWb = validateProject(project([{ id: 'i1', ...itemFromCatalog(r221, 1) }]), template);
+    expect(sameWb.ok).toBe(true);
+    expect(sameWb.issues.some((i) => i.level === 'warning' && /references sheets/.test(i.message))).toBe(true);
+    const other = validateProject(project([{ id: 'i1', ...itemFromCatalog(catalog.records.find((r) => r.id === 'TM1823-03#10')!, 1) }]), template);
+    expect(other.ok).toBe(true);
+    expect(other.issues.some((i) => /costs will differ/.test(i.message))).toBe(true);
+  });
+
+  it('rejects an invalid mm parameter', () => {
+    const it = { id: 'i1', ...itemFromCatalog(balcony, 1) };
+    it.params[0].value = -5;
+    expect(validateProject(project([it]), template).issues.some((i) => /must be a positive number of mm/.test(i.message))).toBe(true);
+  });
+});
