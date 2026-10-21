@@ -85,6 +85,15 @@ describe('validateProject', () => {
     expect(overwritten.description).toContain('BALUSTRADE');
   });
 
+  it('flags a Pcs-priced tab attached to a row measured in metres', () => {
+    const row = { id: 'r1', ...blankRow({ description: 'Railing', quantity: 12, unit: 'm', L: 2560, H: 1130 }) };
+    const attached = { ...row, ...attachTab(row, balcony, false), id: 'r1' }; // balcony is priced per Pcs, row says m
+    const v = validateProject(project([attached]), template, (id) => (id === balcony.id ? balcony.unit : undefined));
+    expect(v.issues.some((i) => i.level === 'error' && /incompatible with the reference tab's unit/.test(i.message))).toBe(true);
+    const ok = validateProject(project([{ ...attached, unit: 'PZ' }]), template, (id) => (id === balcony.id ? balcony.unit : undefined));
+    expect(ok.issues.some((i) => /incompatible/.test(i.message))).toBe(false);
+  });
+
   it('rejects an invalid mm parameter', () => {
     const it = { id: 'i1', ...itemFromCatalog(balcony, 1) };
     it.params[0].value = -5;

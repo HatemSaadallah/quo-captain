@@ -1,6 +1,7 @@
 /** Mapping between catalog records (+ embedding) and the ReferenceTab table. */
 import type { Prisma, PrismaClient, ReferenceTab } from '@prisma/client';
 import type { Catalog, CatalogParam, CatalogRecord, CostBreakdownRow, EmbeddingIndex } from '../../common/interfaces/catalog.interface';
+import type { WorkbookLogic } from '../../excel/logic-extractor';
 
 export function toReferenceTabData(r: CatalogRecord, embedding: number[] | undefined, index: EmbeddingIndex | null, extractedAt: string): Prisma.ReferenceTabCreateInput {
   return {
@@ -88,6 +89,19 @@ export function fromReferenceTab(t: ReferenceTab): CatalogRecord {
     hasExternalRefs: t.hasExternalRefs,
     searchText: t.searchText,
   };
+}
+
+/** Store the extracted logic: per-tab cells + fidelity, and the workbook's external sheet snapshots. */
+export async function syncWorkbookLogic(prisma: PrismaClient, logic: WorkbookLogic, extractedAt: string): Promise<void> {
+  for (const [sheet, cells] of Object.entries(logic.snapshots)) {
+    const data = { workbook: logic.workbook, sheet, cells: cells as unknown as Prisma.InputJsonValue, extractedAt: new Date(extractedAt) };
+    await prisma.workbookSnapshot.upsert({ where: { workbook_sheet: { workbook: logic.workbook, sheet } }, create: data, update: data });
+  }
+  for (const t of logic.tabs) {
+    const id = await prisma.referenceTab.findFirst({ where: { workbook: logic.workbook, sheet: t.sheet }, select: { id: true } });
+    if (!id) continue;
+    await prisma.referenceTab.update({ where: { id: id.id }, data: { cells: t.cells as unknown as Prisma.InputJsonValue, computedUnitCost: t.computedUnitCost, fidelity: t.fidelity } });
+  }
 }
 
 /** Upsert every catalog record (with its vector) into the ReferenceTab table. Returns the number of rows written. */
