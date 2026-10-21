@@ -43,6 +43,14 @@ function hasExternalFormula(sheet: SheetData): string[] {
   return out;
 }
 
+/** Overall validation requires every unresolved warning to be cleared, including external inputs. */
+export function generationStatus(checks: CheckResult[], recalculated: boolean): ValidationReport['status'] {
+  const structural = new Set(['sheet', 'elenco-costi', 'aggregation', 'fresh', 'header']);
+  if (checks.some((c) => c.level === 'error' && structural.has(c.check))) return 'failed';
+  if (!recalculated || checks.some((c) => c.level === 'error' || c.level === 'warning')) return 'requires_review';
+  return 'validated';
+}
+
 export async function validateGenerated(project: Project, outcome: GenerationOutcome, recalc: RecalcInfo, engine: GenerationEngine): Promise<ValidationReport> {
   const wb = await XlsxWorkbook.open(outcome.outputFile);
   const tpl = await XlsxWorkbook.open(outcome.templatePath);
@@ -181,7 +189,7 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
     errorCellsBySheet.push({ sheet: name, template: inTemplate, output: inOutput, cartRows: inCartRows });
     if (recalc.performed) {
       if (inCartRows) err('errors', `${name}: ${inCartRows} error cells in the rows of the cart after recalculation`);
-      if (inOutput > inTemplate) warn('errors', `${name}: ${inOutput - inTemplate} new error cells compared with the template (${inTemplate} inherited)`);
+      if (inOutput) warn('errors', `${name}: ${inOutput} unresolved error cells after recalculation (${inTemplate} in the source template)`);
     } else if (inOutput) warn('errors-cached', `${name}: ${inOutput} cached error cells (${inTemplate} inherited from the template; not recalculated)`);
     tpl.release(name);
     wb.release(name);
@@ -198,16 +206,7 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
   if (externalLinks.length) warn('external-links', `${externalLinks.length} external links inherited from the template (files not available offline, opened with "do not update links"): ${externalLinks.map((l) => l.split(/[\\/]/).pop()).join(', ')}`);
 
   const historicalEstimate = Math.round(project.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * it.quantity, 0) * 100) / 100;
-  const structural = new Set(['sheet', 'elenco-costi', 'aggregation', 'fresh', 'header']);
-  const hasError = checks.some((c) => c.level === 'error');
-  const blockingWarnings = checks.some((c) => c.level === 'warning' && !['external-links', 'errors-cached'].includes(c.check));
-  const status: ValidationReport['status'] = hasError
-    ? checks.some((c) => c.level === 'error' && structural.has(c.check))
-      ? 'failed'
-      : 'requires_review'
-    : recalc.performed && !blockingWarnings
-      ? 'validated'
-      : 'requires_review';
+  const status = generationStatus(checks, recalc.performed);
   const summary =
     status === 'validated'
       ? `Validated: ${outcome.items.length} analysis sheets, recalculated by Excel, no errors in the cost chain, totals reconcile (ELENCO COSTI!K402 = ${elencoCostiTotal?.toFixed(2)}).`

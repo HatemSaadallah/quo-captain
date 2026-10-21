@@ -88,6 +88,8 @@ const project = (id: string): Project => ({
       lotto: record.lotto,
       params: [],
       historicalUnitCost: record.unitCost,
+      historicalUnit: record.unit,
+      historicalCostCompatible: true,
       historicalQuantity: record.quantity,
       dependsOnSheets: [],
       notes: '',

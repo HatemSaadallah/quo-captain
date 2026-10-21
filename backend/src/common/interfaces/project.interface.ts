@@ -30,6 +30,10 @@ export interface ProjectItem {
   /** Editable technical parameters (literal inputs in the source sheet). */
   params: ItemParam[];
   historicalUnitCost: number | null;
+  /** Source cost unit, resolved from the trusted reference analysis. */
+  historicalUnit: string | null;
+  /** Derived by the API; false means the historical price cannot be multiplied by this row quantity. */
+  historicalCostCompatible?: boolean;
   historicalQuantity: number | null;
   /** Manual unit cost replacing the historical one in the web ELENCO COSTI. */
   unitCostOverride: number | null;
@@ -160,7 +164,7 @@ export interface ElencoCostiRow {
   historicalUnitCost: number | null;
   unitCostOverride: number | null;
   /** "Detail sheet ref.": the attached reference tab. */
-  tab: { id: string; workbook: string | null; sheet: string | null; offerNo: string | null } | null;
+  tab: { id: string; workbook: string | null; sheet: string | null; offerNo: string | null; unit?: string | null } | null;
   lotto: string | null;
   warnings: string[];
 }

@@ -2,7 +2,7 @@
 import type { CatalogRecord, WorkbookSummary } from '../../common/interfaces/catalog.interface';
 import type { AddRowDto, ItemParam, Project, ProjectItem, ProjectValidation, ValidationIssue } from '../../common/interfaces/project.interface';
 import { SHEETS } from '../../excel/somec-schema';
-import { unitCostOf } from './elenco-costi';
+import { sameCostUnit, unitCostOf } from './elenco-costi';
 
 export type NewItem = Omit<ProjectItem, 'id'>;
 
@@ -26,6 +26,7 @@ export function itemFromCatalog(r: CatalogRecord, quantity: number, overrides: P
     lotto: r.lotto,
     params,
     historicalUnitCost: r.unitCost,
+    historicalUnit: r.unit,
     historicalQuantity: r.quantity,
     unitCostOverride: null,
     dependsOnSheets: r.dependsOnSheets,
@@ -52,6 +53,7 @@ export function blankRow(input: AddRowDto): NewItem {
     lotto: input.lotto ?? null,
     params: [],
     historicalUnitCost: null,
+    historicalUnit: null,
     historicalQuantity: null,
     unitCostOverride: null,
     dependsOnSheets: [],
@@ -108,6 +110,7 @@ export function validateProject(p: Project, template: WorkbookSummary | null): P
     const tag = `${it.position || '?'} / ${it.itemCode || '?'}`;
     if (!it.catalogId) push('error', `${tag}: no reference analysis attached (attach one by similarity); the Excel export needs a sheet to copy`, it.id);
     else if (!it.sourceSheet) push('error', `${tag}: the historical row has no analysis sheet, nothing can be copied`, it.id);
+    if (it.catalogId && 'historicalUnit' in it && (!it.historicalUnit || !sameCostUnit(it.unit, it.historicalUnit))) push('error', `${tag}: reference cost unit ${it.historicalUnit ?? 'unknown'} is incompatible with row unit ${it.unit}; Excel export cannot apply a unit conversion`, it.id);
     if (!(it.quantity > 0) || !Number.isFinite(it.quantity)) push('error', `${tag}: quantity must be a positive number`, it.id);
     if (!it.itemCode.trim()) push('error', `${tag}: item code is required`, it.id);
     if (!it.position.trim()) push('warning', `${tag}: position is empty (summary by position will not group it)`, it.id);

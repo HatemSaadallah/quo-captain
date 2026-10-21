@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../common/interfaces/generation.interface';
 import { INPUT_DIR, OUTPUT_DIR } from '../../common/utils/paths';
@@ -87,29 +87,34 @@ export class GenerationService {
     throw new Error('Could not allocate a unique output directory');
   }
 
-  listOutputs(): OutputEntry[] {
-    if (!existsSync(OUTPUT_DIR)) return [];
+  async listOutputs(userId: string): Promise<OutputEntry[]> {
+    const allowed = new Set(await this.projects.generationFiles(userId));
     const out: OutputEntry[] = [];
-    for (const folder of readdirSync(OUTPUT_DIR)) {
-      const dir = path.join(OUTPUT_DIR, folder);
-      if (!statSync(dir).isDirectory()) continue;
-      for (const file of readdirSync(dir)) {
-        const st = statSync(path.join(dir, file));
-        out.push({ folder, file, size: st.size, modifiedAt: st.mtime.toISOString() });
-      }
+    for (const relative of allowed) {
+      const folder = path.dirname(relative);
+      const file = path.basename(relative);
+      if (!SAFE_NAME.test(folder) || !SAFE_NAME.test(file)) continue;
+      const absolute = path.resolve(OUTPUT_DIR, relative);
+      if (!absolute.startsWith(path.resolve(OUTPUT_DIR) + path.sep) || !existsSync(absolute)) continue;
+      const st = statSync(absolute);
+      if (st.isFile()) out.push({ folder, file, size: st.size, modifiedAt: st.mtime.toISOString() });
     }
     return out.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
   }
 
-  /** Absolute path of an output file, refusing anything outside data/output. */
-  resolveOutput(folder: string, file: string): string {
+  /** Refuse traversal and every file not recorded against the authenticated owner's projects. */
+  async resolveOutput(folder: string, file: string, userId: string): Promise<string> {
     if (!SAFE_NAME.test(folder) || !SAFE_NAME.test(file)) throw new BadRequestException('Invalid output name');
+    const allowed = new Set(await this.projects.generationFiles(userId));
+    if (!allowed.has(path.join(folder, file))) throw new NotFoundException('Output not found');
     const p = path.resolve(OUTPUT_DIR, folder, file);
-    if (!p.startsWith(path.resolve(OUTPUT_DIR) + path.sep) || !existsSync(p)) throw new NotFoundException('Output not found');
+    if (!p.startsWith(path.resolve(OUTPUT_DIR) + path.sep) || !existsSync(p) || !statSync(p).isFile()) throw new NotFoundException('Output not found');
     return p;
   }
 
-  readReport(folder: string): ValidationReport {
-    return JSON.parse(readFileSync(this.resolveOutput(folder, 'validation_report.json'), 'utf8')) as ValidationReport;
+  async readReport(folder: string, userId: string): Promise<ValidationReport> {
+    const file = await this.resolveOutput(folder, 'validation_report.json', userId);
+    return JSON.parse(readFileSync(file, 'utf8')) as ValidationReport;
   }
+
 }
