@@ -12,8 +12,9 @@ import { PrismaClient } from '@prisma/client';
 import type { EmbeddingIndex } from '../../common/interfaces/catalog.interface';
 import { CATALOG_FILE, EMBEDDINGS_FILE, INPUT_DIR, PROCESSED_DIR } from '../../common/utils/paths';
 import { buildCatalog } from '../../excel/catalog-extractor';
+import { extractWorkbookLogic } from '../../excel/logic-extractor';
 import { buildEmbeddingIndex } from '../../modules/catalog/embeddings';
-import { syncReferenceTabs } from '../../modules/catalog/reference-tab.mapper';
+import { syncReferenceTabs, syncWorkbookLogic } from '../../modules/catalog/reference-tab.mapper';
 
 async function main(): Promise<void> {
   const files = readdirSync(INPUT_DIR)
@@ -46,6 +47,16 @@ async function main(): Promise<void> {
       const t2 = Date.now();
       const n = await syncReferenceTabs(prisma, catalog, index);
       console.log(`${n} reference tabs stored in the database (ReferenceTab) in ${((Date.now() - t2) / 1000).toFixed(1)}s`);
+      if (!process.argv.includes('--no-logic')) {
+        for (const f of files) {
+          const t3 = Date.now();
+          const logic = await extractWorkbookLogic(f, path.basename(f));
+          await syncWorkbookLogic(prisma, logic, catalog.generatedAt);
+          const exact = logic.tabs.filter((t) => t.fidelity === 'exact').length;
+          const checked = logic.tabs.filter((t) => t.fidelity !== 'n/a').length;
+          console.log(`${path.basename(f)}: logic of ${logic.tabs.length} tabs + ${Object.keys(logic.snapshots).length} snapshots stored; engine reproduces Excel on ${exact}/${checked} tabs (${((Date.now() - t3) / 1000).toFixed(1)}s)`);
+        }
+      }
     } catch (e) {
       console.warn(`database sync skipped: ${e instanceof Error ? e.message : String(e)}`);
     } finally {

@@ -16,8 +16,9 @@ import type {
   UpdateProjectDto,
 } from '../../common/interfaces/project.interface';
 import { CatalogService } from '../catalog/catalog.service';
+import { CostingService } from '../costing/costing.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { computeElencoCosti } from './elenco-costi';
+import { computeElencoCosti, type ComputedUnitCost } from './elenco-costi';
 import { attachTab, blankRow, itemFromCatalog, validateProject, type NewItem } from './project.rules';
 
 type ProjectRow = Prisma.ProjectGetPayload<{ include: { items: true; generations: true } }>;
@@ -118,6 +119,7 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: CatalogService,
+    private readonly costing: CostingService,
   ) {}
 
   async list(userId: string): Promise<Project[]> {
@@ -307,9 +309,16 @@ export class ProjectsService {
     return validateProject(p, this.catalog.workbooks.find((w) => w.workbook === p.templateWorkbook) ?? null);
   }
 
-  /** The web ELENCO COSTI: the sheet's own formulas applied to the project's rows. */
+  /** The web ELENCO COSTI: the sheet's own formulas applied to the project's rows; J from the app engine when the tab's logic is stored. */
   async elencoCosti(id: string, userId: string): Promise<ElencoCosti> {
-    return computeElencoCosti(await this.get(id, userId));
+    const p = await this.get(id, userId);
+    const computed = new Map<string, ComputedUnitCost | null>();
+    for (const it of p.items) {
+      if (!it.catalogId || it.unitCostOverride !== null) continue;
+      const c = await this.costing.compute(it);
+      computed.set(it.id, c ? { unitCost: c.unitCost, fidelity: c.fidelity, errors: c.errors, unsupported: c.unsupported } : null);
+    }
+    return computeElencoCosti(p, computed);
   }
 
   async recordGeneration(id: string, g: Omit<GenerationSummary, 'at'>): Promise<void> {

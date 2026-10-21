@@ -7,7 +7,7 @@ interface Props {
   onError: (msg: string) => void;
 }
 
-const sourceBadge = (s: 'override' | 'historical' | 'none'): string => (s === 'override' ? 'badge warn' : s === 'historical' ? 'badge ok' : 'badge err');
+const sourceBadge = (s: 'override' | 'computed' | 'historical' | 'none'): string => (s === 'override' ? 'badge warn' : s === 'computed' ? 'badge ok' : s === 'historical' ? 'badge' : 'badge err');
 
 export function ElencoCosti({ project, onProject, onError }: Props) {
   const [data, setData] = useState<ElencoCostiData | null>(null);
