@@ -98,6 +98,7 @@ export const api = {
   projects: (): Promise<Project[]> => request('/api/projects'),
   projectContacts: (): Promise<Project['contacts']> => request('/api/projects/contacts'),
   createProject: (dto: CreateProjectDto): Promise<Project> => request('/api/projects', { method: 'POST', ...json(dto) }),
+  updateProjectContacts: (id: string, contactIds: string[]): Promise<Project> => request(`/api/projects/${enc(id)}/contacts`, { method: 'PATCH', ...json({ contactIds }) }),
 
   quotations: (): Promise<Quotation[]> => request('/api/quotations'),
   quotation: (id: string): Promise<Quotation> => request(`/api/quotations/${enc(id)}`),

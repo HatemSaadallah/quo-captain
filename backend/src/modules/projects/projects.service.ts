@@ -63,6 +63,20 @@ export class ProjectsService {
     return this.prisma.contact.findMany({ orderBy: [{ company: 'asc' }, { name: 'asc' }] });
   }
 
+  async updateContacts(id: string, input: unknown, ownerId: string): Promise<Project> {
+    const project = await this.getOwned(id, ownerId);
+    const contactIds = Array.isArray(input) ? [...new Set(input.map((value) => text(value, 'contactIds')))] : [];
+    if (!contactIds.length) throw new BadRequestException('At least one project contact is required');
+    const contacts = await this.prisma.contact.findMany({ where: { id: { in: contactIds }, company: project.customer.name } });
+    if (contacts.length !== contactIds.length) throw new BadRequestException('Select contacts belonging to the project customer');
+    await this.prisma.$transaction([
+      this.prisma.projectContact.deleteMany({ where: { projectId: id } }),
+      this.prisma.projectContact.createMany({ data: contactIds.map((contactId) => ({ projectId: id, contactId })) }),
+    ]);
+    const updated = await this.prisma.project.findUniqueOrThrow({ where: { id }, include: { customer: true, contacts: { include: { contact: true } } } });
+    return { id: updated.id, name: updated.name, customerId: updated.customerId, customer: updated.customer.name, contacts: updated.contacts.map((pc) => pc.contact), quotations: [], createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
+  }
+
   async getOwned(id: string, ownerId: string) {
     const row = await this.prisma.project.findFirst({ where: { id, ownerId }, include: { customer: true } });
     if (!row) throw new NotFoundException(`Project ${id} not found`);
