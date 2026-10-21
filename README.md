@@ -72,6 +72,25 @@ Every API route except `POST /api/auth/login` needs `Authorization: Bearer <jwt>
 
 Passwords are hashed with Node's scrypt; tokens are signed with `JWT_SECRET` from `backend/.env` (12 h by default). `make demo` and the frontend log in with the estimator account.
 
+## Web ELENCO COSTI and reference tabs
+
+The primary deliverable is the ELENCO COSTI computed in the web (`GET /api/projects/:id/elenco-costi`, right-hand tab in the UI) with the sheet's own formulas, verified in `docs/cell_mapping.md`:
+
+| Column | Formula (sheet) | In the web |
+|---|---|---|
+| H m² unit | `IF(AND(D="m",G<>0),G/1000,G*F/1000000)` | same |
+| I m² total | `IF(D="m²",E,H*E)` | same |
+| J unit cost € | `ROUND('costi parz.'!$BE<row>,1)` | the attached reference tab's historical unit cost (its own `costi parz.!BE`), or a manual override |
+| K total € | `J*E` | same |
+| TOTAL COST / m² | `SUM(K6:K401)` / `SUM(I6:I400)` | same |
+| Summary by position | `SUMIF(A, pos, I\|K)`, unit = K/I | same |
+
+What the web does **not** do: recompute J when technical parameters or materials change. J is a cached historical cost; the row is flagged and the Excel export + recalculation remains the path for a real recomputation. Rows without an attached tab show no cost (never 0) and are counted as incomplete.
+
+**Reference tabs** (the numbered analysis sheets) are extracted into `data/processed/product_catalog.json` and stored in Postgres (`ReferenceTab`, 589 rows) with provenance (workbook, sheet, row, item code), inputs (parameters, codes used, cost breakdown), dependencies, warnings, source cells, the embedding vector (384-d, multilingual MiniLM) and a content fingerprint. `npm run extract` rebuilds and re-syncs them; the API loads them from the database (`facets.source = "database"`), falling back to the JSON index.
+
+A cost row is either a tab added from search, or a **free row** typed from the customer's BOQ (`POST /api/projects/:id/rows`). `GET .../items/:itemId/suggestions` ranks reference tabs by similarity to the row's description and dimensions; `POST .../items/:itemId/attach {referenceTabId}` attaches one (provenance, parameters and historical unit cost come from the tab; the row keeps its own text unless `overwrite: true`); `DELETE .../attach` detaches. A high similarity score is a suggestion, not proof of technical compatibility: the UI shows the tab's source, specs and cost before attaching.
+
 ## Workflow
 
 1. **Project setup** – create a project (name, customer, reference = offer number such as `TM2099-00`, date, estimator) and pick the template workbook. The template provides the price list (`DATI GEN.`), budget and indirect-cost structure; its own items are emptied in the output.
@@ -106,7 +125,7 @@ Verified by tests on the real files (`backend/src/**/*.spec.ts`, 46 tests):
 
 Not verified in this environment:
 
-* **Excel recalculation.** Excel is installed, but on this machine it is currently blocked by a dialog (sandbox file-access / first-run) that the terminal cannot see: AppleScript answers `every workbook doesn't understand the "count" message`. The generator therefore produces a **draft** (`status: requires_review`, `recalculation.performed: false`); open it in Excel, it recalculates on load (external-link prompt: choose "don't update"). To enable automatic recalculation: open Excel manually, dismiss any dialog, allow file access to the repository folder when asked, then `GET /api/generation/excel-status?refresh=1` should say available. `SOMEC_DISABLE_EXCEL=1` disables the attempt.
+* **Excel recalculation.** Excel 16 answers AppleScript on this machine, but opening a workbook from the repository folder stops at Excel's sandbox dialog ("grant access" to the folder) that the terminal cannot click: the `open` event times out and the generator produces a **draft** (`status: requires_review`, `recalculation.performed: false`). The output recalculates when you open it in Excel (external-link prompt: choose "don't update"). To enable automatic recalculation once: run a generation (or `make demo`), switch to Excel, click **Grant Access / Allow** on the dialog for `data/output`, and the next generation will recalculate (`GET /api/generation/excel-status?refresh=1` reports availability; `SOMEC_DISABLE_EXCEL=1` disables the attempt). Excel's own `open workbook` command does not work for sandboxed paths, which is why the automation uses the standard `open`.
 * Cross-workbook copies get the template's price list: codes that do not exist there are listed in the report (`missingCodes`) and show as `#N/A` after recalculation, exactly as they would if an estimator copied the sheet by hand.
 * Analysis sheets that reference other analysis sheets are copied alone; the report lists the dangling references. Charts/images and form controls inside an analysis sheet are not copied (none of the 581 live sheets has charts).
 * BOQ per-deck counts (`M:AF`) are not modelled: the quantity is written as one number in `BOQ!I`.

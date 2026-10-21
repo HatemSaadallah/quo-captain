@@ -16,8 +16,9 @@ describe('catalog search on the extracted catalog', () => {
   const svc = new CatalogService();
   beforeAll(async () => {
     expect(existsSync(CATALOG_FILE), 'run npm run extract first').toBe(true);
-    svc.load(CATALOG_FILE, EMBEDDINGS_FILE);
+    await svc.load(CATALOG_FILE, EMBEDDINGS_FILE);
     await svc.ensureEmbeddings(EMBEDDINGS_FILE);
+    expect(svc.source).toBe('json');
   });
 
   it('lexical search finds the balcony by description and dimensions', async () => {

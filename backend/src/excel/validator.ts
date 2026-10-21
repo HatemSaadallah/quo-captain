@@ -86,7 +86,7 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
     const { item, row, sheet, boqRow } = p;
     const where = `'${sheet}'`;
     const warnings = [...p.warnings];
-    const base: GeneratedItemReport = { itemId: item.id, position: item.position, itemCode: item.itemCode, sourceWorkbook: item.sourceWorkbook, sourceSheet: item.sourceSheet ?? '', row, sheet, boqRow, quantity: item.quantity, historicalUnitCost: item.historicalUnitCost, unitCost: null, sheetUnitCost: null, totalCost: null, missingCodes: [], errorCells: 0, paramsWritten: p.paramsWritten, warnings };
+    const base: GeneratedItemReport = { itemId: item.id, position: item.position, itemCode: item.itemCode, sourceWorkbook: item.sourceWorkbook ?? project.templateWorkbook, sourceSheet: item.sourceSheet ?? '', row, sheet, boqRow, quantity: item.quantity, historicalUnitCost: item.historicalUnitCost, unitCost: null, sheetUnitCost: null, totalCost: null, missingCodes: [], errorCells: 0, paramsWritten: p.paramsWritten, warnings };
     if (!wb.hasSheet(sheet)) {
       err('sheet', `Analysis sheet '${sheet}' missing`, where);
       items.push({ ...base, warnings: ['sheet missing'] });

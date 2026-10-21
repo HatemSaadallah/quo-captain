@@ -54,6 +54,7 @@ export function item(over: Partial<ProjectItem> = {}): ProjectItem {
   return {
     id: 'i1',
     catalogId: 'TM1643-06#10',
+    referenceTabId: null,
     sourceWorkbook: 'TM1643-06 Analisi.xlsx',
     sourceSheet: '10',
     sourceOfferNo: 'TM1643-06',
@@ -68,6 +69,7 @@ export function item(over: Partial<ProjectItem> = {}): ProjectItem {
     params: [{ cell: 'N3', label: 'INTERASSE BALCONY', unit: 'MM', value: 2560, original: 2560 }],
     historicalUnitCost: 1090.7,
     historicalQuantity: 712,
+    unitCostOverride: null,
     dependsOnSheets: [],
     notes: '',
     ...over,

@@ -105,7 +105,10 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
   const free = freeItemRows(tpl.sheetNames, ec);
   if (project.items.length > free.length) throw new Error(`Template has ${free.length} free item rows, cart has ${project.items.length}`);
   const planned: PlannedItem[] = project.items.map((item, i) => ({ item, row: free[i], sheet: String(free[i]), boqRow: BOQ.firstRow + i, paramsWritten: [], warnings: [] }));
-  for (const p of planned) if (!p.item.sourceSheet) throw new Error(`Item ${p.item.itemCode} has no source analysis sheet`);
+  for (const p of planned) {
+    if (!p.item.catalogId || !p.item.sourceWorkbook) throw new Error(`Item ${p.item.itemCode} has no reference analysis attached, there is no source analysis sheet to copy`);
+    if (!p.item.sourceSheet) throw new Error(`Item ${p.item.itemCode} has no source analysis sheet`);
+  }
 
   // --- 1. project header
   await ed.setCells(SHEETS.datiGen, {
@@ -151,16 +154,17 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
 
   for (const p of planned) {
     const { item, row, sheet, boqRow } = p;
+    const sourceWorkbook = item.sourceWorkbook ?? project.templateWorkbook;
     let src: JSZip;
-    if (item.sourceWorkbook === project.templateWorkbook) src = ed.zip;
+    if (sourceWorkbook === project.templateWorkbook) src = ed.zip;
     else {
-      let z = sourceZips.get(item.sourceWorkbook);
+      let z = sourceZips.get(sourceWorkbook);
       if (!z) {
-        const srcPath = input.sourcePathOf(item.sourceWorkbook);
+        const srcPath = input.sourcePathOf(sourceWorkbook);
         const buf = await readFile(srcPath);
-        sourceHashes[item.sourceWorkbook] = createHash('sha256').update(buf).digest('hex');
+        sourceHashes[sourceWorkbook] = createHash('sha256').update(buf).digest('hex');
         z = await JSZip.loadAsync(buf);
-        sourceZips.set(item.sourceWorkbook, z);
+        sourceZips.set(sourceWorkbook, z);
       }
       src = z;
     }

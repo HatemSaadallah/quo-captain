@@ -409,6 +409,8 @@ export class XlsxEditor {
         } else if (type === REL_HYPERLINK) {
           newRels.push(`<Relationship Id="${id}" Type="${REL_HYPERLINK}" Target="${encodeXml(target)}"${mode ? ` TargetMode="${mode}"` : ''}/>`);
           keptIds.add(id);
+        } else if (type.endsWith('/printerSettings')) {
+          this.log.push(`printer settings of '${sourceSheet}' not copied (page setup kept)`);
         } else {
           warnings.push(`relationship ${id} (${type.split('/').pop()} -> ${target}) not copied`);
         }

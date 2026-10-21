@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import type { Catalog } from '../../common/interfaces/catalog.interface';
 import type { Project } from '../../common/interfaces/project.interface';
 import { CATALOG_FILE } from '../../common/utils/paths';
-import { itemFromCatalog, validateProject } from './project.rules';
+import { attachTab, blankRow, itemFromCatalog, validateProject } from './project.rules';
 
 const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as Catalog;
 const balcony = catalog.records.find((r) => r.id === 'TM1643-06#10')!;
@@ -64,6 +64,25 @@ describe('validateProject', () => {
     const other = validateProject(project([{ id: 'i1', ...itemFromCatalog(catalog.records.find((r) => r.id === 'TM1823-03#10')!, 1) }]), template);
     expect(other.ok).toBe(true);
     expect(other.issues.some((i) => /costs will differ/.test(i.message))).toBe(true);
+  });
+
+  it('free rows need a reference tab for the export, overrides are warned, attach fills blanks only', () => {
+    const row = { id: 'r1', ...blankRow({ description: 'Balcony glass railing 2560 long', quantity: 12, unit: 'm', L: 2560, H: null }) };
+    const v = validateProject(project([row]), template);
+    expect(v.ok).toBe(false);
+    expect(v.issues.some((i) => /no reference analysis attached/.test(i.message))).toBe(true);
+    const withOverride = validateProject(project([{ ...row, unitCostOverride: 250 }]), template);
+    expect(withOverride.estimatedTotal).toBe(3000);
+    expect(withOverride.issues.some((i) => /manual unit cost/.test(i.message))).toBe(true);
+    const attached = attachTab(row, catalog.records.find((r) => r.id === 'TM1643-06#45')!, false);
+    expect(attached.catalogId).toBe('TM1643-06#45');
+    expect(attached.description).toBe('Balcony glass railing 2560 long'); // own text kept
+    expect(attached.H).toBe(1130); // blank filled from the tab
+    expect(attached.L).toBe(2560);
+    expect(attached.quantity).toBe(12);
+    expect(attached.historicalUnitCost).toBe(224.5);
+    const overwritten = attachTab(row, catalog.records.find((r) => r.id === 'TM1643-06#45')!, true);
+    expect(overwritten.description).toContain('BALUSTRADE');
   });
 
   it('rejects an invalid mm parameter', () => {
