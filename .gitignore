@@ -1,0 +1,20 @@
+node_modules/
+*.tsbuildinfo
+dist/
+coverage/
+.DS_Store
+*.log
+.env
+
+# generated at runtime
+data/input/
+data/processed/
+data/output/*
+!data/output/.gitkeep
+data/projects/
+data/models/
+backend/.cache/
+~$*.xlsx
+
+backend/prisma/*.db
+backend/prisma/*.db-journal
