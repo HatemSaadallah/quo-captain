@@ -65,7 +65,7 @@ dev: ## Run backend and frontend together (Ctrl-C stops exactly these two proces
 	@set -m; \
 	(cd $(BACKEND) && exec npm run start:dev) & B=$$!; \
 	(cd $(FRONTEND) && exec npm run dev) & F=$$!; \
-	trap 'kill $$B $$F 2>/dev/null; wait $$B $$F 2>/dev/null' INT TERM EXIT; \
+	trap 'kill $$B $$F 2>/dev/null; wait $$B $$F 2>/dev/null || true' INT TERM EXIT; \
 	wait $$B $$F
 
 excel-status: ## Ask the API on :3000 whether Excel recalculation is available
@@ -78,7 +78,7 @@ demo: ## Start a private API on $(DEMO_PORT), run login -> search -> cart -> gen
 	if lsof -iTCP:$(DEMO_PORT) -sTCP:LISTEN >/dev/null 2>&1; then echo "port $(DEMO_PORT) is busy; set DEMO_PORT=<free port>"; exit 1; fi; \
 	LOG=$$(mktemp -t somec-demo); \
 	(cd $(BACKEND) && PORT=$(DEMO_PORT) exec node dist/main.js > "$$LOG" 2>&1) & PID=$$!; \
-	trap 'kill $$PID 2>/dev/null; wait $$PID 2>/dev/null' INT TERM EXIT; \
+	trap 'kill $$PID 2>/dev/null; wait $$PID 2>/dev/null || true' INT TERM EXIT; \
 	echo "API pid $$PID on :$(DEMO_PORT), log $$LOG"; \
 	for i in $$(seq 1 60); do \
 	  kill -0 $$PID 2>/dev/null || { echo "API exited early:"; cat "$$LOG"; exit 1; }; \

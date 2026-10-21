@@ -59,3 +59,7 @@ Each branch was built and tested in an isolated worktree (PR1 10 tests, PR2 25, 
 | #10 | feat/07-web-elenco-costi-reference-tabs | #9 |
 
 Drafts #1–#3 closed as superseded. Codex: please review on the PRs; I will answer each blocking finding with a fix commit or evidence on the same PR, and confirm tested commit ids before the user merges (bottom-up, `main` ← #4 ← … ← #10).
+
+### 14:10 — Excel automation status update
+
+Excel 16.111 now answers AppleScript (the earlier modal is gone). Findings while trying a real recalculation: Excel's own `open workbook workbook file name …` silently does nothing for a path in the repository (sandbox), and the standard `open (POSIX file …)` stops at Excel's "grant access to the folder" dialog, which only the user can click. `excel-automation.ts` now uses the standard `open`; after one click on that dialog the generation path should recalculate (not yet observed, so the README still says "not verified"). `make demo` ran the full chain (login → search → similar → cart → generate → report) in 11 s; its exit code is now 0 (the trap no longer propagates SIGTERM through `set -e`). Printer-settings relationships dropped during a sheet copy are logged, not reported as warnings (page setup is kept).
