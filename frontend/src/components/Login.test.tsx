@@ -11,7 +11,7 @@ describe('Login', () => {
       expect(method).toBe('POST');
       expect(path).toBe('/api/auth/login');
       expect(body).toEqual({ email: 'estimator@somec.local', password: 'somec2026' });
-      return { token: 'jwt-123', user: { id: 'u1', email: 'estimator@somec.local', name: 'Mock Estimator', role: 'estimator' } };
+      return { token: 'jwt-123', user: { id: 'u1', email: 'estimator@somec.local', name: 'Mock Estimator', role: 'salesman' } };
     });
     const onLogin = vi.fn();
     render(<Login onLogin={onLogin} />);

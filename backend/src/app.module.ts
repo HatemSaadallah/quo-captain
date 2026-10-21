@@ -6,8 +6,9 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { QuotationsModule } from './modules/quotations/quotations.module';
 import { UsersModule } from './modules/users/users.module';
 import { AssistantModule } from './modules/assistant/assistant.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, CatalogModule, QuotationsModule, GenerationModule, AssistantModule],
+  imports: [PrismaModule, AuthModule, UsersModule, CatalogModule, QuotationsModule, GenerationModule, AssistantModule, ProjectsModule],
 })
 export class AppModule {}

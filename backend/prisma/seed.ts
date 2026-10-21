@@ -1,8 +1,8 @@
 /**
- * Seed: a mock estimator user and a sample quotation (cart) built from the
+ * Seed: a mock salesman user and sample quotations built from the
  * extracted catalog. Idempotent. Run with `npm run db:seed` (after `npm run extract`).
  *
- *   login: estimator@somec.local / somec2026   (role estimator)
+ *   login: estimator@somec.local / somec2026   (role salesman)
  *          admin@somec.local     / somec2026   (role admin)
  */
 import { PrismaClient } from '@prisma/client';
@@ -15,8 +15,17 @@ import { itemFromCatalog } from '../src/modules/quotations/quotation.rules';
 const prisma = new PrismaClient();
 
 const USERS = [
-  { email: 'estimator@somec.local', name: 'Mock Estimator', password: 'somec2026', role: 'estimator' },
+  { email: 'estimator@somec.local', name: 'Mock Estimator', password: 'somec2026', role: 'salesman' },
   { email: 'admin@somec.local', name: 'Somec Admin', password: 'somec2026', role: 'admin' },
+];
+
+const PROJECT_CONTACTS = [
+  { id: 'anna.virtanen@apexa.local', name: 'Anna Virtanen', role: 'Procurement Manager, Outfitting', company: 'APEXA', email: 'anna.virtanen@apexa.local' },
+  { id: 'jonas.weber@apexa.local', name: 'Jonas Weber', role: 'Buyer, Glazing & Balconies', company: 'APEXA', email: 'jonas.weber@apexa.local' },
+  { id: 'claire.lefevre@omnix.local', name: 'Claire Lefèvre', role: 'Purchasing Manager', company: 'OMNIX', email: 'claire.lefevre@omnix.local' },
+  { id: 'matteo.rinaldi@omnix.local', name: 'Matteo Rinaldi', role: 'Senior Buyer, Hull Outfitting', company: 'OMNIX', email: 'matteo.rinaldi@omnix.local' },
+  { id: 'hannah.larsen@acme.local', name: 'Hannah Larsen', role: 'Category Buyer, Accommodation', company: 'ACME', email: 'hannah.larsen@acme.local' },
+  { id: 'pietro.conte@acme.local', name: 'Pietro Conte', role: 'Procurement Specialist', company: 'ACME', email: 'pietro.conte@acme.local' },
 ];
 
 async function main(): Promise<void> {
@@ -31,6 +40,7 @@ async function main(): Promise<void> {
     console.log(`user ${row.email} (${row.role})`);
   }
   const owner = users[0];
+  for (const c of PROJECT_CONTACTS) await prisma.contact.upsert({ where: { id: c.id }, update: c, create: c });
 
   if (!existsSync(CATALOG_FILE)) {
     console.log(`catalog not found (${CATALOG_FILE}); run "npm run extract" and seed again to get the sample quotation`);
@@ -88,6 +98,7 @@ async function main(): Promise<void> {
     }
     await createQuotation(owner, catalog, { ...d, lines, status: d.reference === 'TM2118-00' ? 'draft' : 'active' });
   }
+  await attachExistingQuotations();
 }
 
 type Line = { id: string; quantity: number; params?: Record<string, number> };
@@ -97,9 +108,10 @@ async function createQuotation(
   catalog: Catalog,
   q: { reference: string; name: string; customer: string; date: string; template: string; lines: Line[]; status: 'draft' | 'active' },
 ): Promise<void> {
+  const project = await ensureProject(owner.id, q.customer, projectName(q.name));
   const existing = await prisma.quotation.findFirst({ where: { ownerId: owner.id, reference: q.reference } });
   if (existing) {
-    await prisma.quotation.update({ where: { id: existing.id }, data: { status: q.status } });
+    await prisma.quotation.update({ where: { id: existing.id }, data: { status: q.status, projectId: project.id, customer: q.customer, name: q.name } });
     const existingItems = await prisma.quotationItem.findMany({ where: { quotationId: existing.id, catalogId: { not: null }, referenceTabId: null }, select: { id: true, catalogId: true } });
     for (const item of existingItems) {
       const tab = await prisma.referenceTab.findUnique({ where: { id: item.catalogId! }, select: { id: true } });
@@ -109,7 +121,7 @@ async function createQuotation(
     return;
   }
   const quotation = await prisma.quotation.create({
-    data: { status: q.status, name: q.name, customer: q.customer, reference: q.reference, date: q.date, estimator: owner.name, templateWorkbook: q.template, ownerId: owner.id },
+    data: { status: q.status, name: q.name, customer: q.customer, projectId: project.id, reference: q.reference, date: q.date, estimator: owner.name, templateWorkbook: q.template, ownerId: owner.id },
   });
   let order = 0;
   for (const line of q.lines) {
@@ -147,6 +159,38 @@ async function createQuotation(
     });
   }
   console.log(`quotation ${q.reference} created with ${order} items (${quotation.id}) for ${owner.email ?? owner.id}`);
+}
+
+function projectName(quotationName: string): string {
+  const vessel = quotationName.match(/^(Nave\s+\d+)/i)?.[1];
+  return vessel ?? quotationName.trim();
+}
+
+async function ensureProject(ownerId: string, customerName: string, name: string) {
+  const customer = await prisma.customer.upsert({
+    where: { ownerId_name: { ownerId, name: customerName.trim() } }, update: {},
+    create: { ownerId, name: customerName.trim() },
+  });
+  const contacts = await prisma.contact.findMany({ where: { company: customer.name } });
+  if (!contacts.length) throw new Error(`No seeded directory contacts for customer ${customer.name}`);
+  const project = await prisma.project.upsert({
+    where: { ownerId_customerId_name: { ownerId, customerId: customer.id, name } }, update: {},
+    create: { ownerId, customerId: customer.id, name, contacts: { create: contacts.map((contact) => ({ contactId: contact.id })) } },
+  });
+  for (const contact of contacts) await prisma.projectContact.upsert({ where: { projectId_contactId: { projectId: project.id, contactId: contact.id } }, update: {}, create: { projectId: project.id, contactId: contact.id } });
+  return project;
+}
+
+async function attachExistingQuotations(): Promise<void> {
+  const rows = await prisma.quotation.findMany({ where: { projectId: null } });
+  for (const q of rows) {
+    const customer = q.customer.trim();
+    if (!customer) throw new Error(`Quotation ${q.id} (${q.reference}) has no customer; seed repair cannot attach it to a project`);
+    const project = await ensureProject(q.ownerId, customer, projectName(q.name));
+    await prisma.quotation.update({ where: { id: q.id }, data: { projectId: project.id } });
+  }
+  const unattached = await prisma.quotation.findMany({ where: { projectId: null }, select: { id: true, reference: true } });
+  if (unattached.length) throw new Error(`Seed repair left quotations without projects: ${unattached.map((q) => q.reference || q.id).join(', ')}`);
 }
 
 main()
