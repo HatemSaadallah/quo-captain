@@ -1,5 +1,16 @@
-import { useEffect, useState } from 'react';
-import { api, ApiError, fmtMoney, fmtNum, type ExcelStatus, type GenerationResult, type Project, type ProjectItem, type ProjectValidation, type UpdateItemDto } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import {
+  api,
+  ApiError,
+  fmtMoney,
+  fmtNum,
+  type ExcelStatus,
+  type GenerationResult,
+  type Project,
+  type ProjectItem,
+  type ProjectValidation,
+  type UpdateItemDto,
+} from '../api';
 
 interface Props {
   project: Project;
@@ -10,44 +21,83 @@ interface Props {
 export function Cart({ project, onProject, onError }: Props) {
   const [validation, setValidation] = useState<ProjectValidation | null>(null);
   const [excel, setExcel] = useState<ExcelStatus | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<GenerationResult | null>(null);
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+  const [report, setReport] = useState<{ projectId: string; value: GenerationResult } | null>(null);
+  const generating = generatingFor === project.id;
+  const result = report?.projectId === project.id ? report.value : null;
+  const activeProject = useRef<string | null>(project.id);
+  activeProject.current = project.id;
+  useEffect(() => {
+    activeProject.current = project.id;
+    return () => {
+      activeProject.current = null;
+    };
+  }, [project.id]);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    api.validation(project.id).then(setValidation).catch(() => setValidation(null));
+    let active = true;
+    setValidation(null);
+    api
+      .validation(project.id)
+      .then((value) => {
+        if (active) setValidation(value);
+      })
+      .catch(() => {
+        if (active) setValidation(null);
+      });
+    return () => {
+      active = false;
+    };
   }, [project]);
 
   useEffect(() => {
-    api.excelStatus().then(setExcel).catch(() => setExcel(null));
+    api
+      .excelStatus()
+      .then(setExcel)
+      .catch(() => setExcel(null));
   }, []);
 
   const patch = async (item: ProjectItem, dto: UpdateItemDto): Promise<void> => {
     try {
-      onProject(await api.updateItem(project.id, item.id, dto));
+      const next = await api.updateItem(project.id, item.id, dto);
+      if (activeProject.current === project.id) onProject(next);
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      if (activeProject.current === project.id) onError(e instanceof Error ? e.message : String(e));
     }
   };
 
   const remove = async (item: ProjectItem): Promise<void> => {
-    onProject(await api.removeItem(project.id, item.id));
+    try {
+      const next = await api.removeItem(project.id, item.id);
+      if (activeProject.current === project.id) onProject(next);
+    } catch (e) {
+      if (activeProject.current === project.id) onError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const generate = async (): Promise<void> => {
-    setGenerating(true);
-    setResult(null);
+    setGeneratingFor(project.id);
+    setReport(null);
     try {
       const r = await api.generate(project.id);
-      setResult(r);
-      onProject(await api.project(project.id));
+      if (activeProject.current !== project.id) return;
+      setReport({ projectId: project.id, value: r });
+      const next = await api.project(project.id);
+      if (activeProject.current === project.id) onProject(next);
     } catch (e) {
+      if (activeProject.current !== project.id) return;
       if (e instanceof ApiError && e.body && typeof e.body === 'object' && 'issues' in e.body) {
         const issues = (e.body as { issues: ProjectValidation['issues'] }).issues;
-        onError(`Not generated: ${issues.filter((i) => i.level === 'error').map((i) => i.message).join(' · ')}`);
+        onError(
+          `Not generated: ${issues
+            .filter((i) => i.level === 'error')
+            .map((i) => i.message)
+            .join(' · ')}`,
+        );
       } else onError(e instanceof Error ? e.message : String(e));
     } finally {
-      setGenerating(false);
+      if (activeProject.current === project.id) setGeneratingFor(null);
     }
   };
 

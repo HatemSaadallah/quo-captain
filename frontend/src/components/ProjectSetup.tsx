@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type CatalogFacets, type Project } from '../api';
 
 interface Props {
@@ -16,8 +16,17 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 
 export function ProjectSetup({ facets, projects, projectsLoaded, current, onSelect, onChanged, onError }: Props) {
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState({ name: '', customer: '', reference: '', date: today(), estimator: '', templateWorkbook: '' });
+  const [draft, setDraft] = useState({
+    name: '',
+    customer: '',
+    reference: '',
+    date: today(),
+    estimator: '',
+    templateWorkbook: '',
+  });
   const templates = facets?.workbooks ?? [];
+  const activeProject = useRef(current?.id);
+  activeProject.current = current?.id;
   const [seenProjects, setSeenProjects] = useState(false);
   useEffect(() => {
     // open the form automatically only for a first-time user with no projects at all
@@ -29,7 +38,10 @@ export function ProjectSetup({ facets, projects, projectsLoaded, current, onSele
 
   const create = async (): Promise<void> => {
     try {
-      const p = await api.createProject({ ...draft, templateWorkbook: draft.templateWorkbook || templates[0]?.workbook });
+      const p = await api.createProject({
+        ...draft,
+        templateWorkbook: draft.templateWorkbook || templates[0]?.workbook,
+      });
       onChanged();
       onSelect(p);
       setCreating(false);
@@ -42,7 +54,9 @@ export function ProjectSetup({ facets, projects, projectsLoaded, current, onSele
   const patch = async (field: keyof Project, value: string): Promise<void> => {
     if (!current) return;
     try {
-      onSelect(await api.updateProject(current.id, { [field]: value }));
+      const next = await api.updateProject(current.id, { [field]: value });
+      if (activeProject.current === current.id) onSelect(next);
+      onChanged();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     }
