@@ -1,7 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import type { AuthUser } from '../../common/interfaces/auth.interface';
 import type { SearchHit } from '../../common/interfaces/catalog.interface';
 import type { AddItemDto, AddRowDto, AttachTabDto, CreateProjectDto, ElencoCosti, Project, ProjectValidation, UpdateItemDto, UpdateProjectDto } from '../../common/interfaces/project.interface';
+import type { Benchmark, WorkbookView } from '../../common/interfaces/workbook-view.interface';
 import { CurrentUser } from '../auth/auth.decorators';
 import { ProjectsService } from './projects.service';
 
@@ -44,6 +46,27 @@ export class ProjectsController {
   @Get(':id/elenco-costi')
   elencoCosti(@Param('id') id: string, @CurrentUser() user: AuthUser): Promise<ElencoCosti> {
     return this.projects.elencoCosti(id, user.id);
+  }
+
+  /** PDF export of the web ELENCO COSTI. */
+  @Get(':id/elenco-costi.pdf')
+  async elencoCostiPdf(@Param('id') id: string, @CurrentUser() user: AuthUser, @Res() res: Response): Promise<void> {
+    const { file, buffer } = await this.projects.elencoCostiPdf(id, user.id);
+    res.setHeader('content-type', 'application/pdf');
+    res.setHeader('content-disposition', `attachment; filename="${file.replace(/"/g, '')}"`);
+    res.end(buffer);
+  }
+
+  /** The generated quotation as a clickable web workbook (ELENCO COSTI + evaluated analysis sheets). */
+  @Get(':id/workbook')
+  workbook(@Param('id') id: string, @CurrentUser() user: AuthUser): Promise<WorkbookView> {
+    return this.projects.workbookView(id, user.id);
+  }
+
+  /** Historical benchmarking for a row: comparable analyses with specs, dates, quantities, sources and category costs. */
+  @Get(':id/items/:itemId/benchmark')
+  benchmark(@Param('id') id: string, @Param('itemId') itemId: string, @CurrentUser() user: AuthUser, @Query('limit') limit?: string): Promise<Benchmark> {
+    return this.projects.benchmark(id, itemId, user.id, limit ? Number(limit) : undefined);
   }
 
   @Post(':id/items')

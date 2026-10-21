@@ -56,8 +56,7 @@ export class CostingService {
     return (await this.externalSheets(workbook)).size > 0 && (await this.tab(workbook, sheet)) !== null;
   }
 
-  /** Unit cost of the item's reference tab with the item's own quantity, text and parameter overrides. */
-  async compute(item: ProjectItem): Promise<ComputedCost | null> {
+  private async evaluatorFor(item: ProjectItem): Promise<{ ev: SheetEvaluator; snap: SheetSnapshot; fidelity: string | null } | null> {
     if (!item.sourceWorkbook || !item.sourceSheet) return null;
     const ext = await this.externalSheets(item.sourceWorkbook);
     const t = await this.tab(item.sourceWorkbook, item.sourceSheet);
@@ -72,12 +71,40 @@ export class CostingService {
     const overrides: Record<string, Value> = {};
     for (const p of item.params) if (p.value !== null && p.value !== undefined) overrides[p.cell] = p.value;
     const inputs = { quantity: item.quantity, itemCode: item.itemCode, description: item.description, unit: item.unit, lotto: item.lotto, overrides };
+    return { ev: new SheetEvaluator(item.sourceSheet, t.snap, snapshots, inputs, t.row), snap: t.snap, fidelity: t.fidelity };
+  }
+
+  /** Unit cost of the item's reference tab with the item's own quantity, text and parameter overrides. */
+  async compute(item: ProjectItem): Promise<ComputedCost | null> {
+    const e = await this.evaluatorFor(item);
+    if (!e) return null;
     try {
-      const res = new SheetEvaluator(item.sourceSheet, t.snap, snapshots, inputs, t.row).evaluate();
-      return { unitCost: res.unitCost, totalCost: res.totalCost, breakdown: res.breakdown, errors: Object.keys(res.errors).length, unsupported: Object.keys(res.unsupported).length, evaluatedCells: res.evaluatedCells, ms: res.ms, fidelity: t.fidelity, workbook: item.sourceWorkbook, sheet: item.sourceSheet };
-    } catch (e) {
-      this.log.warn(`compute failed for ${item.sourceWorkbook} '${item.sourceSheet}': ${e instanceof Error ? e.message : String(e)}`);
+      const res = e.ev.evaluate();
+      return { unitCost: res.unitCost, totalCost: res.totalCost, breakdown: res.breakdown, errors: Object.keys(res.errors).length, unsupported: Object.keys(res.unsupported).length, evaluatedCells: res.evaluatedCells, ms: res.ms, fidelity: e.fidelity, workbook: item.sourceWorkbook!, sheet: item.sourceSheet! };
+    } catch (err) {
+      this.log.warn(`compute failed for ${item.sourceWorkbook} '${item.sourceSheet}': ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
+  }
+
+  /**
+   * The evaluated analysis sheet as a grid for the web workbook view: every stored cell up to
+   * column W (the sheet's print area) with its computed value and formula.
+   */
+  async grid(item: ProjectItem): Promise<{ cells: Array<{ addr: string; v: Value; f?: string }>; maxRow: number } | null> {
+    const e = await this.evaluatorFor(item);
+    if (!e) return null;
+    const cells: Array<{ addr: string; v: Value; f?: string }> = [];
+    let maxRow = 0;
+    for (const [addr, c] of e.snap.cells) {
+      const m = /^([A-Z]+)(\d+)$/.exec(addr);
+      if (!m || m[1].length > 1 || m[1] > 'W') continue;
+      const row = Number(m[2]);
+      const v = e.ev.get(item.sourceSheet!, m[1], row);
+      if (v === null && !c.f) continue;
+      cells.push(c.f ? { addr, v, f: c.f } : { addr, v });
+      if (row > maxRow) maxRow = row;
+    }
+    return { cells, maxRow };
   }
 }
