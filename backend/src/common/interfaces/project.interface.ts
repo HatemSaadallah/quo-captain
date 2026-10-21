@@ -40,6 +40,7 @@ export interface GenerationSummary {
 
 export interface Project {
   id: string;
+  ownerId: string;
   name: string;
   customer: string;
   /** Offer number: becomes the file name and DATI GEN.!C5 (e.g. TM2099-00). */

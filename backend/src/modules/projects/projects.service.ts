@@ -63,6 +63,7 @@ function toGeneration(g: GenerationRow): GenerationSummary {
 function toProject(p: ProjectRow): Project {
   return {
     id: p.id,
+    ownerId: p.ownerId,
     name: p.name,
     customer: p.customer,
     reference: p.reference,
@@ -98,6 +99,7 @@ function itemData(it: NewItem): Prisma.ProjectItemCreateWithoutProjectInput {
   };
 }
 
+/** Every method is scoped to the authenticated user: a project is only visible to its owner. */
 @Injectable()
 export class ProjectsService {
   constructor(
@@ -105,30 +107,31 @@ export class ProjectsService {
     private readonly catalog: CatalogService,
   ) {}
 
-  async list(): Promise<Project[]> {
-    const rows = await this.prisma.project.findMany({ include: INCLUDE, orderBy: { updatedAt: 'desc' } });
+  async list(userId: string): Promise<Project[]> {
+    const rows = await this.prisma.project.findMany({ where: { ownerId: userId }, include: INCLUDE, orderBy: { updatedAt: 'desc' } });
     return rows.map(toProject);
   }
 
-  async get(id: string): Promise<Project> {
-    const row = await this.prisma.project.findUnique({ where: { id }, include: INCLUDE });
+  async get(id: string, userId: string): Promise<Project> {
+    const row = await this.prisma.project.findFirst({ where: { id, ownerId: userId }, include: INCLUDE });
     if (!row) throw new NotFoundException(`Project ${id} not found`);
     return toProject(row);
   }
 
-  async create(input: CreateProjectDto): Promise<Project> {
-    const name = String(input.name ?? '').trim();
+  async create(input: CreateProjectDto, userId: string): Promise<Project> {
+    const name = requireText(input.name ?? '', 'name');
     if (!name) throw new BadRequestException('name is required');
     const templates = this.catalog.workbooks.map((w) => w.workbook);
     const templateWorkbook = String(input.templateWorkbook ?? templates[0] ?? '');
     if (templateWorkbook && !templates.includes(templateWorkbook)) throw new BadRequestException(`Unknown template workbook ${templateWorkbook}`);
     const row = await this.prisma.project.create({
       data: {
+        ownerId: userId,
         name,
-        customer: String(input.customer ?? '').trim(),
-        reference: String(input.reference ?? '').trim(),
-        date: String(input.date ?? new Date().toISOString().slice(0, 10)),
-        estimator: String(input.estimator ?? '').trim(),
+        customer: requireText(input.customer ?? '', 'customer'),
+        reference: requireText(input.reference ?? '', 'reference'),
+        date: requireText(input.date ?? new Date().toISOString().slice(0, 10), 'date'),
+        estimator: requireText(input.estimator ?? '', 'estimator'),
         templateWorkbook,
       },
       include: INCLUDE,
@@ -136,12 +139,12 @@ export class ProjectsService {
     return toProject(row);
   }
 
-  async update(id: string, patch: UpdateProjectDto): Promise<Project> {
-    await this.get(id);
+  async update(id: string, patch: UpdateProjectDto, userId: string): Promise<Project> {
+    await this.get(id, userId);
     const data: Prisma.ProjectUpdateInput = {};
     for (const k of ['name', 'customer', 'reference', 'date', 'estimator', 'templateWorkbook'] as const) {
       const v = patch[k];
-      if (v !== undefined) data[k] = String(v).trim();
+      if (v !== undefined) data[k] = requireText(v, k);
     }
     if (data.templateWorkbook && !this.catalog.workbooks.some((w) => w.workbook === data.templateWorkbook)) {
       throw new BadRequestException(`Unknown template workbook ${String(data.templateWorkbook)}`);
@@ -150,13 +153,13 @@ export class ProjectsService {
     return toProject(row);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.get(id);
+  async delete(id: string, userId: string): Promise<void> {
+    await this.get(id, userId);
     await this.prisma.project.delete({ where: { id } });
   }
 
-  async addItem(id: string, input: AddItemDto): Promise<Project> {
-    await this.get(id);
+  async addItem(id: string, input: AddItemDto, userId: string): Promise<Project> {
+    await this.get(id, userId);
     if (!input || typeof input.catalogId !== 'string') throw new BadRequestException('catalogId is required');
     const rec = this.catalog.get(input.catalogId);
     // Only these fields may be customised by the caller; provenance, params and historical
@@ -171,10 +174,11 @@ export class ProjectsService {
     const item = itemFromCatalog(rec, q, overrides);
     await this.prisma.projectItem.create({ data: { ...itemData(item), sortOrder: (agg._max.sortOrder ?? 0) + 1, project: { connect: { id } } } });
     await this.touch(id);
-    return this.get(id);
+    return this.get(id, userId);
   }
 
-  async updateItem(id: string, itemId: string, patch: UpdateItemDto): Promise<Project> {
+  async updateItem(id: string, itemId: string, patch: UpdateItemDto, userId: string): Promise<Project> {
+    await this.get(id, userId);
     const row = await this.prisma.projectItem.findFirst({ where: { id: itemId, projectId: id } });
     if (!row) throw new NotFoundException(`Item ${itemId} not found`);
     const data: Prisma.ProjectItemUpdateInput = {};
@@ -197,19 +201,19 @@ export class ProjectsService {
     }
     await this.prisma.projectItem.update({ where: { id: itemId }, data });
     await this.touch(id);
-    return this.get(id);
+    return this.get(id, userId);
   }
 
-  async removeItem(id: string, itemId: string): Promise<Project> {
+  async removeItem(id: string, itemId: string, userId: string): Promise<Project> {
+    await this.get(id, userId);
     const res = await this.prisma.projectItem.deleteMany({ where: { id: itemId, projectId: id } });
     if (!res.count) throw new NotFoundException(`Item ${itemId} not found`);
     await this.touch(id);
-    return this.get(id);
+    return this.get(id, userId);
   }
 
-  async validate(id: string): Promise<ProjectValidation> {
-    const p = await this.get(id);
-    return this.validateProject(p);
+  async validate(id: string, userId: string): Promise<ProjectValidation> {
+    return this.validateProject(await this.get(id, userId));
   }
 
   validateProject(p: Project): ProjectValidation {
