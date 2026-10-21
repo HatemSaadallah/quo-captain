@@ -377,6 +377,46 @@ table.data textarea {
   }
 }
 
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tabs button {
+  border-radius: 8px 8px 0 0;
+  border-bottom: none;
+  background: #e8edf3;
+}
+
+.tabs button.active {
+  background: var(--panel);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.sheet table.elenco th {
+  background: #eef3f8;
+  white-space: nowrap;
+}
+
+.sheet table.elenco tr.total td {
+  border-top: 2px solid var(--ink);
+  font-weight: 600;
+}
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  max-width: 360px;
+}
+
+.suggestions button {
+  text-align: left;
+  font-size: 12px;
+}
+
 .login {
   min-height: 100vh;
   display: flex;

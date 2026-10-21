@@ -1,7 +1,8 @@
-/** Pure business rules for quotation projects (the cart). No I/O. */
+/** Pure business rules for quotation projects (the cart / web ELENCO COSTI). No I/O. */
 import type { CatalogRecord, WorkbookSummary } from '../../common/interfaces/catalog.interface';
-import type { ItemParam, Project, ProjectItem, ProjectValidation, ValidationIssue } from '../../common/interfaces/project.interface';
+import type { AddRowDto, ItemParam, Project, ProjectItem, ProjectValidation, ValidationIssue } from '../../common/interfaces/project.interface';
 import { SHEETS } from '../../excel/somec-schema';
+import { unitCostOf } from './elenco-costi';
 
 export type NewItem = Omit<ProjectItem, 'id'>;
 
@@ -11,6 +12,7 @@ export function itemFromCatalog(r: CatalogRecord, quantity: number, overrides: P
     .map((p) => ({ cell: p.cell, label: p.label, unit: p.unit, value: p.value, original: p.value }));
   return {
     catalogId: r.id,
+    referenceTabId: null,
     sourceWorkbook: r.workbook,
     sourceSheet: r.sheet,
     sourceOfferNo: r.offerNo,
@@ -25,9 +27,53 @@ export function itemFromCatalog(r: CatalogRecord, quantity: number, overrides: P
     params,
     historicalUnitCost: r.unitCost,
     historicalQuantity: r.quantity,
+    unitCostOverride: null,
     dependsOnSheets: r.dependsOnSheets,
     notes: '',
     ...overrides,
+  };
+}
+
+/** A free ELENCO COSTI row typed from the customer's BOQ; a reference tab is attached later. */
+export function blankRow(input: AddRowDto): NewItem {
+  return {
+    catalogId: null,
+    referenceTabId: null,
+    sourceWorkbook: null,
+    sourceSheet: null,
+    sourceOfferNo: null,
+    position: input.position?.trim() ?? '',
+    itemCode: input.itemCode?.trim() ?? '',
+    description: input.description.trim(),
+    unit: input.unit?.trim() || 'Pcs',
+    quantity: input.quantity,
+    L: input.L ?? null,
+    H: input.H ?? null,
+    lotto: input.lotto ?? null,
+    params: [],
+    historicalUnitCost: null,
+    historicalQuantity: null,
+    unitCostOverride: null,
+    dependsOnSheets: [],
+    notes: '',
+  };
+}
+
+/** Attach a reference tab to a row: provenance, historical cost and parameters come from the tab; the row keeps its own text unless `overwrite`. */
+export function attachTab(row: ProjectItem, tab: CatalogRecord, overwrite: boolean): NewItem {
+  const fromTab = itemFromCatalog(tab, row.quantity);
+  const keep = (own: string, tabValue: string): string => (overwrite || !own.trim() ? tabValue : own);
+  return {
+    ...fromTab,
+    position: keep(row.position, fromTab.position),
+    itemCode: keep(row.itemCode, fromTab.itemCode),
+    description: keep(row.description, fromTab.description),
+    unit: keep(row.unit, fromTab.unit),
+    L: overwrite || row.L === null ? fromTab.L : row.L,
+    H: overwrite || row.H === null ? fromTab.H : row.H,
+    lotto: overwrite || row.lotto === null ? fromTab.lotto : row.lotto,
+    unitCostOverride: row.unitCostOverride,
+    notes: row.notes,
   };
 }
 
@@ -53,14 +99,15 @@ export function validateProject(p: Project, template: WorkbookSummary | null): P
     if (!template.requiredSheetsPresent) push('error', `Template ${p.templateWorkbook} lacks one of the required sheets (${SHEETS.elencoCosti}, ${SHEETS.costiParz}, ...)`);
     if (p.items.length > template.freeItemRows) push('error', `Template has only ${template.freeItemRows} free item rows; the cart has ${p.items.length}`);
   }
-  if (!p.items.length) push('error', 'The cart is empty: add at least one product analysis');
+  if (!p.items.length) push('error', 'The cart is empty: add at least one cost row');
 
   const seen = new Map<string, string>();
   let estimatedTotal = 0;
   let itemsWithoutCost = 0;
   for (const it of p.items) {
     const tag = `${it.position || '?'} / ${it.itemCode || '?'}`;
-    if (!it.sourceSheet) push('error', `${tag}: the historical row has no analysis sheet, nothing can be copied`, it.id);
+    if (!it.catalogId) push('error', `${tag}: no reference analysis attached (attach one by similarity); the Excel export needs a sheet to copy`, it.id);
+    else if (!it.sourceSheet) push('error', `${tag}: the historical row has no analysis sheet, nothing can be copied`, it.id);
     if (!(it.quantity > 0) || !Number.isFinite(it.quantity)) push('error', `${tag}: quantity must be a positive number`, it.id);
     if (!it.itemCode.trim()) push('error', `${tag}: item code is required`, it.id);
     if (!it.position.trim()) push('warning', `${tag}: position is empty (summary by position will not group it)`, it.id);
@@ -79,13 +126,15 @@ export function validateProject(p: Project, template: WorkbookSummary | null): P
     } else if (it.dependsOnSheets.length) {
       push('warning', `${tag}: analysis sheet references sheets ${it.dependsOnSheets.join(', ')}; they are not copied, review the result`, it.id);
     }
-    if (it.sourceWorkbook !== p.templateWorkbook) {
+    if (it.sourceWorkbook && it.sourceWorkbook !== p.templateWorkbook) {
       push('warning', `${tag}: copied from ${it.sourceWorkbook}; price-list codes are looked up in the template's DATI GEN., costs will differ from the historical value`, it.id);
     }
-    if (it.historicalUnitCost === null || it.historicalUnitCost === 0) {
+    if (it.unitCostOverride !== null && it.unitCostOverride !== undefined) push('warning', `${tag}: manual unit cost ${it.unitCostOverride} overrides the historical value in the web ELENCO COSTI (not in the Excel export)`, it.id);
+    const { value } = unitCostOf(it);
+    if (value === null || value === 0) {
       itemsWithoutCost++;
-      push('warning', `${tag}: no historical unit cost in the source workbook`, it.id);
-    } else if (it.quantity > 0) estimatedTotal += it.quantity * it.historicalUnitCost;
+      push('warning', `${tag}: no unit cost (no reference tab attached and no override)`, it.id);
+    } else if (it.quantity > 0) estimatedTotal += it.quantity * value;
   }
   return { ok: !issues.some((i) => i.level === 'error'), issues, estimatedTotal: Math.round(estimatedTotal * 100) / 100, itemsWithoutCost };
 }

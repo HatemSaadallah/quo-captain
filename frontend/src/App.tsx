@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Project } from './api';
 import { Cart } from './components/Cart';
+import { ElencoCosti } from './components/ElencoCosti';
 import { Login } from './components/Login';
 import { ProductSearch } from './components/ProductSearch';
 import { ProjectSetup } from './components/ProjectSetup';
@@ -11,6 +12,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'elenco' | 'cart'>('elenco');
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -106,9 +108,19 @@ export default function App() {
         </div>
         <div className="stack">
           {current ? (
-            <Cart project={current} onProject={onProject} onError={setError} />
+            <>
+              <div className="tabs" role="tablist">
+                <button role="tab" aria-selected={view === 'elenco'} className={view === 'elenco' ? 'active' : ''} onClick={() => setView('elenco')}>
+                  ELENCO COSTI (web)
+                </button>
+                <button role="tab" aria-selected={view === 'cart'} className={view === 'cart' ? 'active' : ''} onClick={() => setView('cart')}>
+                  Cart & Excel export
+                </button>
+              </div>
+              {view === 'elenco' ? <ElencoCosti project={current} onProject={onProject} onError={setError} /> : <Cart project={current} onProject={onProject} onError={setError} />}
+            </>
           ) : (
-            <section className="panel muted">Create or select a project to start a cart.</section>
+            <section className="panel muted">Create or select a project to start its ELENCO COSTI.</section>
           )}
         </div>
       </main>

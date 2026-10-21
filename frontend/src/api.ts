@@ -2,9 +2,9 @@
 import type { AuthUser, LoginResponse } from '../../backend/src/common/interfaces/auth.interface';
 import type { CatalogFacets, CatalogRecord, SearchHit, SearchResult } from '../../backend/src/common/interfaces/catalog.interface';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../backend/src/common/interfaces/generation.interface';
-import type { AddItemDto, CreateProjectDto, Project, ProjectValidation, UpdateItemDto, UpdateProjectDto } from '../../backend/src/common/interfaces/project.interface';
+import type { AddItemDto, AddRowDto, CreateProjectDto, ElencoCosti, Project, ProjectValidation, UpdateItemDto, UpdateProjectDto } from '../../backend/src/common/interfaces/project.interface';
 
-export type { AuthUser, CatalogFacets, CatalogRecord, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Project, ProjectValidation, AddItemDto, UpdateItemDto };
+export type { AuthUser, CatalogFacets, CatalogRecord, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Project, ProjectValidation, AddItemDto, AddRowDto, ElencoCosti, UpdateItemDto };
 export type ProjectItem = Project['items'][number];
 
 export class ApiError extends Error {
@@ -97,6 +97,11 @@ export const api = {
   addItem: (id: string, dto: AddItemDto): Promise<Project> => request(`/api/projects/${enc(id)}/items`, { method: 'POST', ...json(dto) }),
   updateItem: (id: string, itemId: string, dto: UpdateItemDto): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}`, { method: 'PATCH', ...json(dto) }),
   removeItem: (id: string, itemId: string): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}`, { method: 'DELETE' }),
+  elencoCosti: (id: string): Promise<ElencoCosti> => request(`/api/projects/${enc(id)}/elenco-costi`),
+  addRow: (id: string, dto: AddRowDto): Promise<Project> => request(`/api/projects/${enc(id)}/rows`, { method: 'POST', ...json(dto) }),
+  suggestions: (id: string, itemId: string, limit = 6): Promise<SearchHit[]> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/suggestions?limit=${limit}`),
+  attach: (id: string, itemId: string, referenceTabId: string, overwrite = false): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/attach`, { method: 'POST', ...json(overwrite ? { referenceTabId, overwrite } : { referenceTabId }) }),
+  detach: (id: string, itemId: string): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/attach`, { method: 'DELETE' }),
 
   generate: (id: string): Promise<GenerationResult> => request(`/api/projects/${enc(id)}/generate`, { method: 'POST' }),
   excelStatus: (refresh = false): Promise<ExcelStatus> => request(`/api/generation/excel-status${refresh ? '?refresh=1' : ''}`),
