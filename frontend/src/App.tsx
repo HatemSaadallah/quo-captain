@@ -5,6 +5,7 @@ import { ElencoCosti } from './components/ElencoCosti';
 import { Login } from './components/Login';
 import { ProductSearch } from './components/ProductSearch';
 import { ProjectSetup } from './components/ProjectSetup';
+import { WorkbookView } from './components/WorkbookView';
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined); // undefined = checking stored token
@@ -13,7 +14,7 @@ export default function App() {
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [current, setCurrent] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<'elenco' | 'cart'>('elenco');
+  const [view, setView] = useState<'elenco' | 'workbook' | 'cart'>('elenco');
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -115,11 +116,16 @@ export default function App() {
                 <button role="tab" aria-selected={view === 'elenco'} className={view === 'elenco' ? 'active' : ''} onClick={() => setView('elenco')}>
                   ELENCO COSTI (web)
                 </button>
+                <button role="tab" aria-selected={view === 'workbook'} className={view === 'workbook' ? 'active' : ''} onClick={() => setView('workbook')}>
+                  Generated workbook & PDF
+                </button>
                 <button role="tab" aria-selected={view === 'cart'} className={view === 'cart' ? 'active' : ''} onClick={() => setView('cart')}>
                   Cart & Excel export
                 </button>
               </div>
-              {view === 'elenco' ? <ElencoCosti project={current} onProject={onProject} onError={setError} /> : <Cart project={current} onProject={onProject} onError={setError} />}
+              {view === 'elenco' && <ElencoCosti project={current} onProject={onProject} onError={setError} />}
+              {view === 'workbook' && <WorkbookView project={current} onProject={onProject} onError={setError} />}
+              {view === 'cart' && <Cart project={current} onProject={onProject} onError={setError} />}
             </>
           ) : (
             <section className="panel muted">Create or select a project to start its ELENCO COSTI.</section>

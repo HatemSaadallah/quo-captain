@@ -3,8 +3,9 @@ import type { AuthUser, LoginResponse } from '../../backend/src/common/interface
 import type { CatalogFacets, CatalogRecord, SearchHit, SearchResult } from '../../backend/src/common/interfaces/catalog.interface';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../backend/src/common/interfaces/generation.interface';
 import type { AddItemDto, AddRowDto, CreateProjectDto, ElencoCosti, Project, ProjectValidation, UpdateItemDto, UpdateProjectDto } from '../../backend/src/common/interfaces/project.interface';
+import type { Benchmark, GridCell, GridSheet, WorkbookView } from '../../backend/src/common/interfaces/workbook-view.interface';
 
-export type { AuthUser, CatalogFacets, CatalogRecord, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Project, ProjectValidation, AddItemDto, AddRowDto, ElencoCosti, UpdateItemDto };
+export type { AuthUser, CatalogFacets, CatalogRecord, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Project, ProjectValidation, AddItemDto, AddRowDto, ElencoCosti, UpdateItemDto, Benchmark, GridCell, GridSheet, WorkbookView };
 export type ProjectItem = Project['items'][number];
 
 export class ApiError extends Error {
@@ -98,6 +99,14 @@ export const api = {
   updateItem: (id: string, itemId: string, dto: UpdateItemDto): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}`, { method: 'PATCH', ...json(dto) }),
   removeItem: (id: string, itemId: string): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}`, { method: 'DELETE' }),
   elencoCosti: (id: string): Promise<ElencoCosti> => request(`/api/projects/${enc(id)}/elenco-costi`),
+  workbook: (id: string): Promise<WorkbookView> => request(`/api/projects/${enc(id)}/workbook`),
+  benchmark: (id: string, itemId: string, limit = 6): Promise<Benchmark> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/benchmark?limit=${limit}`),
+  /** Downloads the ELENCO COSTI as PDF (bearer token, blob). */
+  downloadPdf: async (id: string, reference: string): Promise<void> => {
+    const res = await fetch(`/api/projects/${enc(id)}/elenco-costi.pdf`, { headers: headers() });
+    if (!res.ok) throw new ApiError(res.status, `PDF export failed (${res.status})`, null);
+    saveBlob(await res.blob(), `${reference || 'quotation'} ELENCO COSTI.pdf`);
+  },
   addRow: (id: string, dto: AddRowDto): Promise<Project> => request(`/api/projects/${enc(id)}/rows`, { method: 'POST', ...json(dto) }),
   suggestions: (id: string, itemId: string, limit = 6): Promise<SearchHit[]> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/suggestions?limit=${limit}`),
   attach: (id: string, itemId: string, referenceTabId: string, overwrite = false): Promise<Project> => request(`/api/projects/${enc(id)}/items/${enc(itemId)}/attach`, { method: 'POST', ...json(overwrite ? { referenceTabId, overwrite } : { referenceTabId }) }),
@@ -110,17 +119,20 @@ export const api = {
   download: async (relativeFile: string): Promise<void> => {
     const res = await fetch(api.outputUrl(relativeFile), { headers: headers() });
     if (!res.ok) throw new ApiError(res.status, `Download failed (${res.status})`, null);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = relativeFile.split('/').pop() ?? 'download';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    saveBlob(await res.blob(), relativeFile.split('/').pop() ?? 'download');
   },
 };
+
+export function saveBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 export const fmtMoney = (v: number | null | undefined): string => (v === null || v === undefined ? '—' : v.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }));
 export const fmtNum = (v: number | null | undefined, digits = 0): string => (v === null || v === undefined ? '—' : v.toLocaleString('it-IT', { maximumFractionDigits: digits }));

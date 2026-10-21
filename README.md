@@ -134,3 +134,9 @@ Not verified in this environment:
 
 * The Prisma VS Code extension (Prisma 7 language server) warns about `url` in `schema.prisma`; the project pins Prisma 6 where it is correct.
 * `npm install` needs `legacy-peer-deps` (set in `backend/.npmrc`) because npm 10.9 crashes on the vite 7 / vitest 4 peer-dependency set.
+
+## Generated workbook on the web, benchmarking and PDF
+
+The "Generated workbook & PDF" tab renders the quotation as a clickable web workbook instead of an Excel file: sheet tabs at the bottom (ELENCO COSTI plus one evaluated analysis sheet per row), a formula bar showing the clicked cell's formula, value and source, yellow input cells editable in place (quantity, dimensions, parameters such as `N3`/`N4`, manual unit cost), and the computed cells refreshed through the app engine. **Export PDF** downloads the ELENCO COSTI as a landscape PDF (`GET /api/projects/:id/elenco-costi.pdf`); **Print** uses the browser's print view of the current sheet. `GET /api/projects/:id/workbook` returns the grid.
+
+Selecting a row shows the **historical benchmark** (`GET /api/projects/:id/items/:itemId/benchmark`): the most similar reference analyses with their source workbook/sheet/cell, client, date, quantity, dimensions, parameters and unit cost, min/median/max against this row's cost, a per-category cost comparison (materials, labour, installation…) and the historical projects they come from.

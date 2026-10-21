@@ -15,10 +15,14 @@ import type {
   UpdateItemDto,
   UpdateProjectDto,
 } from '../../common/interfaces/project.interface';
+import type { Benchmark, BenchmarkCategoryRow, BenchmarkExample, GridSheet, WorkbookView } from '../../common/interfaces/workbook-view.interface';
+import { EC } from '../../excel/somec-schema';
 import { CatalogService } from '../catalog/catalog.service';
 import { CostingService } from '../costing/costing.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { computeElencoCosti, unitsCompatible, type ComputedUnitCost } from './elenco-costi';
+import { elencoCostiPdf } from './pdf';
+import { analysisSheet, elencoCostiSheet } from './workbook-view';
 import { attachTab, blankRow, itemFromCatalog, validateProject, type NewItem } from './project.rules';
 
 type ProjectRow = Prisma.ProjectGetPayload<{ include: { items: true; generations: true } }>;
@@ -326,6 +330,76 @@ export class ProjectsService {
       computed.set(it.id, c ? { unitCost: c.unitCost, fidelity: c.fidelity, errors: c.errors, unsupported: c.unsupported } : null);
     }
     return computeElencoCosti(p, computed);
+  }
+
+  /** The generated quotation as a clickable web workbook: ELENCO COSTI + one evaluated analysis sheet per row. */
+  async workbookView(id: string, userId: string): Promise<WorkbookView> {
+    const p = await this.get(id, userId);
+    const ec = await this.elencoCosti(id, userId);
+    const sheets: GridSheet[] = [elencoCostiSheet(p, ec)];
+    for (let i = 0; i < p.items.length; i++) {
+      const it = p.items[i];
+      if (!it.catalogId) continue;
+      const grid = await this.costing.grid(it);
+      if (grid) sheets.push(analysisSheet(it, EC.firstRow + i, grid, `${it.itemCode} ${it.description.split(/\r?\n/)[0]}`));
+    }
+    return { projectId: p.id, reference: p.reference, generatedAt: new Date().toISOString(), sheets };
+  }
+
+  async elencoCostiPdf(id: string, userId: string): Promise<{ file: string; buffer: Buffer }> {
+    const p = await this.get(id, userId);
+    const ec = await this.elencoCosti(id, userId);
+    return { file: `${p.reference || 'quotation'} ELENCO COSTI.pdf`, buffer: await elencoCostiPdf(p, ec) };
+  }
+
+  /** Historical benchmarking for one row: comparable analyses, their specs/dates/sources and category cost comparison. */
+  async benchmark(id: string, itemId: string, userId: string, limit = 6): Promise<Benchmark> {
+    const p = await this.get(id, userId);
+    const it = p.items.find((x) => x.id === itemId);
+    if (!it) throw new NotFoundException(`Item ${itemId} not found`);
+    const query = `${it.description.split(/\r?\n/)[0]}${it.L && it.H ? ` ${it.L}x${it.H}` : ''}`.trim();
+    const hits = it.catalogId && this.catalog.has(it.catalogId) ? await this.catalog.similar(it.catalogId, limit) : (await this.catalog.search({ q: query, limit })).hits;
+    const examples: BenchmarkExample[] = hits.map((h) => ({
+      id: h.record.id,
+      title: h.record.title,
+      offerNo: h.record.offerNo,
+      workbook: h.record.workbook,
+      sheet: h.record.sheet,
+      client: h.record.client,
+      projectDate: h.record.projectDate,
+      itemCode: h.record.itemCode,
+      unit: h.record.unit,
+      quantity: h.record.quantity,
+      L: h.record.L,
+      H: h.record.H,
+      unitCost: h.record.unitCost,
+      params: h.record.params.filter((x) => x.editable).map((x) => ({ label: x.label, value: x.value, unit: x.unit })),
+      similarity: Math.min(1, h.score),
+      sourceCell: h.record.sourceCells.unitCost ?? null,
+    }));
+    const own = it.catalogId && this.catalog.has(it.catalogId) ? this.catalog.get(it.catalogId) : null;
+    const computed = it.catalogId ? await this.costing.compute(it) : null;
+    const ownBreakdown = computed?.breakdown.map((b) => ({ category: b.label, code: b.category, unitCost: b.unitCost })) ?? own?.costBreakdown.map((b) => ({ category: b.category, code: b.code, unitCost: b.unitCost })) ?? [];
+    const codes = new Map<string, string>();
+    for (const b of ownBreakdown) codes.set(b.code, b.category);
+    for (const h of hits) for (const b of h.record.costBreakdown) if (!codes.has(b.code)) codes.set(b.code, b.category);
+    const categories: BenchmarkCategoryRow[] = [...codes].map(([code, category]) => ({
+      category,
+      code,
+      own: ownBreakdown.find((b) => b.code === code)?.unitCost ?? null,
+      comparables: hits.map((h) => h.record.costBreakdown.find((b) => b.code === code)?.unitCost ?? null),
+    }));
+    const byWb = new Map<string, number>();
+    for (const h of hits) byWb.set(h.record.workbook, (byWb.get(h.record.workbook) ?? 0) + 1);
+    const projects = [...byWb]
+      .map(([workbook, matches]) => {
+        const w = this.catalog.workbooks.find((x) => x.workbook === workbook);
+        return { workbook, offerNo: w?.offerNo ?? null, client: w?.client ?? null, projectName: w?.projectName ?? null, projectDate: w?.projectDate ?? null, matches };
+      })
+      .sort((a, b) => b.matches - a.matches);
+    const costs = examples.map((e) => e.unitCost).filter((v): v is number => v !== null).sort((a, b) => a - b);
+    const ownCost = computed?.unitCost ?? it.unitCostOverride ?? it.historicalUnitCost;
+    return { itemId, query, examples, categories, projects, stats: { min: costs[0] ?? null, median: costs.length ? costs[Math.floor(costs.length / 2)] : null, max: costs[costs.length - 1] ?? null, own: ownCost, unit: own?.unit ?? it.unit } };
   }
 
   async recordGeneration(id: string, g: Omit<GenerationSummary, 'at'>): Promise<void> {
