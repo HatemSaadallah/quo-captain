@@ -454,3 +454,24 @@ describe('session request isolation', () => {
     expect(screen.getByRole('option', { name: /Review B/ })).toBeTruthy();
   });
 });
+
+describe('historical optional parameters', () => {
+  it('preserves an unchanged zero-valued optional input from the reference analysis', async () => {
+    const withZero = {
+      ...record,
+      params: [...record.params, { cell: 'N7', label: 'PANNELLO/I FISSI', unit: 'N°', value: 0, editable: true }],
+    };
+    vi.mocked(api.search).mockResolvedValue({ hits: [hit(withZero)], semantic: false, embeddingStatus: 'ready' });
+    const props = searchProps();
+    render(<ProductSearch {...props} />);
+    fireEvent.click(await screen.findByText(record.title!));
+    await screen.findByText('Similar reference', { exact: false });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Add to cart' })));
+    expect(props.onError).not.toHaveBeenCalled();
+    expect(props.onAdd).toHaveBeenCalledWith(
+      withZero,
+      record.quantity,
+      expect.arrayContaining([{ cell: 'N7', value: 0 }]),
+    );
+  });
+});
