@@ -39,9 +39,10 @@ $(BACKEND)/.env:
 	@printf 'DATABASE_URL="%s"\nPORT=3000\nJWT_SECRET="%s"\n' '$(DATABASE_URL)' "$$(openssl rand -hex 24)" > $(BACKEND)/.env
 	@echo "wrote $(BACKEND)/.env"
 
-db: $(BACKEND)/.env ## Create the Postgres database, sync the Prisma schema, seed the mock user + sample project
+db: $(BACKEND)/.env ## Create the Postgres database, sync the Prisma schema, seed the mock user + sample project (when a seed is configured)
 	@psql -lqt | cut -d'|' -f1 | grep -qw "$(DB_NAME)" || createdb "$(DB_NAME)"
-	cd $(BACKEND) && npx prisma generate && npx prisma db push && npx prisma db seed
+	cd $(BACKEND) && npx prisma generate && npx prisma db push
+	@cd $(BACKEND) && if node -e "process.exit(require('./package.json').prisma && require('./package.json').prisma.seed ? 0 : 1)"; then npx prisma db seed; else echo "no seed configured"; fi
 
 extract: ## Index data/input/*.xlsx into data/processed (catalog + embeddings)
 	@ls data/input/*.xlsx >/dev/null 2>&1 || { echo "Put the Somec workbooks in data/input/ first"; exit 1; }
