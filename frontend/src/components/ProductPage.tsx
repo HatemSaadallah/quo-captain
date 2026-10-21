@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react';
 import { api, fmtMoney, fmtNum, type CatalogRecord, type Quotation } from '../api';
 import { cleanTitle, dims, imageOf, locationOf, materialsOf, rankSimilar, sourceOf, typologyOf, type SimilarProduct } from '../product';
-import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
 
 interface Props {
   id: string;
+  cart: Quotation | null;
   quotations: Quotation[];
-  onAdd: (quotationId: string, record: CatalogRecord, quantity: number) => Promise<void>;
+  onCart: (quotationId: string) => void;
+  onAddToCart: (record: CatalogRecord, quantity: number) => Promise<void>;
   onError: (msg: string) => void;
 }
 
-export function ProductPage({ id, quotations, onAdd, onError }: Props) {
+export function ProductPage({ id, cart, quotations, onCart, onAddToCart, onError }: Props) {
   const [r, setR] = useState<CatalogRecord | null>(null);
   const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
-  const [target, setTarget] = useState('');
   const [qty, setQty] = useState('1');
   const [added, setAdded] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     setR(null);
@@ -30,7 +31,7 @@ export function ProductPage({ id, quotations, onAdd, onError }: Props) {
         if (!live) return;
         setR(rec);
         setQty(String(rec.quantity ?? 1));
-        const hits = await api.similar(id, 40);
+        const hits = await api.similar(id, 50);
         if (live) setSimilar(rankSimilar(rec, hits).slice(0, 12));
       })
       .catch((e: unknown) => onError(String(e)));
@@ -44,12 +45,11 @@ export function ProductPage({ id, quotations, onAdd, onError }: Props) {
   const mats = materialsOf(r);
   const breakdown = r.costBreakdown.map((c) => ({ ...c, unitCost: c.unitCost ?? 0 })).filter((c) => c.unitCost > 0).sort((a, b) => b.unitCost - a.unitCost);
   const total = breakdown.reduce((s, c) => s + c.unitCost, 0) || 1;
-  const quotation = quotations.find((x) => x.id === target) ?? quotations[0];
-
   const add = async (): Promise<void> => {
-    if (!quotation) return navigate({ page: 'new', step: 1 });
-    await onAdd(quotation.id, r, Number(qty) || 1);
-    setAdded(quotation.reference || quotation.name);
+    setAdding(true);
+    await onAddToCart(r, Number(qty) || 1);
+    setAdding(false);
+    setAdded(cart?.reference || cart?.name || 'a new draft quotation');
   };
 
   return (
@@ -105,23 +105,28 @@ export function ProductPage({ id, quotations, onAdd, onError }: Props) {
             </dd>
           </dl>
           <div className="addbox">
-            <select value={quotation?.id ?? ''} onChange={(e) => setTarget(e.target.value)} aria-label="quotation">
-              {quotations.length === 0 && <option value="">No quotation yet</option>}
+            <label className="small muted" style={{ whiteSpace: 'nowrap' }}>
+              Qty ({r.unit ?? 'unit'})
+            </label>
+            <input type="number" min={0.001} step="any" value={qty} onChange={(e) => setQty(e.target.value)} style={{ width: 100 }} aria-label="quantity" />
+            <button className="primary" onClick={() => void add()} disabled={adding}>
+              {adding ? 'Adding…' : '🛒 Add to cart'}
+            </button>
+          </div>
+          <div className="small muted" style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
+            Cart (draft quotation):
+            <select value={cart?.id ?? ''} onChange={(e) => onCart(e.target.value)} style={{ width: 'auto', padding: '2px 6px' }} aria-label="cart quotation">
+              {!cart && <option value="">new draft (created on first add)</option>}
               {quotations.map((x) => (
                 <option key={x.id} value={x.id}>
-                  {x.reference || '(no ref)'} · {x.name}
+                  {x.reference || '(no ref)'} · {x.name} ({x.items.length} items)
                 </option>
               ))}
             </select>
-            <input type="number" min={0.001} step="any" value={qty} onChange={(e) => setQty(e.target.value)} style={{ width: 90 }} aria-label="quantity" />
-            <button className="primary" onClick={() => void add()}>
-              {quotation ? 'Add to quotation' : 'Start a quotation'}
-            </button>
           </div>
           {added && (
             <div className="small" style={{ color: 'var(--ok)', marginTop: 6 }}>
-              Added to {added}.{' '}
-              <a href={`#/quotations/${quotation?.id}`}>Open quotation →</a>
+              ✓ Added to {added}. {cart && <a href={`#/quotations/${cart.id}`}>Open quotation →</a>}
             </div>
           )}
         </div>
@@ -159,7 +164,7 @@ export function ProductPage({ id, quotations, onAdd, onError }: Props) {
       <div className="pgrid">
         {similar?.map((s) => (
           <div key={s.hit.record.id} className="simwrap">
-            <ProductCard r={s.hit.record} badge={`${Math.min(97, Math.round(s.score * 100))}% match`} />
+            <ProductCard r={s.hit.record} onAdd={(rec) => onAddToCart(rec, 1)} badge={`${Math.min(97, Math.round(s.score * 100))}% match`} />
             <div className="reasons">
               {s.sameTypology && <span className="reason">Same typology</span>}
               {s.sharedMaterials.map((m) => (

@@ -86,6 +86,7 @@ function toQuotation(p: QuotationRow): Quotation {
     date: p.date,
     estimator: p.estimator,
     templateWorkbook: p.templateWorkbook,
+    status: p.status === 'active' ? 'active' : 'draft',
     items: p.items.map(toItem),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -167,6 +168,10 @@ export class QuotationsService {
     }
     if (data.templateWorkbook && !this.catalog.workbooks.some((w) => w.workbook === data.templateWorkbook)) {
       throw new BadRequestException(`Unknown template workbook ${String(data.templateWorkbook)}`);
+    }
+    if (patch.status !== undefined) {
+      if (patch.status !== 'draft' && patch.status !== 'active') throw new BadRequestException('status must be draft or active');
+      data.status = patch.status;
     }
     const row = await this.prisma.quotation.update({ where: { id }, data, include: INCLUDE });
     return toQuotation(row);

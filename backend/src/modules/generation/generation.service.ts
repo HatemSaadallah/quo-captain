@@ -59,7 +59,8 @@ export class GenerationService {
     const excel = await detectExcel();
     let recalc = { performed: false, method: 'none', detail: excel.detail };
     let engine: ValidationReport['engine'] = 'ooxml';
-    if (excel.available) {
+    // Opt-in: AppleScript automation can block on macOS file-access prompts. The file is flagged fullCalcOnLoad, so Excel recalculates on open anyway.
+    if (excel.available && process.env.EXCEL_RECALC === "1") {
       const r = await recalculateWithExcel(outcome.outputFile);
       recalc = r.ok ? { performed: true, method: 'Microsoft Excel (AppleScript full recalculation)', detail: r.detail } : { performed: false, method: 'none', detail: `Excel recalculation failed: ${r.detail}` };
       if (r.ok) engine = 'ooxml+excel';

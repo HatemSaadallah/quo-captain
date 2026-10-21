@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Quotation } from './api';
+import { CartWorkspace } from './components/CartWorkspace';
+import { ContactsPage } from './components/ContactsPage';
 import { ProductHome } from './components/ProductHome';
 import { ProductPage } from './components/ProductPage';
 import { Login } from './components/Login';
 import { NewQuotation } from './components/NewQuotation';
 import { QuotationList } from './components/QuotationList';
 import { QuotationPage } from './components/QuotationPage';
+import { cleanTitle } from './product';
 import { navigate, useRoute } from './route';
 
 export default function App() {
@@ -14,6 +17,22 @@ export default function App() {
   const [facets, setFacets] = useState<CatalogFacets | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [cartId, setCartIdState] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('somec.cart');
+    } catch {
+      return null;
+    }
+  });
+  const [toast, setToast] = useState<{ text: string; quotationId: string } | null>(null);
+  const setCartId = (id: string): void => {
+    setCartIdState(id);
+    try {
+      localStorage.setItem('somec.cart', id);
+    } catch {
+      // per-browser convenience only
+    }
+  };
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -66,6 +85,29 @@ export default function App() {
     }
   };
 
+  /** The cart is a draft quotation; adding with no draft open starts a new draft with the next offer number. */
+  const drafts = quotations.filter((q) => q.status === 'draft').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const cart = drafts.find((q) => q.id === cartId) ?? drafts[0] ?? null;
+  const [workspaceTab, setWorkspaceTab] = useState('elenco');
+  const newCart = async (name = 'Draft quotation', customer = ''): Promise<Quotation> => {
+    const next = Math.max(2099, ...quotations.map((q) => Number(/TM(\d{4})/.exec(q.reference)?.[1] ?? 0))) + 1;
+    const created = await api.createQuotation({ status: 'draft', name, customer, reference: `TM${next}-00`, date: new Date().toISOString().slice(0, 10), estimator: user?.name, templateWorkbook: facets?.workbooks[0]?.workbook });
+    onQuotation(created);
+    setCartId(created.id);
+    return created;
+  };
+  const addToCart = async (record: CatalogRecord, quantity = 1): Promise<void> => {
+    try {
+      const target = cart ?? (await newCart());
+      setCartId(target.id);
+      await addTo(target.id, record, quantity, []);
+      setToast({ text: `${cleanTitle(record)} added to ${target.reference || target.name}`, quotationId: target.id });
+      window.setTimeout(() => setToast(null), 4500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const deleteQuotation = async (p: Quotation): Promise<void> => {
     if (!confirm(`Delete quotation "${p.reference || p.name}" and its rows?`)) return;
     try {
@@ -87,8 +129,8 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const current = route.page === 'quotation' || route.page === 'new' ? (quotations.find((p) => p.id === route.id) ?? null) : null;
-  const navItem = (page: 'catalog' | 'quotations' | 'new', label: string, icon: string, active: boolean): ReactElement => (
-    <button className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(page === 'new' ? { page: 'new', step: 1 } : { page })}>
+  const navItem = (page: 'catalog' | 'quotations' | 'contacts', label: string, icon: string, active: boolean): ReactElement => (
+    <button className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(page === 'quotations' ? { page: 'quotations' } : { page })}>
       <span className="icon">{icon}</span> {label}
     </button>
   );
@@ -105,9 +147,44 @@ export default function App() {
         </div>
         <nav>
           {navItem('catalog', 'Catalog', '▦', route.page === 'catalog' || route.page === 'product')}
-          {navItem('quotations', 'Quotations', '≣', route.page === 'quotations' || route.page === 'quotation')}
-          {navItem('new', 'New quotation', '＋', route.page === 'new')}
+          {navItem('quotations', 'Quotations', '≣', route.page === 'quotations' || route.page === 'quotation' || route.page === 'new')}
+          {navItem('contacts', 'Contacts', '☎', route.page === 'contacts')}
         </nav>
+        <div className="carts-nav">
+          <div className="carts-head">Carts</div>
+          {drafts.slice(0, 6).map((d) => (
+            <button
+              key={d.id}
+              className={`cart-nav ${cart?.id === d.id ? 'active' : ''}`}
+              onClick={() => {
+                setCartId(d.id);
+                navigate({ page: 'quotations' });
+              }}
+            >
+              <span className="icon">🛒</span>
+              <span className="cart-text">
+                {d.reference || '(no ref)'}
+                <small>{d.name}</small>
+              </span>
+              <span className="cart-badge">{d.items.length}</span>
+            </button>
+          ))}
+          {drafts.length > 6 && (
+            <button className="carts-more" onClick={() => navigate({ page: 'quotations', status: 'draft' })}>
+              +{drafts.length - 6} more carts
+            </button>
+          )}
+          <button
+            className="carts-new"
+            onClick={() =>
+              void newCart()
+                .then(() => navigate({ page: 'quotations' }))
+                .catch((e: unknown) => setError(String(e)))
+            }
+          >
+            ＋ New cart
+          </button>
+        </div>
         <div className="sidebar-foot small">
           <div>{facets ? `${facets.recordCount} analyses · ${facets.workbooks.length} workbooks` : 'loading catalog…'}</div>
           <div className="muted">costs are estimated costs, not selling prices</div>
@@ -128,12 +205,52 @@ export default function App() {
             </button>
           </div>
         )}
-        {route.page === 'catalog' && <ProductHome facets={facets} onError={setError} />}
-        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} onAdd={(qid, r, q) => addTo(qid, r, q, [])} onError={setError} />}
-        {route.page === 'quotations' && <QuotationList quotations={quotations} onDelete={(p) => void deleteQuotation(p)} />}
-        {route.page === 'quotation' && (current ? <QuotationPage quotation={current} facets={facets} tab={route.tab} onQuotation={onQuotation} onAdd={(r, q, prm) => addTo(current.id, r, q, prm)} onError={setError} /> : <section className="panel muted">{quotations.length ? 'Quotation not found.' : 'Loading…'}</section>)}
+        {route.page === 'catalog' && <ProductHome facets={facets} onError={setError} onAddToCart={(r) => addToCart(r)} />}
+        {route.page === 'product' && <ProductPage id={route.id} cart={cart} quotations={drafts} onCart={setCartId} onAddToCart={addToCart} onError={setError} />}
+        {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
+        {route.page === 'quotations' && !route.status && (
+          <CartWorkspace carts={drafts} current={cart} customers={[...new Set(quotations.map((q) => q.customer).filter(Boolean))]} onSelect={setCartId} onNewCart={async (n, c) => void (await newCart(n, c))}>
+            {cart && (
+              <QuotationPage
+                quotation={cart}
+                isCart
+                onMakeCart={() => undefined}
+                onConfirmed={(q) => {
+                  setToast({ text: `${q.reference || q.name} confirmed · now an active quotation`, quotationId: q.id });
+                  window.setTimeout(() => setToast(null), 4500);
+                }}
+                facets={facets}
+                tab={workspaceTab}
+                onTab={setWorkspaceTab}
+                onQuotation={onQuotation}
+                onAdd={(r, q, prm) => addTo(cart.id, r, q, prm)}
+                onError={setError}
+              />
+            )}
+          </CartWorkspace>
+        )}
+        {route.page === 'quotations' && route.status && <QuotationList quotations={quotations} cartId={cart?.id ?? null} status={route.status} onDelete={(p) => void deleteQuotation(p)} />}
+        {route.page === 'quotation' && (current ? <QuotationPage quotation={current} isCart={cart?.id === current.id} onMakeCart={() => setCartId(current.id)}
+            onConfirmed={(q) => {
+              setToast({ text: `${q.reference || q.name} confirmed · now an active quotation`, quotationId: q.id });
+              window.setTimeout(() => setToast(null), 4500);
+            }} facets={facets} tab={route.tab} onQuotation={onQuotation} onAdd={(r, q, prm) => addTo(current.id, r, q, prm)} onError={setError} /> : <section className="panel muted">{quotations.length ? 'Quotation not found.' : 'Loading…'}</section>)}
         {route.page === 'new' && <NewQuotation facets={facets} quotation={current} step={route.step} onQuotation={onQuotation} onAdd={(r, q, prm) => (current ? addTo(current.id, r, q, prm) : Promise.resolve())} onError={setError} />}
       </main>
+      {toast && (
+        <div className="toast" role="status">
+          <span className="toast-ok">✓</span>
+          <span>{toast.text}</span>
+          <button
+            onClick={() => {
+              setCartId(toast.quotationId);
+              navigate(quotations.find((q) => q.id === toast.quotationId)?.status === 'draft' ? { page: 'quotations' } : { page: 'quotation', id: toast.quotationId, tab: 'elenco' });
+            }}
+          >
+            View cart →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
