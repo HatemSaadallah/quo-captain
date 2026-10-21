@@ -32,8 +32,8 @@ export class GenerationService {
     return detectExcel(force);
   }
 
-  async generate(projectId: string): Promise<GenerationResult> {
-    const project = await this.projects.get(projectId);
+  async generate(projectId: string, userId: string): Promise<GenerationResult> {
+    const project = await this.projects.get(projectId, userId);
     const validation = this.projects.validateProject(project);
     if (!validation.ok) throw new BadRequestException({ message: 'Project is not ready for generation', issues: validation.issues });
     const templatePath = path.join(INPUT_DIR, project.templateWorkbook);
