@@ -242,6 +242,7 @@ describe('project mutation consistency', () => {
       <ProjectSetup
         facets={facets}
         projects={[p]}
+        projectsLoaded={true}
         current={p}
         onSelect={vi.fn()}
         onChanged={onChanged}
