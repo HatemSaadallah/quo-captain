@@ -168,6 +168,8 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
   it('refuses an item without an analysis sheet', async () => {
     const bad: Project = { ...project, items: [{ id: 'x', ...itemFromCatalog(rec('TM1641-03#178'), 1) }], templateWorkbook: 'TM1641-03 Analisi.xlsx' };
     await expect(generateWorkbook({ project: bad, templatePath: path.join(INPUT_DIR, 'TM1641-03 Analisi.xlsx'), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no source analysis sheet/);
+    const free: Project = { ...project, items: [{ id: 'f', ...itemFromCatalog(rec('TM1643-06#10'), 1), catalogId: null, sourceWorkbook: null, sourceSheet: null }] };
+    await expect(generateWorkbook({ project: free, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no reference analysis attached/);
   });
 
   it('flags sheets that depend on other analysis sheets', async () => {
