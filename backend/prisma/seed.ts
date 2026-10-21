@@ -28,6 +28,13 @@ const PROJECT_CONTACTS = [
   { id: 'pietro.conte@acme.local', name: 'Pietro Conte', role: 'Procurement Specialist', company: 'ACME', email: 'pietro.conte@acme.local' },
 ];
 
+// Repairs two legacy seed rows that predate mandatory customer assignment.
+// The customer is set explicitly from the matching seed-analysis clients.
+const LEGACY_CUSTOMER_REPAIRS: Array<{ reference: string; customer: string }> = [
+  { reference: 'TM2124-00', customer: 'ACME' },
+  { reference: 'TM2125-00', customer: 'APEXA' },
+];
+
 async function main(): Promise<void> {
   const users = [];
   for (const u of USERS) {
@@ -41,6 +48,8 @@ async function main(): Promise<void> {
   }
   const owner = users[0];
   for (const c of PROJECT_CONTACTS) await prisma.contact.upsert({ where: { id: c.id }, update: c, create: c });
+
+  await repairLegacyCustomers(owner.id);
 
   if (!existsSync(CATALOG_FILE)) {
     console.log(`catalog not found (${CATALOG_FILE}); run "npm run extract" and seed again to get the sample quotation`);
@@ -182,15 +191,32 @@ async function ensureProject(ownerId: string, customerName: string, name: string
 }
 
 async function attachExistingQuotations(): Promise<void> {
-  const rows = await prisma.quotation.findMany({ where: { projectId: null } });
-  for (const q of rows) {
+  const unattached = await prisma.$queryRaw<Array<{ id: string; ownerId: string; name: string; customer: string; reference: string }>>`
+    SELECT "id", "ownerId", "name", "customer", "reference"
+    FROM "Quotation"
+    WHERE "projectId" IS NULL
+  `;
+  for (const q of unattached) {
     const customer = q.customer.trim();
-    if (!customer) throw new Error(`Quotation ${q.id} (${q.reference}) has no customer; seed repair cannot attach it to a project`);
+    if (!customer) throw new Error(`Quotation ${q.reference || q.id} has no customer; seed repair needs its customer before linking a project`);
     const project = await ensureProject(q.ownerId, customer, projectName(q.name));
     await prisma.quotation.update({ where: { id: q.id }, data: { projectId: project.id } });
   }
-  const unattached = await prisma.quotation.findMany({ where: { projectId: null }, select: { id: true, reference: true } });
-  if (unattached.length) throw new Error(`Seed repair left quotations without projects: ${unattached.map((q) => q.reference || q.id).join(', ')}`);
+  const rows = await prisma.quotation.findMany({ include: { project: { include: { customer: true } } } });
+  for (const q of rows) {
+    if (!q.project || !q.projectId) throw new Error(`Quotation ${q.id} (${q.reference}) has no project`);
+    if (!q.customer.trim() || q.customer !== q.project.customer.name) throw new Error(`Quotation ${q.reference} and its project have different customers`);
+  }
+  console.log(`verified ${rows.length} quotations attached to customer projects`);
+}
+
+async function repairLegacyCustomers(ownerId: string): Promise<void> {
+  for (const repair of LEGACY_CUSTOMER_REPAIRS) {
+    const quotation = await prisma.quotation.findFirst({ where: { ownerId, reference: repair.reference } });
+    if (quotation && !quotation.customer.trim()) {
+      await prisma.quotation.update({ where: { id: quotation.id }, data: { customer: repair.customer } });
+    }
+  }
 }
 
 main()
