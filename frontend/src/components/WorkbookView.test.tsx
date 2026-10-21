@@ -63,11 +63,11 @@ describe('WorkbookView', () => {
     expect(JSON.parse(String((patch![1] as RequestInit).body))).toEqual({ quantity: 60 });
   });
 
-  it('exports the PDF through the authenticated endpoint', async () => {
+  it('keeps PDF export out of the workbook tab because export is in the page header', async () => {
     const fetch = mockFetch((_m, path) => (path.endsWith('/workbook') ? wb : path.includes('/benchmark') ? benchmark : {}));
-    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
     render(<WorkbookView quotation={quotation()} onQuotation={vi.fn()} onError={vi.fn()} />);
-    await userEvent.click(await screen.findByRole('button', { name: /Export PDF/ }));
-    await waitFor(() => expect(fetch.mock.calls.some((c) => String(c[0]).endsWith('/elenco-costi.pdf'))).toBe(true));
+    await screen.findByRole('tab', { name: 'ELENCO COSTI' });
+    expect(screen.queryByRole('button', { name: /Export PDF/ })).not.toBeInTheDocument();
+    expect(fetch.mock.calls.some((c) => String(c[0]).endsWith('/elenco-costi.pdf'))).toBe(false);
   });
 });

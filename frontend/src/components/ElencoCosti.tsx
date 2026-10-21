@@ -102,7 +102,7 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
               <td style={{ minWidth: 220 }} title={r.description}>
                 {r.description.split(/\r?\n/)[0]}
                 {r.warnings.length > 0 && (
-                  <ul className="issues small">
+                  <ul className="issues small" hidden>
                     {r.warnings.map((w, i) => (
                       <li key={i} className={r.unitCostSource === 'none' ? 'error' : 'warning'}>
                         {w}

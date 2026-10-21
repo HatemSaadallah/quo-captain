@@ -57,6 +57,18 @@ export interface CatalogRecord {
   sourceCells: Record<string, string>;
   warnings: string[];
   searchText: string;
+  /** True for a user-created reusable catalog product without a historical analysis sheet. */
+  custom?: boolean;
+}
+
+export interface CreateCatalogProductDto {
+  title: string;
+  description: string;
+  categoryName: string;
+  itemCode?: string;
+  unit: string;
+  L?: number | null;
+  H?: number | null;
 }
 
 export interface WorkbookSummary {

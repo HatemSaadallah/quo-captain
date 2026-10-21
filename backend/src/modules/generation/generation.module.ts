@@ -8,5 +8,6 @@ import { GenerationService } from './generation.service';
   imports: [CatalogModule, QuotationsModule],
   controllers: [GenerationController],
   providers: [GenerationService],
+  exports: [GenerationService],
 })
 export class GenerationModule {}

@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { api, fmtMoney, type CatalogFacets, type CatalogRecord } from '../api';
-import { cleanTitle, dims, imageOf, materialsOf, MATERIALS, sourceOf, typologyOf, TYPOLOGIES } from '../product';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { api, fmtMoney, type CatalogFacets, type CatalogRecord, type Quotation } from '../api';
+import { cleanTitle, dims, imageOf, isProduct, materialsOf, MATERIALS, sourceOf, typologyOf, TYPOLOGIES } from '../product';
 import { navigate } from '../route';
 import { SearchSuggest } from './SearchSuggest';
+import { AddProductButton } from './AddProductButton';
 
 interface Props {
   facets: CatalogFacets | null;
+  quotations: Quotation[];
+  estimator: string;
   onError: (msg: string) => void;
+  onAddToQuotation: (r: CatalogRecord, quotationId: string) => Promise<boolean>;
+  initialQuery?: string;
+  initialCreate?: boolean;
 }
 
 let allCache: CatalogRecord[] | null = null;
@@ -14,8 +20,8 @@ let allCache: CatalogRecord[] | null = null;
 /** The whole catalog: one blank search per source workbook (the API caps a page at 200). */
 async function loadAll(facets: CatalogFacets): Promise<CatalogRecord[]> {
   if (allCache) return allCache;
-  const pages = await Promise.all(facets.workbooks.map((w) => api.search('', { workbook: w.workbook, limit: 200 })));
-  allCache = pages.flatMap((p) => p.hits.map((h) => h.record)).filter((r) => r.sheet && r.unitCost);
+  const [pages, custom] = await Promise.all([Promise.all(facets.workbooks.map((w) => api.search('', { workbook: w.workbook, limit: 200 }))), api.customProducts()]);
+  allCache = [...custom, ...pages.flatMap((p) => p.hits.map((h) => h.record)).filter((r) => r.sheet && r.unitCost && isProduct(r))];
   return allCache;
 }
 
@@ -35,11 +41,12 @@ function featured(records: CatalogRecord[]): CatalogRecord[] {
   return out;
 }
 
-export function ProductCard({ r, badge }: { r: CatalogRecord; badge?: string }) {
+export function ProductCard({ r, badge, quotations, facets, estimator, onError, onAddToQuotation }: { r: CatalogRecord; badge?: string; quotations: Quotation[]; facets: CatalogFacets | null; estimator: string; onError: (msg: string) => void; onAddToQuotation: (r: CatalogRecord, quotationId: string) => Promise<boolean> }) {
   const ty = typologyOf(r);
   const mats = materialsOf(r);
+  const open = (): void => navigate({ page: 'product', id: r.id });
   return (
-    <button className="pcard" onClick={() => navigate({ page: 'product', id: r.id })}>
+    <div className="pcard" role="link" tabIndex={0} onClick={open} onKeyDown={(e) => e.key === 'Enter' && open()}>
       <div className="pimg" style={{ backgroundImage: `url(${imageOf(r)})` }}>
         <span className="ptype">{ty.label}</span>
         {badge && <span className="pbadge">{badge}</span>}
@@ -60,16 +67,14 @@ export function ProductCard({ r, badge }: { r: CatalogRecord; badge?: string }) 
         <div className="pprice">
           <b>{fmtMoney(r.unitCost)}</b>
           <span className="muted"> / {r.unit ?? 'unit'}</span>
-          <span className="muted small" style={{ marginLeft: 'auto' }}>
-            est. cost
-          </span>
+          <AddProductButton record={r} quotations={quotations} facets={facets} estimator={estimator} onAdd={onAddToQuotation} onError={onError} />
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
-export function ProductHome({ facets, onError }: Props) {
+export function ProductHome({ facets, quotations, estimator, onError, onAddToQuotation, initialQuery, initialCreate }: Props) {
   const [all, setAll] = useState<CatalogRecord[] | null>(allCache);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<CatalogRecord[] | null>(null);
@@ -77,10 +82,21 @@ export function ProductHome({ facets, onError }: Props) {
   const [material, setMaterial] = useState('');
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(24);
+  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({ title: '', description: '', categoryName: '', itemCode: '', unit: 'Pcs', L: '', H: '' });
 
   useEffect(() => {
     if (facets && !all) loadAll(facets).then(setAll).catch((e: unknown) => onError(String(e)));
   }, [facets, all, onError]);
+
+  useEffect(() => {
+    if (initialQuery && initialQuery !== q) {
+      setQ(initialQuery);
+      void search(initialQuery);
+    }
+  }, [initialQuery]);
+  useEffect(() => { if (initialCreate) setCreating(true); }, [initialCreate]);
 
   const search = async (query = q): Promise<void> => {
     setShown(24);
@@ -88,7 +104,7 @@ export function ProductHome({ facets, onError }: Props) {
     setBusy(true);
     try {
       const res = await api.search(query, { limit: 80 });
-      setHits(res.hits.map((h) => h.record).filter((r) => r.sheet));
+      setHits(res.hits.map((h) => h.record).filter((r) => r.custom || (r.sheet && isProduct(r))));
     } catch (err) {
       onError(String(err));
     } finally {
@@ -104,14 +120,28 @@ export function ProductHome({ facets, onError }: Props) {
     return c;
   }, [base]);
   const clients = new Set((facets?.workbooks ?? []).map((w) => w.client)).size;
+  const createProduct = async (event: FormEvent): Promise<void> => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const record = await api.createCatalogProduct({ ...draft, L: draft.L ? Number(draft.L) : null, H: draft.H ? Number(draft.H) : null });
+      const existing = allCache ?? (facets ? await loadAll(facets) : []);
+      allCache = [record, ...existing.filter((item) => item.id !== record.id)];
+      setAll(allCache);
+      setHits(null);
+      setCreating(false);
+      setDraft({ title: '', description: '', categoryName: '', itemCode: '', unit: 'Pcs', L: '', H: '' });
+    } catch (err) { onError(err instanceof Error ? err.message : String(err)); }
+    finally { setSaving(false); }
+  };
 
   return (
     <div className="stack">
       <section className="hero">
         <div className="hero-inner">
           <div className="eyebrow">Somec Marine · Product intelligence</div>
-          <h1>Every balcony, windscreen and divider we have ever costed.</h1>
-          <p>Search {facets?.recordCount ?? '…'} engineered products from past cruise-ship offers and reuse their cost analysis in a new quotation.</p>
+          <h1>Every glass balcony, windscreen and deck we have ever costed.</h1>
+          <p>Search {all?.length ?? '…'} glass and flooring products from past cruise-ship offers and reuse their cost analysis in a new quotation.</p>
           <SearchSuggest
             q={q}
             setQ={setQ}
@@ -126,8 +156,8 @@ export function ProductHome({ facets, onError }: Props) {
           />
           <div className="hero-stats">
             <div>
-              <b>{facets?.recordCount ?? '—'}</b>
-              <span>analysed products</span>
+              <b>{all?.length ?? '—'}</b>
+              <span>catalog products</span>
             </div>
             <div>
               <b>{facets?.workbooks.length ?? '—'}</b>
@@ -164,6 +194,7 @@ export function ProductHome({ facets, onError }: Props) {
 
       <div className="section-head">
         <h2>{hits ? `${list.length} results for “${q}”` : 'Featured products'}</h2>
+        <button onClick={() => setCreating(true)}>＋ New catalog product</button>
         {hits && (
           <button
             onClick={() => {
@@ -178,7 +209,7 @@ export function ProductHome({ facets, onError }: Props) {
       {!all && !hits && <div className="muted">Loading catalog…</div>}
       <div className="pgrid">
         {list.slice(0, shown).map((r) => (
-          <ProductCard key={r.id} r={r} />
+          <ProductCard key={r.id} r={r} quotations={quotations} facets={facets} estimator={estimator} onError={onError} onAddToQuotation={onAddToQuotation} />
         ))}
       </div>
       {list.length > shown && (
@@ -187,6 +218,15 @@ export function ProductHome({ facets, onError }: Props) {
         </div>
       )}
       {list.length === 0 && (all || hits) && <div className="muted">No product matches these filters.</div>}
+      {creating && <div className="modal-backdrop" onClick={() => setCreating(false)}><form className="panel stack" onSubmit={(e) => void createProduct(e)} onClick={(e) => e.stopPropagation()} style={{ width: 'min(620px, 94vw)', margin: '10vh auto', maxHeight: '80vh', overflow: 'auto' }}>
+        <div className="section-head"><h2>New catalog product</h2><button type="button" onClick={() => setCreating(false)}>×</button></div>
+        <p className="muted small">The product is embedded locally for semantic search as soon as you save it.</p>
+        <label>Product name *<input required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
+        <label>Description *<textarea required rows={4} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
+        <div className="grid2"><label>Category *<input required value={draft.categoryName} onChange={(e) => setDraft({ ...draft, categoryName: e.target.value })} /></label><label>Unit *<input required value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} /></label></div>
+        <div className="grid2"><label>Item code<input value={draft.itemCode} onChange={(e) => setDraft({ ...draft, itemCode: e.target.value })} /></label><label>Length (mm)<input type="number" min="0" value={draft.L} onChange={(e) => setDraft({ ...draft, L: e.target.value })} /></label><label>Height (mm)<input type="number" min="0" value={draft.H} onChange={(e) => setDraft({ ...draft, H: e.target.value })} /></label></div>
+        <button className="primary" disabled={saving}>{saving ? 'Saving and embedding…' : 'Save product'}</button>
+      </form></div>}
     </div>
   );
 }

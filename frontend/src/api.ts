@@ -1,11 +1,12 @@
 /** Typed client for the NestJS backend. Types are shared with the backend (type-only imports). */
 import type { AuthUser, LoginResponse } from '../../backend/src/common/interfaces/auth.interface';
-import type { CatalogFacets, CatalogRecord, SearchHit, SearchResult } from '../../backend/src/common/interfaces/catalog.interface';
+import type { CatalogFacets, CatalogRecord, CreateCatalogProductDto, SearchHit, SearchResult } from '../../backend/src/common/interfaces/catalog.interface';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../backend/src/common/interfaces/generation.interface';
 import type { AddItemDto, AddRowDto, CreateQuotationDto, ElencoCosti, Quotation, QuotationValidation, UpdateItemDto, UpdateQuotationDto } from '../../backend/src/common/interfaces/quotation.interface';
+import type { CreateProjectDto, Project, ProjectContact } from '../../backend/src/common/interfaces/project.interface';
 import type { Benchmark, GridCell, GridSheet, WorkbookView } from '../../backend/src/common/interfaces/workbook-view.interface';
 
-export type { AuthUser, CatalogFacets, CatalogRecord, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Quotation, QuotationValidation, AddItemDto, AddRowDto, ElencoCosti, UpdateItemDto, Benchmark, GridCell, GridSheet, WorkbookView };
+export type { AuthUser, CatalogFacets, CatalogRecord, CreateCatalogProductDto, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Quotation, QuotationValidation, AddItemDto, AddRowDto, CreateQuotationDto, ElencoCosti, UpdateItemDto, Benchmark, GridCell, GridSheet, WorkbookView, Project, ProjectContact, CreateProjectDto };
 export type QuotationItem = Quotation['items'][number];
 
 export class ApiError extends Error {
@@ -81,6 +82,10 @@ export const api = {
   logout: (): void => setToken(null),
 
   facets: (): Promise<CatalogFacets> => request('/api/catalog/facets'),
+  outputs: (): Promise<Array<{ folder: string; file: string; size: number; modifiedAt: string }>> => request('/api/outputs'),
+  assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
+  customProducts: (): Promise<CatalogRecord[]> => request('/api/catalog/custom'),
+  createCatalogProduct: (dto: CreateCatalogProductDto): Promise<CatalogRecord> => request('/api/catalog', { method: 'POST', ...json(dto) }),
   search: (q: string, opts: { workbook?: string; category?: string; limit?: number } = {}): Promise<SearchResult> => {
     const p = new URLSearchParams({ q, limit: String(opts.limit ?? 30) });
     if (opts.workbook) p.set('workbook', opts.workbook);
@@ -89,6 +94,11 @@ export const api = {
   },
   record: (id: string): Promise<CatalogRecord> => request(`/api/catalog/${enc(id)}`),
   similar: (id: string, limit = 6): Promise<SearchHit[]> => request(`/api/catalog/${enc(id)}/similar?limit=${limit}`),
+
+  projects: (): Promise<Project[]> => request('/api/projects'),
+  projectContacts: (): Promise<Project['contacts']> => request('/api/projects/contacts'),
+  createProject: (dto: CreateProjectDto): Promise<Project> => request('/api/projects', { method: 'POST', ...json(dto) }),
+  updateProjectContacts: (id: string, contactIds: string[]): Promise<Project> => request(`/api/projects/${enc(id)}/contacts`, { method: 'PATCH', ...json({ contactIds }) }),
 
   quotations: (): Promise<Quotation[]> => request('/api/quotations'),
   quotation: (id: string): Promise<Quotation> => request(`/api/quotations/${enc(id)}`),

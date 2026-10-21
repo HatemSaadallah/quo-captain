@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, ApiError, fmtMoney, fmtNum, type ExcelStatus, type GenerationResult, type Quotation, type QuotationItem, type QuotationValidation, type UpdateItemDto } from '../api';
+import { api, ApiError, fmtMoney, fmtNum, type ExcelStatus, type GenerationResult, type Quotation, type QuotationValidation } from '../api';
 
 interface Props {
   quotation: Quotation;
@@ -12,7 +12,6 @@ export function Cart({ quotation, onQuotation, onError }: Props) {
   const [excel, setExcel] = useState<ExcelStatus | null>(null);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GenerationResult | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     api.validation(quotation.id).then(setValidation).catch(() => setValidation(null));
@@ -21,18 +20,6 @@ export function Cart({ quotation, onQuotation, onError }: Props) {
   useEffect(() => {
     api.excelStatus().then(setExcel).catch(() => setExcel(null));
   }, []);
-
-  const patch = async (item: QuotationItem, dto: UpdateItemDto): Promise<void> => {
-    try {
-      onQuotation(await api.updateItem(quotation.id, item.id, dto));
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const remove = async (item: QuotationItem): Promise<void> => {
-    onQuotation(await api.removeItem(quotation.id, item.id));
-  };
 
   const generate = async (): Promise<void> => {
     setGenerating(true);
@@ -51,109 +38,11 @@ export function Cart({ quotation, onQuotation, onError }: Props) {
     }
   };
 
-  const issuesFor = (item: QuotationItem) => validation?.issues.filter((i) => i.itemId === item.id) ?? [];
-  const total = quotation.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * (it.quantity > 0 ? it.quantity : 0), 0);
   const lastGen = quotation.generations[0];
 
   return (
     <section className="panel">
-      <h2>
-        C · Cart — quotation cost-analysis items
-        <span className="muted small">{quotation.reference || '(no reference)'} · template {quotation.templateWorkbook}</span>
-      </h2>
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Pos.</th>
-            <th>Item</th>
-            <th>Description · source</th>
-            <th className="num">Qty</th>
-            <th>Unit</th>
-            <th className="num">Hist. unit cost</th>
-            <th className="num">Est. total</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {quotation.items.map((it) => {
-            const iss = issuesFor(it);
-            const err = iss.some((i) => i.level === 'error');
-            return (
-              <tr key={it.id} style={err ? { background: '#fff5f4' } : undefined}>
-                <td>
-                  <input className="narrow" defaultValue={it.position} key={it.id + 'p'} onBlur={(e) => e.target.value !== it.position && patch(it, { position: e.target.value })} />
-                </td>
-                <td>
-                  <input className="narrow" defaultValue={it.itemCode} key={it.id + 'i'} onBlur={(e) => e.target.value !== it.itemCode && patch(it, { itemCode: e.target.value })} />
-                </td>
-                <td style={{ minWidth: 220 }}>
-                  {expanded === it.id ? (
-                    <textarea defaultValue={it.description} onBlur={(e) => e.target.value !== it.description && patch(it, { description: e.target.value })} />
-                  ) : (
-                    <div onClick={() => setExpanded(it.id)} title="click to edit" style={{ cursor: 'text' }}>
-                      {it.description.split('\n')[0]}
-                    </div>
-                  )}
-                  <div className="small muted">
-                    <span className="chip">{it.sourceOfferNo ?? it.sourceWorkbook}</span> sheet {it.sourceSheet ?? '—'} · {it.L && it.H ? `${fmtNum(it.L)}×${fmtNum(it.H)} mm` : ''}
-                    {it.params.map((p) => (
-                      <span key={p.cell}>
-                        {' '}
-                        · {p.label}{' '}
-                        <input
-                          className="narrow"
-                          style={{ width: 70, display: 'inline-block' }}
-                          defaultValue={p.value === null ? '' : String(p.value)}
-                          key={it.id + p.cell + String(p.value)}
-                          onBlur={(e) => String(p.value ?? '') !== e.target.value && patch(it, { params: [{ cell: p.cell, value: e.target.value }] })}
-                        />
-                        {p.value !== p.original && <span title={`historical: ${String(p.original)}`}> ✎</span>}
-                      </span>
-                    ))}
-                  </div>
-                  {iss.length > 0 && (
-                    <ul className="issues small">
-                      {iss.map((i, k) => (
-                        <li key={k} className={i.level}>
-                          {i.message.replace(/^[^:]*: /, '')}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </td>
-                <td className="num">
-                  <input className="narrow" type="number" step="any" min={0} defaultValue={it.quantity} key={it.id + 'q' + it.quantity} onBlur={(e) => Number(e.target.value) !== it.quantity && patch(it, { quantity: Number(e.target.value) })} />
-                </td>
-                <td>
-                  <input className="narrow" defaultValue={it.unit} key={it.id + 'u'} onBlur={(e) => e.target.value !== it.unit && patch(it, { unit: e.target.value })} />
-                </td>
-                <td className="num">{fmtMoney(it.historicalUnitCost)}</td>
-                <td className="num">{fmtMoney(it.historicalUnitCost !== null ? it.historicalUnitCost * it.quantity : null)}</td>
-                <td>
-                  <button className="danger" onClick={() => void remove(it)} title="remove from cart">
-                    ×
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-          {quotation.items.length === 0 && (
-            <tr>
-              <td colSpan={8} className="muted">
-                The cart is empty. Search for a historical analysis on the left and add it.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-      <div className="totals">
-        <span className="muted small" style={{ alignSelf: 'center' }}>
-          Indicative: Σ quantity × historical unit cost. Excel recomputes the real costs from the copied analyses and the template's price list.
-        </span>
-        <span>
-          Estimated total <b>{fmtMoney(total)}</b>
-        </span>
-      </div>
+      <h2>Checks & exports <span className="muted small">{quotation.reference || '(no reference)'} · {quotation.items.length} items</span></h2>
 
       {validation && validation.issues.filter((i) => !i.itemId).length > 0 && (
         <ul className="issues" style={{ marginTop: 8 }}>
@@ -167,7 +56,6 @@ export function Cart({ quotation, onQuotation, onError }: Props) {
         </ul>
       )}
 
-      <h3>D · Excel generation</h3>
       <div className="row">
         <button className="primary big" onClick={() => void generate()} disabled={generating || !validation?.ok}>
           {generating ? (
@@ -179,7 +67,7 @@ export function Cart({ quotation, onQuotation, onError }: Props) {
           )}
         </button>
         <div className="small muted">
-          {excel ? (excel.available ? <span className="badge ok">Excel available: recalculation will run</span> : <span className="badge warn">Excel not scriptable: output will be a draft recalculated on open</span>) : 'checking Excel…'}
+          {excel ? (excel.available ? <span className="badge ok">Excel detected · automatic recalculation is opt-in</span> : <span className="badge warn">Excel unavailable · output will recalculate when opened in Excel</span>) : 'checking Excel…'}
           {excel && !excel.available && <div>{excel.detail}</div>}
         </div>
       </div>

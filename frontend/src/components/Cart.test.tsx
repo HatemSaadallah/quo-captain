@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Cart } from './Cart';
 import { item, mockFetch, quotation } from '../test-utils';
@@ -8,15 +8,13 @@ describe('Cart', () => {
   it('shows the items, the indicative total and validation issues', async () => {
     const p = quotation([item(), item({ id: 'i2', itemCode: '01-02', quantity: 5, historicalUnitCost: 1110, sourceOfferNo: 'TM1823-03', sourceWorkbook: 'TM1823-03 Analisi.xlsx' })]);
     mockFetch((_m, path) => {
-      if (path.endsWith('/validation')) return { ok: true, issues: [{ level: 'warning', itemId: 'i2', message: '01 / 01-02: copied from TM1823-03 Analisi.xlsx; costs will differ' }], estimatedTotal: 60085, itemsWithoutCost: 0 };
+      if (path.endsWith('/validation')) return { ok: true, issues: [{ level: 'warning', message: 'Costs differ from the source quotation' }], estimatedTotal: 60085, itemsWithoutCost: 0 };
       if (path.endsWith('/excel-status')) return { available: false, platform: 'darwin', detail: 'Excel blocked' };
       return {};
     });
     render(<Cart quotation={p} onQuotation={vi.fn()} onError={vi.fn()} />);
-    expect(screen.getAllByDisplayValue('01-01')).toHaveLength(1);
-    expect(screen.getByText(/Estimated total/)).toHaveTextContent('60.085,00');
-    expect(await screen.findByText(/costs will differ/)).toBeInTheDocument();
-    expect(await screen.findByText(/Excel not scriptable/)).toBeInTheDocument();
+    expect(await screen.findByText(/Costs differ from the source quotation/)).toBeInTheDocument();
+    expect(await screen.findByText(/Excel unavailable/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Generate Excel Analysis/ })).toBeEnabled();
   });
 
@@ -32,13 +30,8 @@ describe('Cart', () => {
     render(<Cart quotation={p} onQuotation={onQuotation} onError={vi.fn()} />);
     expect(await screen.findByText(/Reference number is required/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Generate Excel Analysis/ })).toBeDisabled();
-    const qty = screen.getByDisplayValue('50');
-    await userEvent.clear(qty);
-    await userEvent.type(qty, '80');
-    await userEvent.tab();
-    await waitFor(() => expect(onQuotation).toHaveBeenCalled());
-    const patch = fetch.mock.calls.find((c) => (c[1] as RequestInit).method === 'PATCH');
-    expect(patch).toBeDefined();
-    expect(JSON.parse(String((patch![1] as RequestInit).body))).toEqual({ quantity: 80 });
+    await userEvent.click(screen.getByRole('button', { name: /Generate Excel Analysis/ }));
+    expect(fetch.mock.calls.some((call) => (call[1] as RequestInit).method === 'POST')).toBe(false);
+    expect(onQuotation).not.toHaveBeenCalled();
   });
 });

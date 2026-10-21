@@ -67,10 +67,23 @@ Every API route except `POST /api/auth/login` needs `Authorization: Bearer <jwt>
 
 | User | Password | Role |
 |---|---|---|
-| `estimator@somec.local` | `somec2026` | estimator (owns the seeded quotation `TM2099-00`, 3 cart lines) |
+| `estimator@somec.local` | `somec2026` | salesman (owns the seeded quotation `TM2099-00`, 3 cart lines) |
 | `admin@somec.local` | `somec2026` | admin |
 
 Passwords are hashed with Node's scrypt; tokens are signed with `JWT_SECRET` from `backend/.env` (12 h by default). `make demo` and the frontend log in with the estimator account.
+
+## Projects, customers and contacts
+
+Each quotation belongs to a project. Projects belong to a customer and can contain multiple quotations and directory contacts. On a database that already contains quotations, apply the nullable backfill schema, seed the project/customer/contact links, then apply the required relation:
+
+```bash
+cd backend
+npx prisma db push --schema prisma/schema.project-backfill.prisma
+npm run db:seed
+npx prisma db push
+```
+
+The seed step stops if an existing quotation has no customer value that can be repaired from the explicit seed corrections. New quotations require a project.
 
 ## Web ELENCO COSTI and reference tabs
 
