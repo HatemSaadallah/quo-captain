@@ -91,7 +91,7 @@ export function validateQuotation(p: Quotation, template: WorkbookSummary | null
   if (!p.name?.trim()) push('error', 'Quotation name is required');
   if (!p.reference?.trim()) push('error', 'Reference number is required (it becomes the offer number and file name)');
   else if (!isValidReference(p.reference)) push('error', 'Reference may only contain letters, digits, spaces, "-", "_" and "."');
-  if (!p.customer?.trim()) push('warning', 'Customer is empty');
+  if (!p.customer?.trim()) push('error', 'Customer is required');
   if (!p.date || Number.isNaN(Date.parse(p.date))) push('error', 'Date is missing or invalid');
   if (!p.templateWorkbook) push('error', 'No template workbook selected');
   else if (!template) push('error', `Template workbook ${p.templateWorkbook} is not in the catalog`);

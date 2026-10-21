@@ -74,7 +74,7 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
             </h2>
             <div className="small muted">
               {quotation.customer || 'no customer'} · {quotation.date} · estimator {quotation.estimator || '—'} · {quotation.items.length} items · <b>{fmtMoney(total)}</b> estimated cost
-              {isCart && <span className="cart-pill">cart</span>}
+              {isCart && <span className="cart-pill">Draft Quotation</span>}
             </div>
           </div>
           <div className="row" style={{ flexWrap: 'wrap' }}>
@@ -91,13 +91,13 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
               {exporting === 'pdf' ? 'Preparing PDF…' : '⬇ PDF'}
             </button>
             {quotation.status === 'draft' ? (
-              <button className="confirm" onClick={() => void setStatus('active')} disabled={quotation.items.length === 0} title="Confirm the draft: it becomes an active quotation and the cart starts empty">
+              <button className="confirm" onClick={() => void setStatus('active')} disabled={quotation.items.length === 0} title="Confirm this draft quotation">
                 ✓ Confirm quotation
               </button>
             ) : (
               <button onClick={() => void setStatus('draft')}>Reopen as draft</button>
             )}
-            {quotation.status === 'draft' && !isCart && <button onClick={onMakeCart}>Use as cart</button>}
+            {quotation.status === 'draft' && !isCart && <button onClick={onMakeCart}>Set as Draft Quotation</button>}
             <button onClick={() => navigate({ page: 'catalog' })}>+ Add products</button>
             <button onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit details'}</button>
           </div>

@@ -54,7 +54,7 @@ export function embeddingText(r: CatalogRecord): string {
     .filter((p) => p.value !== null)
     .map((p) => `${p.label} ${p.value} ${p.unit ?? ''}`.trim())
     .join(', ');
-  return [r.title ?? '', r.categoryName ?? '', dims, lines.slice(1, 4).join(' '), params]
+  return [r.title ?? '', r.itemCode ?? '', r.categoryName ?? '', r.unit ?? '', dims, lines.slice(0, 4).join(' '), params]
     .filter(Boolean)
     .join('. ')
     .slice(0, 1200);

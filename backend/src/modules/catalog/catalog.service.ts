@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, OnModuleInit, Optional } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import type { Catalog, CatalogFacets, CatalogRecord, EmbeddingIndex, EmbeddingStatus, SearchHit, SearchOptions, SearchResult, WorkbookSummary } from '../../common/interfaces/catalog.interface';
+import { randomUUID } from 'node:crypto';
+import type { Catalog, CatalogFacets, CatalogRecord, CreateCatalogProductDto, EmbeddingIndex, EmbeddingStatus, SearchHit, SearchOptions, SearchResult, WorkbookSummary } from '../../common/interfaces/catalog.interface';
 import { CATALOG_FILE, EMBEDDINGS_FILE } from '../../common/utils/paths';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildEmbeddingIndex, embed, embeddingFingerprint, EMBEDDING_MODEL } from './embeddings';
@@ -80,6 +81,19 @@ export class CatalogService implements OnModuleInit {
       } else this.log.warn('Embedding index is stale or corrupt (model, content or vectors changed); rebuilding in background');
     }
     if (this.embeddingStatus !== 'ready') void this.ensureEmbeddings(embeddingsFile);
+    if (this.prisma) {
+      try {
+        const custom = await this.prisma.customProduct.findMany();
+        for (const row of custom) {
+          const record = this.customRecord(row);
+          this.catalog.records.push(record);
+          this.byId.set(record.id, record);
+          if (row.embeddingModel === EMBEDDING_MODEL && row.fingerprint === embeddingFingerprint([record])) this.vectors.set(record.id, row.embedding);
+        }
+      } catch (e) {
+        this.log.warn(`Custom products unavailable: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
     this.log.log(`Catalog loaded from ${this.source}: ${this.catalog.records.length} reference tabs, ${this.catalog.workbooks.length} workbooks (embeddings: ${this.embeddingStatus})`);
   }
 
@@ -128,6 +142,29 @@ export class CatalogService implements OnModuleInit {
 
   has(id: string): boolean {
     return this.byId.has(id);
+  }
+
+  async createProduct(input: CreateCatalogProductDto, createdBy: string): Promise<CatalogRecord> {
+    if (!this.prisma) throw new Error('Catalog database is unavailable');
+    const title = input.title?.trim();
+    const description = input.description?.trim();
+    const categoryName = input.categoryName?.trim();
+    const unit = input.unit?.trim();
+    if (!title || !description || !categoryName || !unit) throw new Error('Title, description, category and unit are required');
+    const id = `custom-${randomUUID()}`;
+    const record = this.customRecord({ id, title, description, categoryName, itemCode: input.itemCode?.trim() || null, unit, L: input.L ?? null, H: input.H ?? null });
+    const vector = (await embed([record.searchText]))[0];
+    const fingerprint = embeddingFingerprint([record]);
+    const saved = await this.prisma.customProduct.create({ data: { id, title, description, categoryName, itemCode: record.itemCode, unit, L: record.L, H: record.H, createdBy, embedding: vector, embeddingModel: EMBEDDING_MODEL, fingerprint } });
+    this.catalog.records.unshift(record);
+    this.byId.set(id, record);
+    this.vectors.set(id, saved.embedding);
+    return record;
+  }
+
+  private customRecord(row: { id: string; title: string; description: string; categoryName: string; itemCode: string | null; unit: string; L: number | null; H: number | null }): CatalogRecord {
+    const searchText = [row.title, row.description, row.categoryName, row.itemCode, row.unit, row.L && row.H ? `${row.L} x ${row.H}` : ''].filter(Boolean).join(' ');
+    return { id: row.id, workbook: 'Custom catalog', offerNo: null, client: null, projectName: null, estimator: null, projectDate: null, row: 0, sheet: null, position: null, categoryName: row.categoryName, itemCode: row.itemCode, title: row.title, description: row.description, unit: row.unit, quantity: null, L: row.L, H: row.H, m2Unit: null, unitCost: null, totalCost: null, lotto: null, analysisUnit: null, productClass: null, sheetUnitCost: null, sheetTotalCost: null, unitWeightKg: null, params: [], costBreakdown: [], lineItemCount: 0, codesUsed: [], errorCells: 0, dependsOnSheets: [], hasExternalRefs: false, sourceCells: {}, warnings: [], searchText, custom: true };
   }
 
   facets(): CatalogFacets {

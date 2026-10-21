@@ -1,28 +1,26 @@
 import { useEffect, useState } from 'react';
-import { api, fmtMoney, fmtNum, type CatalogRecord, type Quotation } from '../api';
+import { api, fmtMoney, fmtNum, type CatalogFacets, type CatalogRecord, type Quotation } from '../api';
 import { cleanTitle, dims, imageOf, locationOf, materialsOf, rankSimilar, sourceOf, typologyOf, type SimilarProduct } from '../product';
 import { ProductCard } from './ProductHome';
+import { AddProductButton } from './AddProductButton';
 
 interface Props {
   id: string;
-  cart: Quotation | null;
   quotations: Quotation[];
-  onCart: (quotationId: string) => void;
-  onAddToCart: (record: CatalogRecord, quantity: number) => Promise<void>;
+  facets: CatalogFacets | null;
+  estimator: string;
+  onAddToQuotation: (record: CatalogRecord, quotationId: string, quantity: number) => Promise<boolean>;
   onError: (msg: string) => void;
 }
 
-export function ProductPage({ id, cart, quotations, onCart, onAddToCart, onError }: Props) {
+export function ProductPage({ id, quotations, facets, estimator, onAddToQuotation, onError }: Props) {
   const [r, setR] = useState<CatalogRecord | null>(null);
   const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
   const [qty, setQty] = useState('1');
-  const [added, setAdded] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     setR(null);
     setSimilar(null);
-    setAdded(null);
     window.scrollTo(0, 0);
     let live = true;
     api
@@ -45,13 +43,6 @@ export function ProductPage({ id, cart, quotations, onCart, onAddToCart, onError
   const mats = materialsOf(r);
   const breakdown = r.costBreakdown.map((c) => ({ ...c, unitCost: c.unitCost ?? 0 })).filter((c) => c.unitCost > 0).sort((a, b) => b.unitCost - a.unitCost);
   const total = breakdown.reduce((s, c) => s + c.unitCost, 0) || 1;
-  const add = async (): Promise<void> => {
-    setAdding(true);
-    await onAddToCart(r, Number(qty) || 1);
-    setAdding(false);
-    setAdded(cart?.reference || cart?.name || 'a new draft quotation');
-  };
-
   return (
     <div className="stack">
       <div className="crumbs">
@@ -109,26 +100,15 @@ export function ProductPage({ id, cart, quotations, onCart, onAddToCart, onError
               Qty ({r.unit ?? 'unit'})
             </label>
             <input type="number" min={0.001} step="any" value={qty} onChange={(e) => setQty(e.target.value)} style={{ width: 100 }} aria-label="quantity" />
-            <button className="primary" onClick={() => void add()} disabled={adding}>
-              {adding ? 'Adding…' : '🛒 Add to cart'}
-            </button>
+            <AddProductButton
+              record={r}
+              quotations={quotations}
+              facets={facets}
+              estimator={estimator}
+              onError={onError}
+              onAdd={(record, quotationId) => onAddToQuotation(record, quotationId, Number(qty) || 1)}
+            />
           </div>
-          <div className="small muted" style={{ marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}>
-            Cart (draft quotation):
-            <select value={cart?.id ?? ''} onChange={(e) => onCart(e.target.value)} style={{ width: 'auto', padding: '2px 6px' }} aria-label="cart quotation">
-              {!cart && <option value="">new draft (created on first add)</option>}
-              {quotations.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.reference || '(no ref)'} · {x.name} ({x.items.length} items)
-                </option>
-              ))}
-            </select>
-          </div>
-          {added && (
-            <div className="small" style={{ color: 'var(--ok)', marginTop: 6 }}>
-              ✓ Added to {added}. {cart && <a href={`#/quotations/${cart.id}`}>Open quotation →</a>}
-            </div>
-          )}
         </div>
       </section>
 
@@ -164,7 +144,7 @@ export function ProductPage({ id, cart, quotations, onCart, onAddToCart, onError
       <div className="pgrid">
         {similar?.map((s) => (
           <div key={s.hit.record.id} className="simwrap">
-            <ProductCard r={s.hit.record} onAdd={(rec) => onAddToCart(rec, 1)} badge={`${Math.min(97, Math.round(s.score * 100))}% match`} />
+            <ProductCard r={s.hit.record} quotations={quotations} facets={facets} estimator={estimator} onError={onError} onAddToQuotation={(rec, quotationId) => onAddToQuotation(rec, quotationId, 1)} badge={`${Math.min(97, Math.round(s.score * 100))}% match`} />
             <div className="reasons">
               {s.sameTypology && <span className="reason">Same typology</span>}
               {s.sharedMaterials.map((m) => (

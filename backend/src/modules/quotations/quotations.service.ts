@@ -142,7 +142,7 @@ export class QuotationsService {
     const name = requireText(input.name ?? '', 'name');
     if (!name) throw new BadRequestException('name is required');
     const templates = this.catalog.workbooks.map((w) => w.workbook);
-    const templateWorkbook = String(input.templateWorkbook ?? templates[0] ?? '');
+    const templateWorkbook = requireText(input.templateWorkbook ?? '', 'templateWorkbook');
     if (templateWorkbook && !templates.includes(templateWorkbook)) throw new BadRequestException(`Unknown template workbook ${templateWorkbook}`);
     const row = await this.prisma.quotation.create({
       data: {
@@ -207,7 +207,9 @@ export class QuotationsService {
       if (v !== undefined) overrides[k] = requireText(v, k);
     }
     const q = input.quantity === undefined ? (rec.quantity ?? 1) : requirePositive(input.quantity, 'quantity');
-    const item = itemFromCatalog(rec, q, overrides);
+    const item = rec.custom
+      ? blankRow({ position: undefined, itemCode: rec.itemCode ?? undefined, description: rec.description ?? rec.title ?? '', unit: rec.unit ?? undefined, quantity: q, L: rec.L, H: rec.H })
+      : itemFromCatalog(rec, q, overrides);
     item.referenceTabId = await this.referenceTabIdFor(item.catalogId);
     await this.prisma.quotationItem.create({ data: { ...itemData(item), sortOrder: await this.nextSortOrder(id), quotationId: id } });
     await this.touch(id);

@@ -1,14 +1,26 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import type { CatalogFacets, CatalogRecord, SearchHit, SearchResult } from '../../common/interfaces/catalog.interface';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import type { AuthUser } from '../../common/interfaces/auth.interface';
+import { CurrentUser } from '../auth/auth.decorators';
+import type { CatalogFacets, CatalogRecord, CreateCatalogProductDto, SearchHit, SearchResult } from '../../common/interfaces/catalog.interface';
 import { CatalogService } from './catalog.service';
 
 @Controller('catalog')
 export class CatalogController {
   constructor(private readonly catalog: CatalogService) {}
 
+  @Post()
+  create(@Body() body: CreateCatalogProductDto, @CurrentUser() user: AuthUser): Promise<CatalogRecord> {
+    return this.catalog.createProduct(body, user.id);
+  }
+
   @Get('facets')
   facets(): CatalogFacets {
     return this.catalog.facets();
+  }
+
+  @Get('custom')
+  custom(): CatalogRecord[] {
+    return this.catalog.records.filter((record) => record.custom);
   }
 
   @Get('search')
