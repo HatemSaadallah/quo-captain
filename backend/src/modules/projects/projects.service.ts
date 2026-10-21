@@ -17,7 +17,7 @@ import type {
 } from '../../common/interfaces/project.interface';
 import { CatalogService } from '../catalog/catalog.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { computeElencoCosti } from './elenco-costi';
+import { computeElencoCosti, sameCostUnit } from './elenco-costi';
 import { attachTab, blankRow, itemFromCatalog, validateProject, type NewItem } from './project.rules';
 
 type ProjectRow = Prisma.ProjectGetPayload<{ include: { items: true; generations: true } }>;
@@ -26,7 +26,11 @@ type GenerationRow = Prisma.GenerationGetPayload<Record<string, never>>;
 
 const INCLUDE = { items: { orderBy: { sortOrder: 'asc' } }, generations: { orderBy: { createdAt: 'desc' } } } as const;
 
-function toItem(r: ItemRow): ProjectItem {
+function toItem(r: ItemRow, catalog: CatalogService): ProjectItem {
+  let historicalUnit: string | null = null;
+  if (r.catalogId) {
+    try { historicalUnit = catalog.get(r.catalogId).unit; } catch { /* An unavailable reference has no trusted cost unit. */ }
+  }
   return {
     id: r.id,
     catalogId: r.catalogId,
@@ -44,6 +48,8 @@ function toItem(r: ItemRow): ProjectItem {
     lotto: r.lotto,
     params: JSON.parse(r.params) as ItemParam[],
     historicalUnitCost: r.historicalUnitCost,
+    historicalUnit,
+    historicalCostCompatible: historicalUnit !== null && sameCostUnit(r.unit, historicalUnit),
     historicalQuantity: r.historicalQuantity,
     unitCostOverride: r.unitCostOverride,
     dependsOnSheets: JSON.parse(r.dependsOnSheets) as string[],
@@ -71,7 +77,7 @@ function toGeneration(g: GenerationRow): GenerationSummary {
   return { at: g.createdAt.toISOString(), file: g.file, reportFile: g.reportFile, status: g.status, engine: g.engine };
 }
 
-function toProject(p: ProjectRow): Project {
+function toProject(p: ProjectRow, catalog: CatalogService): Project {
   return {
     id: p.id,
     ownerId: p.ownerId,
@@ -81,7 +87,7 @@ function toProject(p: ProjectRow): Project {
     date: p.date,
     estimator: p.estimator,
     templateWorkbook: p.templateWorkbook,
-    items: p.items.map(toItem),
+    items: p.items.map((item) => toItem(item, catalog)),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
     generations: p.generations.map(toGeneration),
@@ -122,13 +128,22 @@ export class ProjectsService {
 
   async list(userId: string): Promise<Project[]> {
     const rows = await this.prisma.project.findMany({ where: { ownerId: userId }, include: INCLUDE, orderBy: { updatedAt: 'desc' } });
-    return rows.map(toProject);
+    return rows.map((row) => toProject(row, this.catalog));
+  }
+
+  /** Only recorded output files belonging to this user's projects may be served. */
+  async generationFiles(userId: string): Promise<string[]> {
+    const rows = await this.prisma.generation.findMany({
+      where: { project: { ownerId: userId } },
+      select: { file: true, reportFile: true },
+    });
+    return rows.flatMap((row) => [row.file, row.reportFile]);
   }
 
   async get(id: string, userId: string): Promise<Project> {
     const row = await this.prisma.project.findFirst({ where: { id, ownerId: userId }, include: INCLUDE });
     if (!row) throw new NotFoundException(`Project ${id} not found`);
-    return toProject(row);
+    return toProject(row, this.catalog);
   }
 
   async create(input: CreateProjectDto, userId: string): Promise<Project> {
@@ -149,7 +164,7 @@ export class ProjectsService {
       },
       include: INCLUDE,
     });
-    return toProject(row);
+    return toProject(row, this.catalog);
   }
 
   async update(id: string, patch: UpdateProjectDto, userId: string): Promise<Project> {
@@ -163,7 +178,7 @@ export class ProjectsService {
       throw new BadRequestException(`Unknown template workbook ${String(data.templateWorkbook)}`);
     }
     const row = await this.prisma.project.update({ where: { id }, data, include: INCLUDE });
-    return toProject(row);
+    return toProject(row, this.catalog);
   }
 
   async delete(id: string, userId: string): Promise<void> {

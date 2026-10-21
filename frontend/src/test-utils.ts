@@ -68,6 +68,8 @@ export function item(over: Partial<ProjectItem> = {}): ProjectItem {
     lotto: 'L1201',
     params: [{ cell: 'N3', label: 'INTERASSE BALCONY', unit: 'MM', value: 2560, original: 2560 }],
     historicalUnitCost: 1090.7,
+    historicalUnit: 'Pcs',
+    historicalCostCompatible: true,
     historicalQuantity: 712,
     unitCostOverride: null,
     dependsOnSheets: [],

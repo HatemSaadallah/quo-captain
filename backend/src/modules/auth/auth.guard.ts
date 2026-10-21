@@ -15,7 +15,7 @@ export class AuthGuard implements CanActivate {
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, [ctx.getHandler(), ctx.getClass()])) return true;
     const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
     const header = req.headers.authorization ?? '';
-    const token = header.startsWith('Bearer ') ? header.slice(7).trim() : (typeof req.query.token === 'string' ? req.query.token : '');
+    const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token) throw new UnauthorizedException('Missing bearer token');
     req.user = await this.auth.verify(token);
     return true;

@@ -102,7 +102,8 @@ export function Cart({ project, onProject, onError }: Props) {
   };
 
   const issuesFor = (item: ProjectItem) => validation?.issues.filter((i) => i.itemId === item.id) ?? [];
-  const total = project.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * (it.quantity > 0 ? it.quantity : 0), 0);
+  const total = project.items.reduce((acc, it) => acc + (it.historicalCostCompatible === false ? 0 : (it.historicalUnitCost ?? 0) * (it.quantity > 0 ? it.quantity : 0)), 0);
+  const incompleteEstimate = project.items.some((it) => it.historicalCostCompatible === false || it.historicalUnitCost === null);
   const lastGen = project.generations[0];
 
   return (
@@ -177,8 +178,8 @@ export function Cart({ project, onProject, onError }: Props) {
                 <td>
                   <input className="narrow" defaultValue={it.unit} key={it.id + 'u'} onBlur={(e) => e.target.value !== it.unit && patch(it, { unit: e.target.value })} />
                 </td>
-                <td className="num">{fmtMoney(it.historicalUnitCost)}</td>
-                <td className="num">{fmtMoney(it.historicalUnitCost !== null ? it.historicalUnitCost * it.quantity : null)}</td>
+                <td className="num">{fmtMoney(it.historicalUnitCost)}{it.historicalUnit && it.historicalCostCompatible === false && <span className="small muted"> / {it.historicalUnit}</span>}</td>
+                <td className="num">{fmtMoney(it.historicalUnitCost !== null && it.historicalCostCompatible !== false ? it.historicalUnitCost * it.quantity : null)}</td>
                 <td>
                   <button className="danger" onClick={() => void remove(it)} title="remove from cart">
                     ×
@@ -201,7 +202,7 @@ export function Cart({ project, onProject, onError }: Props) {
           Indicative: Σ quantity × historical unit cost. Excel recomputes the real costs from the copied analyses and the template's price list.
         </span>
         <span>
-          Estimated total <b>{fmtMoney(total)}</b>
+          {incompleteEstimate ? 'Known historical subtotal' : 'Estimated total'} <b>{fmtMoney(total)}</b>
         </span>
       </div>
 

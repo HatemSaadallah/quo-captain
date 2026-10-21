@@ -37,8 +37,23 @@ export function m2Total(unit: string, quantity: number, m2u: number): number {
   return isM2(unit) ? quantity : m2u * quantity;
 }
 
-export function unitCostOf(item: Pick<ProjectItem, 'unitCostOverride' | 'historicalUnitCost'>): { value: number | null; source: UnitCostSource } {
+/** Equivalent unit labels found in the source workbooks; no quantity conversion is implied. */
+export function sameCostUnit(a: string, b: string): boolean {
+  const canonical = (unit: string): string => {
+    const key = unit.trim().toLowerCase();
+    if (['pcs', 'pc', 'pz'].includes(key)) return 'piece';
+    if (['m', 'ml'].includes(key)) return 'metre';
+    if (['m²', 'm2', 'mq'].includes(key)) return 'square-metre';
+    return key;
+  };
+  return canonical(a) === canonical(b);
+}
+
+type CostInputs = Pick<ProjectItem, 'unitCostOverride' | 'historicalUnitCost' | 'unit' | 'historicalUnit'>;
+
+export function unitCostOf(item: CostInputs): { value: number | null; source: UnitCostSource } {
   if (item.unitCostOverride !== null && item.unitCostOverride !== undefined) return { value: round(item.unitCostOverride, 1), source: 'override' };
+  if (!item.historicalUnit || !sameCostUnit(item.unit, item.historicalUnit)) return { value: null, source: 'none' };
   if (item.historicalUnitCost !== null && item.historicalUnitCost !== undefined) return { value: round(item.historicalUnitCost, 1), source: 'historical' };
   return { value: null, source: 'none' };
 }
@@ -48,10 +63,13 @@ export function computeRow(item: ProjectItem, line: number, templateWorkbook: st
   const h = m2Unit(item.unit, item.L, item.H);
   const i = m2Total(item.unit, item.quantity, h);
   const { value: j, source } = unitCostOf(item);
-  const k = j === null ? null : round(j * item.quantity, 2);
+  const k = j === null ? null : j * item.quantity;
   if (!item.catalogId) warnings.push('no reference analysis attached: unit cost unknown until a tab is attached or overridden');
   else if (item.sourceWorkbook && item.sourceWorkbook !== templateWorkbook) warnings.push(`historical unit cost comes from ${item.sourceWorkbook} (different price list than the template)`);
   if (source === 'historical' && item.params.some((p) => p.value !== p.original)) warnings.push('technical parameters changed: the historical unit cost is not recomputed in the web, export to Excel to recalculate');
+  if (item.catalogId && (!item.historicalUnit || !sameCostUnit(item.unit, item.historicalUnit))) {
+    warnings.push(item.historicalUnit ? `reference cost is per ${item.historicalUnit}, row is ${item.unit}; historical cost cannot be transferred without an explicit override` : 'reference cost unit is unknown; historical cost is unavailable');
+  }
   if (source === 'override') warnings.push('manual unit cost');
   if (!(item.quantity > 0)) warnings.push('quantity must be positive');
   return {
@@ -64,14 +82,14 @@ export function computeRow(item: ProjectItem, line: number, templateWorkbook: st
     quantity: item.quantity,
     L: item.L,
     H: item.H,
-    m2Unit: round(h, 6),
-    m2Total: round(i, 6),
+    m2Unit: h,
+    m2Total: i,
     unitCost: j,
     totalCost: k,
     unitCostSource: source,
     historicalUnitCost: item.historicalUnitCost,
     unitCostOverride: item.unitCostOverride,
-    tab: item.catalogId ? { id: item.catalogId, workbook: item.sourceWorkbook, sheet: item.sourceSheet, offerNo: item.sourceOfferNo } : null,
+    tab: item.catalogId ? { id: item.catalogId, workbook: item.sourceWorkbook, sheet: item.sourceSheet, offerNo: item.sourceOfferNo, unit: item.historicalUnit ?? null } : null,
     lotto: item.lotto,
     warnings,
   };
@@ -95,13 +113,13 @@ export function computeElencoCosti(project: Project): ElencoCosti {
     byPos.set(key, s);
   }
   const summary = [...byPos.values()]
-    .map((s) => ({ ...s, m2Total: round(s.m2Total, 4), totalCost: round(s.totalCost, 2), unitCost: s.m2Total !== 0 ? round(s.totalCost / s.m2Total, 2) : null }))
+    .map((s) => ({ ...s, m2Total: s.m2Total, totalCost: s.totalCost, unitCost: s.m2Total !== 0 ? s.totalCost / s.m2Total : null }))
     .sort((a, b) => a.position.localeCompare(b.position));
   return {
     projectId: project.id,
     reference: project.reference,
     rows,
-    totals: { m2Total: round(m2, 4), totalCost: round(total, 2), rowsWithoutCost: without, complete: without === 0 },
+    totals: { m2Total: m2, totalCost: total, rowsWithoutCost: without, complete: without === 0 },
     summary,
     formulas: ELENCO_COSTI_FORMULAS,
     note: 'Unit costs are the historical cached costs of the attached reference analyses (or manual overrides); they are estimated costs, not selling prices, and are not recomputed when parameters change. Export to Excel for a full recalculation.',

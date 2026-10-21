@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { Catalog } from '../../common/interfaces/catalog.interface';
 import type { Project } from '../../common/interfaces/project.interface';
+import { computeElencoCosti } from './elenco-costi';
 import { CATALOG_FILE } from '../../common/utils/paths';
 import { attachTab, blankRow, itemFromCatalog, validateProject } from './project.rules';
 
@@ -90,4 +91,15 @@ describe('validateProject', () => {
     it.params[0].value = -5;
     expect(validateProject(project([it]), template).issues.some((i) => /must be a positive number of mm/.test(i.message))).toBe(true);
   });
+});
+
+
+it('does not transfer the real balcony per-piece cost to a free metre row', () => {
+  const row = {id:'unit-review',...blankRow({description:'Linear railing',unit:'m',quantity:120})};
+  const attached = {id:row.id,...attachTab(row,balcony,false)};
+  const result = computeElencoCosti(project([attached]));
+  expect(attached.historicalUnit).toBe('Pcs');
+  expect(result.rows[0].unitCost).toBeNull();
+  expect(result.totals.complete).toBe(false);
+  expect(validateProject(project([attached]),template).issues.some(i=>/incompatible with row unit/.test(i.message))).toBe(true);
 });

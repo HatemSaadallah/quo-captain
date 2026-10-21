@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Project, ProjectItem } from '../../common/interfaces/project.interface';
-import { computeElencoCosti, m2Total, m2Unit } from './elenco-costi';
+import { computeElencoCosti, m2Total, m2Unit, sameCostUnit } from './elenco-costi';
 
 function item(over: Partial<ProjectItem>): ProjectItem {
   return {
@@ -20,6 +20,7 @@ function item(over: Partial<ProjectItem>): ProjectItem {
     lotto: null,
     params: [],
     historicalUnitCost: 1090.7,
+    historicalUnit: 'Pcs',
     historicalQuantity: 712,
     unitCostOverride: null,
     dependsOnSheets: [],
@@ -46,7 +47,7 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
   it('row 30: unit m² -> I = quantity, no dimensions', () => {
     expect(m2Unit('m²', null, null)).toBe(0);
     expect(m2Total('m²', 4901, 0)).toBe(4901);
-    const r = computeElencoCosti(project([item({ id: 'f', unit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8, position: '03', itemCode: '03-01' })])).rows[0];
+    const r = computeElencoCosti(project([item({ id: 'f', unit: 'm²', historicalUnit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8, position: '03', itemCode: '03-01' })])).rows[0];
     expect(r.m2Total).toBe(4901);
     expect(r.totalCost).toBeCloseTo(601842.8, 2);
   });
@@ -71,7 +72,7 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
   });
 
   it('sums by position like the SUMMARY block', () => {
-    const ec = computeElencoCosti(project([item({}), item({ id: 'b', itemCode: '01-02', quantity: 129, L: 2710, historicalUnitCost: 1128.6 }), item({ id: 'c', position: '03', itemCode: '03-01', unit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8 })]));
+    const ec = computeElencoCosti(project([item({}), item({ id: 'b', itemCode: '01-02', quantity: 129, L: 2710, historicalUnitCost: 1128.6 }), item({ id: 'c', position: '03', itemCode: '03-01', unit: 'm²', historicalUnit: 'm²', quantity: 4901, L: null, H: null, historicalUnitCost: 122.8 })]));
     const s01 = ec.summary.find((s) => s.position === '01')!;
     expect(s01.rows).toBe(2);
     expect(s01.totalCost).toBeCloseTo(776578.4 + 145589.4, 2);
@@ -87,5 +88,41 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
     const ec = computeElencoCosti(project([changed, other]));
     expect(ec.rows[0].warnings.some((w) => /not recomputed/.test(w))).toBe(true);
     expect(ec.rows[1].warnings.some((w) => /different price list/.test(w))).toBe(true);
+  });
+});
+
+
+describe('review regressions: units and precision', () => {
+  it('does not treat a per-piece reference price as a per-metre cost', () => {
+    const row = item({ unit: 'm', historicalUnit: 'Pcs', quantity: 120 });
+    const result = computeElencoCosti(project([row]));
+    expect(result.rows[0].unitCost).toBeNull();
+    expect(result.rows[0].totalCost).toBeNull();
+    expect(result.rows[0].warnings.join(' ')).toMatch(/per Pcs/);
+    expect(result.rows[0].tab?.unit).toBe('Pcs');
+    expect(result.totals.complete).toBe(false);
+  });
+  it('allows an explicit override and becomes unresolved again when it is cleared', () => {
+    const row = item({ unit: 'm', historicalUnit: 'Pcs', unitCostOverride: 250, quantity: 12 });
+    expect(computeElencoCosti(project([row])).rows[0].totalCost).toBe(3000);
+    expect(computeElencoCosti(project([{...row, unitCostOverride: null}])).rows[0].totalCost).toBeNull();
+    const original = item({ unit: 'Pcs', historicalUnit: 'Pcs' });
+    expect(computeElencoCosti(project([{...original, unit:'m'}])).rows[0].unitCost).toBeNull();
+  });
+  it('normalizes documented unit aliases without converting across dimensions', () => {
+    expect(sameCostUnit('Pcs','PZ')).toBe(true);
+    expect(sameCostUnit('m','ML')).toBe(true);
+    expect(sameCostUnit('m²','MQ')).toBe(true);
+    expect(sameCostUnit('m2','m²')).toBe(true);
+    expect(sameCostUnit('Pcs','m')).toBe(false);
+    expect(computeElencoCosti(project([item({historicalUnit:null})])).rows[0].unitCost).toBeNull();
+  });
+  it('keeps unrounded K values through the total and per-position SUMIF', () => {
+    const rows = ['a','b','c'].map(id => item({id,quantity:0.125,historicalUnitCost:1.1}));
+    const result = computeElencoCosti(project(rows));
+    expect(result.rows[0].totalCost).toBeCloseTo(0.1375,12);
+    expect(result.totals.totalCost).toBeCloseTo(0.4125,12);
+    expect(result.summary[0].totalCost).toBeCloseTo(0.4125,12);
+    expect(result.totals.totalCost.toFixed(2)).toBe('0.41');
   });
 });

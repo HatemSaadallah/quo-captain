@@ -168,6 +168,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
                 {r.tab ? (
                   <>
                     <span className="chip">{r.tab.offerNo ?? r.tab.workbook}</span> sheet <b>{r.tab.sheet}</b>
+                    {r.tab.unit && <span> · source unit {r.tab.unit}</span>}
                     <div>
                       <button onClick={() => void suggest(r.itemId)} style={{ padding: '1px 6px' }}>
                         change
