@@ -4,6 +4,9 @@ import { cleanTitle } from '../product';
 import { navigate } from '../route';
 import { CONTACTS } from './ContactsPage';
 
+type Message = { role: 'user' | 'assistant'; content: string };
+type ChatTab = { id: number; title: string; messages: Message[] };
+
 /** Local semantic catalog search with explicit, reviewable catalog actions. */
 export function WorkspaceAssistant({ quotations, facets, onError }: { quotations: Quotation[]; facets: CatalogFacets | null; onError: (message: string) => void }) {
   const [open, setOpen] = useState(false);
@@ -14,11 +17,26 @@ export function WorkspaceAssistant({ quotations, facets, onError }: { quotations
   const [contactMatches, setContactMatches] = useState<typeof CONTACTS>([]);
   const [workbookMatches, setWorkbookMatches] = useState<CatalogFacets['workbooks']>([]);
   const [fileMatches, setFileMatches] = useState<Array<{ folder: string; file: string }>>([]);
-  const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [tabs, setTabs] = useState<ChatTab[]>([{ id: 1, title: 'Chat 1', messages: [] }]);
+  const [activeTabId, setActiveTabId] = useState(1);
+  const messages = tabs.find((tab) => tab.id === activeTabId)?.messages ?? [];
+  const updateMessages = (next: Message[], titleText?: string): void => setTabs((current) => current.map((tab) => tab.id === activeTabId ? { ...tab, messages: next, title: tab.title.startsWith('Chat ') && titleText ? titleText.slice(0, 22) : tab.title } : tab));
+  const newTab = (): void => {
+    const id = Math.max(0, ...tabs.map((tab) => tab.id)) + 1;
+    setTabs([...tabs, { id, title: `Chat ${id}`, messages: [] }]);
+    setActiveTabId(id);
+  };
+  const closeTab = (id: number): void => {
+    if (tabs.length === 1) { setTabs([{ id: tabs[0].id + 1, title: 'Chat 1', messages: [] }]); setActiveTabId(tabs[0].id + 1); return; }
+    const index = tabs.findIndex((tab) => tab.id === id);
+    const next = tabs.filter((tab) => tab.id !== id);
+    setTabs(next);
+    if (activeTabId === id) setActiveTabId(next[Math.max(0, index - 1)].id);
+  };
   const ask = async (): Promise<void> => {
     if (!query.trim()) return;
     const next = [...messages, { role: 'user' as const, content: query.trim() }];
-    setMessages(next);
+    updateMessages(next, query.trim());
     const submitted = query.trim();
     setQuery('');
     setBusy(true);
@@ -40,12 +58,12 @@ export function WorkspaceAssistant({ quotations, facets, onError }: { quotations
       setFileMatches(outputs);
       setAnswer(products);
       const response = await api.assistantChat(next, CONTACTS);
-      setMessages([...next, { role: 'assistant', content: response.reply }]);
+      updateMessages([...next, { role: 'assistant', content: response.reply }]);
     }
     catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       onError(message);
-      setMessages([...next, { role: 'assistant', content: `I could not complete that request: ${message}` }]);
+      updateMessages([...next, { role: 'assistant', content: `I could not complete that request: ${message}` }]);
     }
     finally { setBusy(false); }
   };
@@ -53,6 +71,7 @@ export function WorkspaceAssistant({ quotations, facets, onError }: { quotations
     <button className="assistant-launch" onClick={() => setOpen(!open)} aria-expanded={open}>✦ Ask Somec</button>
     {open && <aside className="assistant-panel" aria-label="Somec assistant">
       <header><div><b>Somec assistant</b><div className="small muted">Search across your workspace</div></div><button onClick={() => setOpen(false)} aria-label="Close">×</button></header>
+      <div className="assistant-tabbar" role="tablist" aria-label="Assistant conversations">{tabs.map((tab) => <div className={`assistant-tab ${activeTabId === tab.id ? 'active' : ''}`} key={tab.id}><button role="tab" aria-selected={activeTabId === tab.id} onClick={() => setActiveTabId(tab.id)}>{tab.title}</button><button className="assistant-tab-close" onClick={() => closeTab(tab.id)} aria-label={`Close ${tab.title}`}>×</button></div>)}<button className="assistant-new-tab" onClick={newTab} aria-label="New chat tab">＋</button></div>
       <div className="assistant-messages"><p className="assistant-note">Ask about products, quotations, customers, contacts, workbooks or generated files.</p>
         {messages.map((m, index) => <div className={`assistant-bubble ${m.role}`} key={`${m.role}-${index}`}><b>{m.role === 'user' ? 'You' : 'Somec'}</b><div>{m.content}</div></div>)}
         {quoteMatches.length > 0 && <div><b className="small">Quotations</b>{quoteMatches.map((q) => <button className="assistant-result" key={q.id} onClick={() => { setOpen(false); navigate({ page: 'quotation', id: q.id, tab: 'elenco' }); }}>{q.name}<small>{q.reference} · {q.customer} · {q.items.length} rows</small></button>)}</div>}

@@ -29,7 +29,7 @@ export function Login({ onLogin }: Props) {
     <main className="login">
       <form className="panel stack" onSubmit={(e) => void submit(e)} aria-label="login form">
         <h2>Sign in</h2>
-        <p className="muted small">Somec quotation cost-analysis generator. Mock estimator: estimator@somec.local / somec2026.</p>
+        <p className="muted small">Somec quotation cost-analysis workspace. Demo salesman: estimator@somec.local / somec2026.</p>
         <label className="field">
           Email
           <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />

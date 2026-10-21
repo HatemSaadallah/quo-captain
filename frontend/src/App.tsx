@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Quotation } from './api';
 import { CartWorkspace } from './components/CartWorkspace';
 import { ContactsPage } from './components/ContactsPage';
+import { ProjectsPage } from './components/ProjectsPage';
 import { ProductHome } from './components/ProductHome';
 import { ProductPage } from './components/ProductPage';
 import { Login } from './components/Login';
@@ -114,7 +115,7 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const current = route.page === 'quotation' || route.page === 'new' ? (quotations.find((p) => p.id === route.id) ?? null) : null;
-  const navItem = (page: 'catalog' | 'quotations' | 'contacts', label: string, icon: string, active: boolean): ReactElement => (
+  const navItem = (page: 'catalog' | 'quotations' | 'contacts' | 'projects', label: string, icon: string, active: boolean): ReactElement => (
     <button className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(page === 'quotations' ? { page: 'quotations' } : { page })}>
       <span className="icon">{icon}</span> {label}
     </button>
@@ -131,6 +132,7 @@ export default function App() {
           </div>
         </div>
         <nav>
+          {navItem('projects', 'Projects', '⌂', route.page === 'projects')}
           {navItem('catalog', 'Catalog', '▦', route.page === 'catalog' || route.page === 'product')}
           {navItem('quotations', 'Quotations', '≣', route.page === 'quotations' || route.page === 'quotation' || route.page === 'new')}
           {navItem('contacts', 'Contacts', '☎', route.page === 'contacts')}
@@ -161,15 +163,9 @@ export default function App() {
           )}
           <button className="carts-new" onClick={() => navigate({ page: 'quotations' })}>View Draft Quotations</button>
         </div>
-        <div className="sidebar-foot small">
-          <div>{facets ? `${facets.recordCount} analyses · ${facets.workbooks.length} workbooks` : 'loading catalog…'}</div>
-          <div className="muted">costs are estimated costs, not selling prices</div>
-          <div style={{ marginTop: 8 }}>
-            {user.name} <span className="muted">({user.role})</span>
-          </div>
-          <button onClick={logout} style={{ marginTop: 4, padding: '2px 8px' }}>
-            Sign out
-          </button>
+        <div className="sidebar-foot">
+          <div className="sidebar-account"><span className="sidebar-user-avatar">{user.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span className="sidebar-user-copy"><strong>{user.name}</strong><small>{user.role}</small></span></div>
+          <button className="sidebar-signout" onClick={logout}><span aria-hidden="true">↪</span> Sign out</button>
         </div>
       </aside>
       <main className="content">
@@ -185,6 +181,7 @@ export default function App() {
         {route.page === 'catalog' && <ProductHome facets={facets} quotations={quotations} estimator={user.name} initialQuery={route.q} initialCreate={route.create} onError={setError} onAddToQuotation={(r, id) => addTo(id, r, 1, [])} />}
         {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity) => addTo(id, r, quantity, [])} onError={setError} />}
         {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
+        {route.page === 'projects' && <ProjectsPage onError={setError} />}
         {route.page === 'quotations' && !route.status && (
           <CartWorkspace drafts={drafts} current={cart} facets={facets} estimator={user.name} onError={setError} onSelect={setCartId} onCreated={(q) => { onQuotation(q); setCartId(q.id); }}>
             {cart && (

@@ -80,6 +80,8 @@ export function quotation(items: QuotationItem[] = [item()], over: Partial<Quota
   return {
     id: 'p1',
     ownerId: 'u1',
+    projectId: 'project1',
+    projectName: 'Nave 4',
     name: 'Nave 4 - Balcony',
     customer: 'APEXA',
     reference: 'TM2099-00',
