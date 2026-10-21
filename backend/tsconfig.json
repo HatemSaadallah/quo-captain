@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "module": "node18",
+    "moduleResolution": "node16",
+    "esModuleInterop": true,
+    "declaration": false,
+    "removeComments": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noFallthroughCasesInSwitch": true,
+    "strictPropertyInitialization": false,
+    "types": [
+      "vitest/globals",
+      "node"
+    ],
+    "rootDir": "./src"
+  },
+  "include": [
+    "src/**/*"
+  ]
+}
