@@ -89,7 +89,8 @@ export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
       const raw = params[p.cell] ?? '';
       if (typeof p.value === 'number' || p.unit === 'MM') {
         const value = Number(raw);
-        if (!raw.trim() || !Number.isFinite(value) || value <= 0)
+        const unchanged = value === p.value;
+        if (!raw.trim() || !Number.isFinite(value) || (value <= 0 && !unchanged))
           return onError(`${p.label} must be a positive number`);
       }
     }
