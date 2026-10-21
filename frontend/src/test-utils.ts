@@ -86,6 +86,7 @@ export function quotation(items: QuotationItem[] = [item()], over: Partial<Quota
     date: '2026-10-21',
     estimator: 'Mock Estimator',
     templateWorkbook: 'TM1643-06 Analisi.xlsx',
+    status: 'draft',
     items,
     createdAt: '2026-10-21T00:00:00.000Z',
     updatedAt: '2026-10-21T00:00:00.000Z',

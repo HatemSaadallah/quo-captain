@@ -36,6 +36,8 @@ model Quotation {
   estimator        String        @default("")
   /// File name of the workbook used as template (data/input)
   templateWorkbook String
+  /// draft = the cart being built; active = confirmed quotation
+  status           String   @default("draft")
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   items            QuotationItem[]

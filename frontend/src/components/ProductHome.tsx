@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, fmtMoney, type CatalogFacets, type CatalogRecord } from '../api';
-import { cleanTitle, dims, imageOf, materialsOf, MATERIALS, sourceOf, typologyOf, TYPOLOGIES } from '../product';
+import { cleanTitle, dims, imageOf, isProduct, materialsOf, MATERIALS, sourceOf, typologyOf, TYPOLOGIES } from '../product';
 import { navigate } from '../route';
 import { SearchSuggest } from './SearchSuggest';
 
 interface Props {
   facets: CatalogFacets | null;
   onError: (msg: string) => void;
+  onAddToCart: (r: CatalogRecord) => Promise<void>;
 }
 
 let allCache: CatalogRecord[] | null = null;
@@ -15,7 +16,7 @@ let allCache: CatalogRecord[] | null = null;
 async function loadAll(facets: CatalogFacets): Promise<CatalogRecord[]> {
   if (allCache) return allCache;
   const pages = await Promise.all(facets.workbooks.map((w) => api.search('', { workbook: w.workbook, limit: 200 })));
-  allCache = pages.flatMap((p) => p.hits.map((h) => h.record)).filter((r) => r.sheet && r.unitCost);
+  allCache = pages.flatMap((p) => p.hits.map((h) => h.record)).filter((r) => r.sheet && r.unitCost && isProduct(r));
   return allCache;
 }
 
@@ -35,11 +36,13 @@ function featured(records: CatalogRecord[]): CatalogRecord[] {
   return out;
 }
 
-export function ProductCard({ r, badge }: { r: CatalogRecord; badge?: string }) {
+export function ProductCard({ r, badge, onAdd }: { r: CatalogRecord; badge?: string; onAdd?: (r: CatalogRecord) => Promise<void> }) {
   const ty = typologyOf(r);
   const mats = materialsOf(r);
+  const [state, setState] = useState<'idle' | 'adding' | 'added'>('idle');
+  const open = (): void => navigate({ page: 'product', id: r.id });
   return (
-    <button className="pcard" onClick={() => navigate({ page: 'product', id: r.id })}>
+    <div className="pcard" role="link" tabIndex={0} onClick={open} onKeyDown={(e) => e.key === 'Enter' && open()}>
       <div className="pimg" style={{ backgroundImage: `url(${imageOf(r)})` }}>
         <span className="ptype">{ty.label}</span>
         {badge && <span className="pbadge">{badge}</span>}
@@ -60,16 +63,33 @@ export function ProductCard({ r, badge }: { r: CatalogRecord; badge?: string }) 
         <div className="pprice">
           <b>{fmtMoney(r.unitCost)}</b>
           <span className="muted"> / {r.unit ?? 'unit'}</span>
-          <span className="muted small" style={{ marginLeft: 'auto' }}>
-            est. cost
-          </span>
+          {onAdd ? (
+            <button
+              className={`cart-btn ${state}`}
+              disabled={state === 'adding'}
+              onClick={(e) => {
+                e.stopPropagation();
+                setState('adding');
+                void onAdd(r).then(() => {
+                  setState('added');
+                  window.setTimeout(() => setState('idle'), 1800);
+                });
+              }}
+            >
+              {state === 'added' ? '✓ Added' : state === 'adding' ? 'Adding…' : '+ Add to cart'}
+            </button>
+          ) : (
+            <span className="muted small" style={{ marginLeft: 'auto' }}>
+              est. cost
+            </span>
+          )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
-export function ProductHome({ facets, onError }: Props) {
+export function ProductHome({ facets, onError, onAddToCart }: Props) {
   const [all, setAll] = useState<CatalogRecord[] | null>(allCache);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<CatalogRecord[] | null>(null);
@@ -88,7 +108,7 @@ export function ProductHome({ facets, onError }: Props) {
     setBusy(true);
     try {
       const res = await api.search(query, { limit: 80 });
-      setHits(res.hits.map((h) => h.record).filter((r) => r.sheet));
+      setHits(res.hits.map((h) => h.record).filter((r) => r.sheet && isProduct(r)));
     } catch (err) {
       onError(String(err));
     } finally {
@@ -110,8 +130,8 @@ export function ProductHome({ facets, onError }: Props) {
       <section className="hero">
         <div className="hero-inner">
           <div className="eyebrow">Somec Marine · Product intelligence</div>
-          <h1>Every balcony, windscreen and divider we have ever costed.</h1>
-          <p>Search {facets?.recordCount ?? '…'} engineered products from past cruise-ship offers and reuse their cost analysis in a new quotation.</p>
+          <h1>Every glass balcony, windscreen and deck we have ever costed.</h1>
+          <p>Search {all?.length ?? '…'} glass and flooring products from past cruise-ship offers and reuse their cost analysis in a new quotation.</p>
           <SearchSuggest
             q={q}
             setQ={setQ}
@@ -126,8 +146,8 @@ export function ProductHome({ facets, onError }: Props) {
           />
           <div className="hero-stats">
             <div>
-              <b>{facets?.recordCount ?? '—'}</b>
-              <span>analysed products</span>
+              <b>{all?.length ?? '—'}</b>
+              <span>catalog products</span>
             </div>
             <div>
               <b>{facets?.workbooks.length ?? '—'}</b>
@@ -178,7 +198,7 @@ export function ProductHome({ facets, onError }: Props) {
       {!all && !hits && <div className="muted">Loading catalog…</div>}
       <div className="pgrid">
         {list.slice(0, shown).map((r) => (
-          <ProductCard key={r.id} r={r} />
+          <ProductCard key={r.id} r={r} onAdd={onAddToCart} />
         ))}
       </div>
       {list.length > shown && (

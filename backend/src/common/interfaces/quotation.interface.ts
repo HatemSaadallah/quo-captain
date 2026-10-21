@@ -45,6 +45,8 @@ export interface GenerationSummary {
   engine: string;
 }
 
+export type QuotationStatus = 'draft' | 'active';
+
 export interface Quotation {
   id: string;
   ownerId: string;
@@ -55,6 +57,8 @@ export interface Quotation {
   date: string;
   estimator: string;
   templateWorkbook: string;
+  /** draft = cart being built; active = confirmed. */
+  status: QuotationStatus;
   items: QuotationItem[];
   createdAt: string;
   updatedAt: string;
@@ -84,9 +88,10 @@ export interface CreateQuotationDto {
   date?: string;
   estimator?: string;
   templateWorkbook?: string;
+  status?: QuotationStatus;
 }
 
-export type UpdateQuotationDto = Partial<Pick<Quotation, 'name' | 'customer' | 'reference' | 'date' | 'estimator' | 'templateWorkbook'>>;
+export type UpdateQuotationDto = Partial<Pick<Quotation, 'name' | 'customer' | 'reference' | 'date' | 'estimator' | 'templateWorkbook' | 'status'>>;
 
 export interface AddItemDto {
   catalogId: string;
