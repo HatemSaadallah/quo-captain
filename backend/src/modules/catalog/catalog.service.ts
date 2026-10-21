@@ -1,10 +1,19 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit, Optional } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { Catalog, CatalogFacets, CatalogRecord, EmbeddingIndex, EmbeddingStatus, SearchHit, SearchOptions, SearchResult, WorkbookSummary } from '../../common/interfaces/catalog.interface';
 import { CATALOG_FILE, EMBEDDINGS_FILE } from '../../common/utils/paths';
+import { PrismaService } from '../prisma/prisma.service';
 import { buildEmbeddingIndex, embed, embeddingFingerprint, EMBEDDING_MODEL } from './embeddings';
 import { parseQuery, rankHybrid, similarRecords } from './catalog-search';
+import { fromReferenceTab, syncReferenceTabs } from './reference-tab.mapper';
 
+export type CatalogSource = 'database' | 'json' | 'none';
+
+/**
+ * Holds the reference tabs (historical analyses) in memory for search. They are loaded
+ * from the ReferenceTab table when it is populated (`npm run extract` syncs it), otherwise
+ * from the JSON index files. Workbook summaries always come from the JSON catalog.
+ */
 @Injectable()
 export class CatalogService implements OnModuleInit {
   private readonly log = new Logger(CatalogService.name);
@@ -12,26 +21,56 @@ export class CatalogService implements OnModuleInit {
   private byId = new Map<string, CatalogRecord>();
   private readonly vectors = new Map<string, number[]>();
   private embeddingsJob: Promise<void> | null = null;
+  source: CatalogSource = 'none';
   embeddingStatus: EmbeddingStatus = 'missing';
   embeddingError: string | null = null;
 
-  onModuleInit(): void {
-    this.load();
+  constructor(@Optional() private readonly prisma?: PrismaService) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.load();
   }
 
-  load(catalogFile: string = CATALOG_FILE, embeddingsFile: string = EMBEDDINGS_FILE): void {
+  async load(catalogFile: string = CATALOG_FILE, embeddingsFile: string = EMBEDDINGS_FILE): Promise<void> {
     if (!existsSync(catalogFile)) {
       this.log.warn(`Catalog not found at ${catalogFile}. Run "npm run extract" in backend/.`);
       return;
     }
     this.catalog = JSON.parse(readFileSync(catalogFile, 'utf8')) as Catalog;
-    this.byId = new Map(this.catalog.records.map((r) => [r.id, r]));
     this.vectors.clear();
-    if (existsSync(embeddingsFile)) {
+    this.embeddingStatus = 'missing';
+    const expected = embeddingFingerprint(this.catalog.records);
+
+    // 1. database (reference tabs stored with their vectors)
+    if (this.prisma) {
+      try {
+        const rows = await this.prisma.referenceTab.findMany();
+        if (rows.length) {
+          const records = rows.map(fromReferenceTab);
+          const sameSet = records.length === this.catalog.records.length && records.every((r) => this.catalog.records.some((c) => c.id === r.id));
+          if (sameSet) {
+            this.catalog = { ...this.catalog, records };
+            this.source = 'database';
+            const withVec = rows.filter((r) => r.embedding.length && r.embeddingModel === EMBEDDING_MODEL && r.fingerprint === expected);
+            if (withVec.length === rows.length) {
+              for (const r of rows) this.vectors.set(r.id, r.embedding);
+              this.embeddingStatus = 'ready';
+            }
+          } else this.log.warn(`ReferenceTab table (${rows.length}) differs from the catalog JSON (${this.catalog.records.length}); using JSON, run "npm run extract" to resync`);
+        }
+      } catch (e) {
+        this.log.warn(`ReferenceTab table not readable (${e instanceof Error ? e.message : String(e)}); using JSON`);
+      }
+    }
+    if (this.source !== 'database') this.source = 'json';
+    this.byId = new Map(this.catalog.records.map((r) => [r.id, r]));
+
+    // 2. JSON embedding index
+    if (this.embeddingStatus !== 'ready' && existsSync(embeddingsFile)) {
       const idx = JSON.parse(readFileSync(embeddingsFile, 'utf8')) as EmbeddingIndex;
       const fresh =
         idx.model === EMBEDDING_MODEL &&
-        idx.fingerprint === embeddingFingerprint(this.catalog.records) &&
+        idx.fingerprint === expected &&
         idx.ids.length === this.catalog.records.length &&
         idx.vectors.length === idx.ids.length &&
         idx.vectors.every((v) => v.length === idx.dim && v.every(Number.isFinite));
@@ -41,7 +80,7 @@ export class CatalogService implements OnModuleInit {
       } else this.log.warn('Embedding index is stale or corrupt (model, content or vectors changed); rebuilding in background');
     }
     if (this.embeddingStatus !== 'ready') void this.ensureEmbeddings(embeddingsFile);
-    this.log.log(`Catalog loaded: ${this.catalog.records.length} records from ${this.catalog.workbooks.length} workbooks (embeddings: ${this.embeddingStatus})`);
+    this.log.log(`Catalog loaded from ${this.source}: ${this.catalog.records.length} reference tabs, ${this.catalog.workbooks.length} workbooks (embeddings: ${this.embeddingStatus})`);
   }
 
   ensureEmbeddings(embeddingsFile: string = EMBEDDINGS_FILE): Promise<void> {
@@ -52,6 +91,14 @@ export class CatalogService implements OnModuleInit {
         const idx = await buildEmbeddingIndex(this.catalog.records);
         idx.ids.forEach((id, i) => this.vectors.set(id, idx.vectors[i]));
         writeFileSync(embeddingsFile, JSON.stringify(idx));
+        if (this.prisma) {
+          try {
+            await syncReferenceTabs(this.prisma, this.catalog, idx);
+            this.source = 'database';
+          } catch (e) {
+            this.log.warn(`Could not store reference tabs in the database: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
         this.embeddingStatus = 'ready';
         this.log.log(`Embeddings ready (${idx.ids.length} x ${idx.dim}, ${idx.model})`);
       } catch (e) {
@@ -75,8 +122,12 @@ export class CatalogService implements OnModuleInit {
 
   get(id: string): CatalogRecord {
     const r = this.byId.get(id);
-    if (!r) throw new NotFoundException(`Catalog record ${id} not found`);
+    if (!r) throw new NotFoundException(`Reference tab ${id} not found`);
     return r;
+  }
+
+  has(id: string): boolean {
+    return this.byId.has(id);
   }
 
   facets(): CatalogFacets {
@@ -89,6 +140,7 @@ export class CatalogService implements OnModuleInit {
     return {
       generatedAt: this.catalog.generatedAt,
       recordCount: this.catalog.records.length,
+      source: this.source,
       embeddings: { status: this.embeddingStatus, model: EMBEDDING_MODEL, error: this.embeddingError },
       workbooks: this.catalog.workbooks,
       categories: [...categories].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),

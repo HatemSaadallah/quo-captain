@@ -127,6 +127,8 @@ export interface FacetCount {
 export interface CatalogFacets {
   generatedAt: string;
   recordCount: number;
+  /** Where the reference tabs were loaded from: the ReferenceTab table or the JSON index. */
+  source: 'database' | 'json' | 'none';
   embeddings: { status: EmbeddingStatus; model: string; error: string | null };
   workbooks: WorkbookSummary[];
   categories: FacetCount[];
