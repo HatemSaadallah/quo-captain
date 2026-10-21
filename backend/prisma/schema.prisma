@@ -89,11 +89,29 @@ model ReferenceTab {
   embeddingModel String?
   /// sha256 of model + embedded text (see embeddingFingerprint)
   fingerprint    String?
+  /// The sheet's logic: every non-empty cell as [address, value, formula?] (inputs + formulas)
+  cells          Json?
+  /// Unit cost recomputed by the app's formula engine with the historical inputs
+  computedUnitCost Float?
+  /// exact | off | n/a : does the app engine reproduce Excel's cached E67 for this tab?
+  fidelity       String?
   extractedAt    DateTime
   items          ProjectItem[]
 
   @@index([workbook, sheet])
   @@index([categoryName])
+}
+
+/// Cached values of the workbook sheets an analysis sheet reads (DATI GEN. price list,
+/// BDG Costi, indiretti, ELENCO COSTI, costi parz.), so the engine never opens Excel files.
+model WorkbookSnapshot {
+  id          String   @id @default(cuid())
+  workbook    String
+  sheet       String
+  cells       Json
+  extractedAt DateTime
+
+  @@unique([workbook, sheet])
 }
 
 model ProjectItem {

@@ -24,8 +24,24 @@ export const ELENCO_COSTI_FORMULAS: Record<string, string> = {
 };
 
 const round = (v: number, d: number): number => Math.round(v * 10 ** d) / 10 ** d;
-const isM = (unit: string): boolean => unit.trim().toLowerCase() === 'm';
+const isM = (unit: string): boolean => /^(m|ml)$/i.test(unit.trim());
 const isM2 = (unit: string): boolean => /^(m²|m2|mq)$/i.test(unit.trim());
+
+/** Documented aliases of the measurement units used in ELENCO COSTI (D) and the analysis sheets (T1). */
+export function unitClass(unit: string | null | undefined): 'pcs' | 'm' | 'm2' | 'kg' | 'forfait' | 'other' {
+  const u = (unit ?? '').trim().toLowerCase();
+  if (u === '' || /^(pcs|pz|pc|pezzi|n°|nr|cad)$/.test(u)) return 'pcs';
+  if (/^(m|ml)$/.test(u)) return 'm';
+  if (/^(m²|m2|mq)$/.test(u)) return 'm2';
+  if (u === 'kg') return 'kg';
+  if (/^(forfait|a corpo|lump sum)$/.test(u)) return 'forfait';
+  return 'other';
+}
+
+/** A unit cost is only meaningful when the row's unit and the reference tab's unit are the same class. */
+export function unitsCompatible(rowUnit: string, tabUnit: string | null | undefined): boolean {
+  return unitClass(rowUnit) === unitClass(tabUnit);
+}
 
 export function m2Unit(unit: string, L: number | null, H: number | null): number {
   const f = L ?? 0;
@@ -37,21 +53,34 @@ export function m2Total(unit: string, quantity: number, m2u: number): number {
   return isM2(unit) ? quantity : m2u * quantity;
 }
 
-export function unitCostOf(item: Pick<ProjectItem, 'unitCostOverride' | 'historicalUnitCost'>): { value: number | null; source: UnitCostSource } {
+/** Result of the app-side engine for a row (see CostingService). */
+export interface ComputedUnitCost {
+  unitCost: number | null;
+  fidelity: string | null;
+  errors: number;
+  unsupported: number;
+}
+
+export function unitCostOf(item: Pick<ProjectItem, 'unitCostOverride' | 'historicalUnitCost'>, computed?: ComputedUnitCost | null): { value: number | null; source: UnitCostSource } {
   if (item.unitCostOverride !== null && item.unitCostOverride !== undefined) return { value: round(item.unitCostOverride, 1), source: 'override' };
+  if (computed && computed.unitCost !== null && computed.unsupported === 0) return { value: round(computed.unitCost, 1), source: 'computed' };
   if (item.historicalUnitCost !== null && item.historicalUnitCost !== undefined) return { value: round(item.historicalUnitCost, 1), source: 'historical' };
   return { value: null, source: 'none' };
 }
 
-export function computeRow(item: ProjectItem, line: number, templateWorkbook: string): ElencoCostiRow {
+export function computeRow(item: ProjectItem, line: number, templateWorkbook: string, computed?: ComputedUnitCost | null): ElencoCostiRow {
   const warnings: string[] = [];
   const h = m2Unit(item.unit, item.L, item.H);
   const i = m2Total(item.unit, item.quantity, h);
-  const { value: j, source } = unitCostOf(item);
-  const k = j === null ? null : round(j * item.quantity, 2);
+  const { value: j, source } = unitCostOf(item, computed);
+  const k = j === null ? null : j * item.quantity; // K = J*E, no intermediate rounding (SUM(K) in the sheet is unrounded)
   if (!item.catalogId) warnings.push('no reference analysis attached: unit cost unknown until a tab is attached or overridden');
-  else if (item.sourceWorkbook && item.sourceWorkbook !== templateWorkbook) warnings.push(`historical unit cost comes from ${item.sourceWorkbook} (different price list than the template)`);
-  if (source === 'historical' && item.params.some((p) => p.value !== p.original)) warnings.push('technical parameters changed: the historical unit cost is not recomputed in the web, export to Excel to recalculate');
+  else if (item.sourceWorkbook && item.sourceWorkbook !== templateWorkbook) warnings.push(`unit cost uses the price list of ${item.sourceWorkbook} (different price list than the template)`);
+  if (source === 'computed') {
+    if (computed?.fidelity && computed.fidelity !== 'exact') warnings.push(`engine did not reproduce Excel's historical cost for this tab (fidelity: ${computed.fidelity}); review`);
+    if (computed?.errors) warnings.push(`${computed.errors} cells evaluate to Excel errors (e.g. codes missing in the price list)`);
+  }
+  if (source === 'historical' && item.params.some((p) => p.value !== p.original)) warnings.push('technical parameters changed: the historical unit cost is not recomputed (tab logic not stored), export to Excel to recalculate');
   if (source === 'override') warnings.push('manual unit cost');
   if (!(item.quantity > 0)) warnings.push('quantity must be positive');
   return {
@@ -64,8 +93,8 @@ export function computeRow(item: ProjectItem, line: number, templateWorkbook: st
     quantity: item.quantity,
     L: item.L,
     H: item.H,
-    m2Unit: round(h, 6),
-    m2Total: round(i, 6),
+    m2Unit: h,
+    m2Total: i,
     unitCost: j,
     totalCost: k,
     unitCostSource: source,
@@ -77,8 +106,8 @@ export function computeRow(item: ProjectItem, line: number, templateWorkbook: st
   };
 }
 
-export function computeElencoCosti(project: Project): ElencoCosti {
-  const rows = project.items.map((it, idx) => computeRow(it, idx + 1, project.templateWorkbook));
+export function computeElencoCosti(project: Project, computed: Map<string, ComputedUnitCost | null> = new Map()): ElencoCosti {
+  const rows = project.items.map((it, idx) => computeRow(it, idx + 1, project.templateWorkbook, computed.get(it.id)));
   let m2 = 0;
   let total = 0;
   let without = 0;
@@ -94,16 +123,17 @@ export function computeElencoCosti(project: Project): ElencoCosti {
     s.rows++;
     byPos.set(key, s);
   }
+  // No rounding of sums: the sheet sums unrounded K values; the UI formats to cents.
   const summary = [...byPos.values()]
-    .map((s) => ({ ...s, m2Total: round(s.m2Total, 4), totalCost: round(s.totalCost, 2), unitCost: s.m2Total !== 0 ? round(s.totalCost / s.m2Total, 2) : null }))
+    .map((s) => ({ ...s, unitCost: s.m2Total !== 0 ? s.totalCost / s.m2Total : null }))
     .sort((a, b) => a.position.localeCompare(b.position));
   return {
     projectId: project.id,
     reference: project.reference,
     rows,
-    totals: { m2Total: round(m2, 4), totalCost: round(total, 2), rowsWithoutCost: without, complete: without === 0 },
+    totals: { m2Total: m2, totalCost: total, rowsWithoutCost: without, complete: without === 0 },
     summary,
     formulas: ELENCO_COSTI_FORMULAS,
-    note: 'Unit costs are the historical cached costs of the attached reference analyses (or manual overrides); they are estimated costs, not selling prices, and are not recomputed when parameters change. Export to Excel for a full recalculation.',
+    note: 'Unit costs marked "computed" are recalculated by the app from the stored logic of the attached reference analysis (its formulas, its workbook price list) with this row\'s quantity and parameters; "historical" ones are the cached Excel values; "override" are manual. All are estimated costs, not selling prices.',
   };
 }

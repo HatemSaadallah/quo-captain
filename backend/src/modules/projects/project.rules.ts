@@ -2,7 +2,7 @@
 import type { CatalogRecord, WorkbookSummary } from '../../common/interfaces/catalog.interface';
 import type { AddRowDto, ItemParam, Project, ProjectItem, ProjectValidation, ValidationIssue } from '../../common/interfaces/project.interface';
 import { SHEETS } from '../../excel/somec-schema';
-import { unitCostOf } from './elenco-costi';
+import { unitCostOf, unitsCompatible } from './elenco-costi';
 
 export type NewItem = Omit<ProjectItem, 'id'>;
 
@@ -83,7 +83,7 @@ export function isValidReference(ref: string): boolean {
   return REFERENCE_RE.test(ref) && !/\.xls/i.test(ref);
 }
 
-export function validateProject(p: Project, template: WorkbookSummary | null): ProjectValidation {
+export function validateProject(p: Project, template: WorkbookSummary | null, tabUnitOf?: (catalogId: string) => string | null | undefined): ProjectValidation {
   const issues: ValidationIssue[] = [];
   const push = (level: ValidationIssue['level'], message: string, itemId?: string): void => {
     issues.push(itemId ? { level, itemId, message } : { level, message });
@@ -130,6 +130,7 @@ export function validateProject(p: Project, template: WorkbookSummary | null): P
       push('warning', `${tag}: copied from ${it.sourceWorkbook}; price-list codes are looked up in the template's DATI GEN., costs will differ from the historical value`, it.id);
     }
     if (it.unitCostOverride !== null && it.unitCostOverride !== undefined) push('warning', `${tag}: manual unit cost ${it.unitCostOverride} overrides the historical value in the web ELENCO COSTI (not in the Excel export)`, it.id);
+    if (it.catalogId && tabUnitOf && !unitsCompatible(it.unit, tabUnitOf(it.catalogId))) push('error', `${tag}: row unit "${it.unit}" is incompatible with the reference tab's unit "${tabUnitOf(it.catalogId) ?? '?'}"`, it.id);
     const { value } = unitCostOf(it);
     if (value === null || value === 0) {
       itemsWithoutCost++;

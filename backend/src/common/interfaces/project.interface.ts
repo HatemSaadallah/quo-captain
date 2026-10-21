@@ -131,7 +131,7 @@ export interface UpdateItemDto {
   params?: Array<{ cell: string; value: number | string | null }>;
 }
 
-export type UnitCostSource = 'override' | 'historical' | 'none';
+export type UnitCostSource = 'override' | 'computed' | 'historical' | 'none';
 
 /** One computed line of the web ELENCO COSTI (columns as in the sheet). */
 export interface ElencoCostiRow {

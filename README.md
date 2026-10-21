@@ -80,12 +80,12 @@ The primary deliverable is the ELENCO COSTI computed in the web (`GET /api/proje
 |---|---|---|
 | H m² unit | `IF(AND(D="m",G<>0),G/1000,G*F/1000000)` | same |
 | I m² total | `IF(D="m²",E,H*E)` | same |
-| J unit cost € | `ROUND('costi parz.'!$BE<row>,1)` | the attached reference tab's historical unit cost (its own `costi parz.!BE`), or a manual override |
+| J unit cost € | `ROUND('costi parz.'!$BE<row>,1)` | the attached tab's unit cost recomputed by the app engine for this row (`computed`), else its historical value, or a manual override |
 | K total € | `J*E` | same |
 | TOTAL COST / m² | `SUM(K6:K401)` / `SUM(I6:I400)` | same |
 | Summary by position | `SUMIF(A, pos, I\|K)`, unit = K/I | same |
 
-What the web does **not** do: recompute J when technical parameters or materials change. J is a cached historical cost; the row is flagged and the Excel export + recalculation remains the path for a real recomputation. Rows without an attached tab show no cost (never 0) and are counted as incomplete.
+**Cost engine in the app (no Excel at runtime).** `npm run extract` also stores each tab's logic (every input and formula cell, `ReferenceTab.cells`) and the sheets a tab reads (`WorkbookSnapshot`: DATI GEN. price list, BDG Costi, indiretti, ELENCO COSTI, costi parz.). `backend/src/common/utils/formula-engine.ts` evaluates the Excel subset those sheets use (IF, VLOOKUP, IFERROR, SUMIF, SUM, INT, CEILING, INDIRECT, CELL, ROUND, CONCATENATE, OR, MID, FIND, VALUE, TRIM, COUNTIF(S), LEFT/RIGHT, SUMPRODUCT, PRODUCT, FLOOR(.MATH), AND, MAX, TRUNC) and `sheet-evaluator.ts` runs a stored tab with the project's quantity, text and parameter overrides. Rows whose tab logic is stored get `unitCostSource: "computed"`: J is recalculated for the row's quantity and parameters (fixed engineering/management costs spread over the new quantity, material quantities from the new dimensions), with the tab's own workbook price list. Fidelity, measured at extraction with each tab's historical inputs (`npx tsx src/scripts/fidelity/fidelity.ts`): 508 of 538 checkable tabs reproduce Excel's cached E67 to the cent (TM1643-06 83/84, TM1823-03 90/91, TM1837-02 54/55, TM2030-00 215/216, TM2086-01 57/80, TM1641-03 9/12; the other TM1641-03 tabs have no cached E67 because Excel never computed them). Tabs marked `off` are flagged in the row; rows without an attached tab show no cost (never 0) and count as incomplete.
 
 **Reference tabs** (the numbered analysis sheets) are extracted into `data/processed/product_catalog.json` and stored in Postgres (`ReferenceTab`, 589 rows) with provenance (workbook, sheet, row, item code), inputs (parameters, codes used, cost breakdown), dependencies, warnings, source cells, the embedding vector (384-d, multilingual MiniLM) and a content fingerprint. `npm run extract` rebuilds and re-syncs them; the API loads them from the database (`facets.source = "database"`), falling back to the JSON index.
 
