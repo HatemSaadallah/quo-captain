@@ -23,7 +23,9 @@ export class AuthService {
   async verify(token: string): Promise<AuthUser> {
     try {
       const p = await this.jwt.verifyAsync<JwtPayload>(token);
-      return { id: p.sub, email: p.email, name: p.name, role: p.role };
+      const user = await this.users.findById(p.sub);
+      if (!user) throw new UnauthorizedException('User no longer exists');
+      return toAuthUser(user);
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }

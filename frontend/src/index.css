@@ -635,6 +635,14 @@ table.data textarea {
   font-size: 17px;
 }
 
+.customer-link { padding: 0; border: 0; border-radius: 2px; background: transparent; color: var(--accent); font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.customer-link:hover { color: #083e62; }
+.table-scroll { overflow-x: auto; }
+.customer-list-controls select { width: 210px; }
+.customer-pagination { flex-wrap: wrap; }
+.customer-pagination label { margin-left: auto; }
+.customer-pagination select { width: 70px; }
+
 .project-card-tabs { display: flex; gap: 14px; margin: 6px 0 10px; border-bottom: 1px solid var(--line); }
 .project-card-tabs button { padding: 7px 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); font-size: 12px; }
 .project-card-tabs button.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 650; }

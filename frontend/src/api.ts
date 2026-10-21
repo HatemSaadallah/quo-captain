@@ -3,8 +3,13 @@ import type { AuthUser, LoginResponse } from '../../backend/src/common/interface
 import type { CatalogFacets, CatalogRecord, CreateCatalogProductDto, SearchHit, SearchResult } from '../../backend/src/common/interfaces/catalog.interface';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../backend/src/common/interfaces/generation.interface';
 import type { AddItemDto, AddRowDto, CreateQuotationDto, ElencoCosti, Quotation, QuotationValidation, UpdateItemDto, UpdateQuotationDto } from '../../backend/src/common/interfaces/quotation.interface';
-import type { CreateProjectDto, Project, ProjectContact } from '../../backend/src/common/interfaces/project.interface';
+import type { CreateProjectDto, Project, ProjectContact, ProjectMessage, ProjectSearchResult } from '../../backend/src/common/interfaces/project.interface';
+export type { ProjectMessage, ProjectSearchResult };
 import type { Benchmark, GridCell, GridSheet, WorkbookView } from '../../backend/src/common/interfaces/workbook-view.interface';
+import type { RawMaterial, ProductMaterial, MaterialDetail, MaterialPriceHistory, MaterialPriceRange } from '../../backend/src/common/interfaces/material.interface';
+import type { DashboardData } from '../../backend/src/common/interfaces/dashboard.interface';
+export type { DashboardData };
+export type { RawMaterial, ProductMaterial, MaterialDetail, MaterialPriceHistory, MaterialPriceRange };
 
 export type { AuthUser, CatalogFacets, CatalogRecord, CreateCatalogProductDto, SearchHit, SearchResult, ExcelStatus, GenerationResult, ValidationReport, Quotation, QuotationValidation, AddItemDto, AddRowDto, CreateQuotationDto, ElencoCosti, UpdateItemDto, Benchmark, GridCell, GridSheet, WorkbookView, Project, ProjectContact, CreateProjectDto };
 export type QuotationItem = Quotation['items'][number];
@@ -96,6 +101,19 @@ export const api = {
   similar: (id: string, limit = 6): Promise<SearchHit[]> => request(`/api/catalog/${enc(id)}/similar?limit=${limit}`),
 
   projects: (): Promise<Project[]> => request('/api/projects'),
+  dashboard: (filters: { from?: string; to?: string; customerId?: string; status?: string }): Promise<DashboardData> => request(`/api/dashboard?${new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)) as Array<[string, string]>).toString()}`),
+  searchProjects: (query: string): Promise<ProjectSearchResult> => request('/api/projects/search', { method: 'POST', ...json({ query }) }),
+  projectMessages: (id: string): Promise<ProjectMessage[]> => request(`/api/projects/${enc(id)}/messages`),
+  projectChat: (id: string, message: string): Promise<ProjectMessage[]> => request(`/api/projects/${enc(id)}/messages`, { method: 'POST', ...json({ message }) }),
+  updateProjectBrief: (id: string, brief: string): Promise<{ brief: string }> => request(`/api/projects/${enc(id)}/brief`, { method: 'PATCH', ...json({ brief }) }),
+  createProjectRevision: (id: string, messageId: string, name: string, reference: string): Promise<{ quotationId: string }> => request(`/api/projects/${enc(id)}/messages/${enc(messageId)}/draft`, { method: 'POST', ...json({ name, reference }) }),
+  materials: (): Promise<RawMaterial[]> => request('/api/materials'),
+  material: (id: string): Promise<MaterialDetail> => request(`/api/materials/${enc(id)}`),
+  materialPrices: (id: string, range: MaterialPriceRange): Promise<MaterialPriceHistory> => request(`/api/materials/${enc(id)}/prices?range=${range}`),
+  productMaterials: (id: string): Promise<ProductMaterial[]> => request(`/api/catalog/${enc(id)}/materials`),
+  updateMaterialPrice: (id: string, unitCost: number): Promise<{ ok: true }> => request(`/api/materials/${enc(id)}`, { method: 'PATCH', ...json({ unitCost }) }),
+  customers: (): Promise<Array<{ id: string; name: string }>> => request('/api/customers'),
+  updateProject: (id: string, dto: CreateProjectDto): Promise<Project> => request(`/api/projects/${enc(id)}`, { method: 'PATCH', ...json(dto) }),
   projectContacts: (): Promise<Project['contacts']> => request('/api/projects/contacts'),
   createProject: (dto: CreateProjectDto): Promise<Project> => request('/api/projects', { method: 'POST', ...json(dto) }),
   updateProjectContacts: (id: string, contactIds: string[]): Promise<Project> => request(`/api/projects/${enc(id)}/contacts`, { method: 'PATCH', ...json({ contactIds }) }),
@@ -147,3 +165,4 @@ export function saveBlob(blob: Blob, fileName: string): void {
 
 export const fmtMoney = (v: number | null | undefined): string => (v === null || v === undefined ? '—' : v.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }));
 export const fmtNum = (v: number | null | undefined, digits = 0): string => (v === null || v === undefined ? '—' : v.toLocaleString('it-IT', { maximumFractionDigits: digits }));
+export const fmtMaterialQty = (value: number): string => value !== 0 && Math.abs(value) < 0.0001 ? value.toExponential(3) : fmtNum(value, 4);
