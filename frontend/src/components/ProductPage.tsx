@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api, fmtMoney, fmtNum, type CatalogFacets, type CatalogRecord, type Quotation } from '../api';
-import { cleanTitle, dims, imageOf, locationOf, materialsOf, rankSimilar, sourceOf, typologyOf, type SimilarProduct } from '../product';
+import { api, fmtMoney, fmtNum, fmtMaterialQty, type CatalogFacets, type CatalogRecord, type Quotation, type ProductMaterial } from '../api';
+import { cleanTitle, dims, imageOf, locationOf, rankSimilar, sourceOf, typologyOf, type SimilarProduct } from '../product';
+import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
 import { AddProductButton } from './AddProductButton';
 
@@ -17,17 +18,19 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
   const [r, setR] = useState<CatalogRecord | null>(null);
   const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
   const [qty, setQty] = useState('1');
+  const [materials, setMaterials] = useState<ProductMaterial[]>([]);
 
   useEffect(() => {
     setR(null);
     setSimilar(null);
+    setMaterials([]);
     window.scrollTo(0, 0);
     let live = true;
-    api
-      .record(id)
-      .then(async (rec) => {
+    Promise.all([api.record(id), api.productMaterials(id)])
+      .then(async ([rec, billOfMaterials]) => {
         if (!live) return;
         setR(rec);
+        setMaterials(billOfMaterials);
         setQty(String(rec.quantity ?? 1));
         const hits = await api.similar(id, 50);
         if (live) setSimilar(rankSimilar(rec, hits).slice(0, 12));
@@ -40,7 +43,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
 
   if (!r) return <div className="muted">Loading product…</div>;
   const ty = typologyOf(r);
-  const mats = materialsOf(r);
+  const mats = [...new Set(materials.map((link) => link.material.name))];
   const breakdown = r.costBreakdown.map((c) => ({ ...c, unitCost: c.unitCost ?? 0 })).filter((c) => c.unitCost > 0).sort((a, b) => b.unitCost - a.unitCost);
   const total = breakdown.reduce((s, c) => s + c.unitCost, 0) || 1;
   return (
@@ -76,6 +79,8 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
             <dd>{dims(r) ?? '—'}</dd>
             <dt>Location</dt>
             <dd>{locationOf(r) ?? '—'}</dd>
+            <dt>Lot</dt>
+            <dd>{r.lotto ?? 'Not assigned'}</dd>
             <dt>Unit weight</dt>
             <dd>{r.unitWeightKg ? `${fmtNum(r.unitWeightKg, 1)} kg` : '—'}</dd>
             <dt>Quantity supplied</dt>
@@ -108,6 +113,12 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
             />
           </div>
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>Raw materials · bill of materials</h2>
+        <p className="small muted">Quantities are shown per costing unit. Mock quantities and raw-material prices are labelled separately.</p>
+        {materials.length ? <div className="table-scroll"><table><thead><tr><th>Material</th><th>Quantity per unit</th><th>Original analysis batch</th><th>Estimated unit price</th><th>Material cost per unit</th><th>Quantity source</th></tr></thead><tbody>{materials.map((link) => <tr key={link.id} title={link.sourceNote}><td><button className="customer-link" onClick={() => navigate({ page: 'materials', id: link.material.id })}>{link.material.name}</button></td><td>{fmtMaterialQty(link.quantity)} {link.material.unit} / 1 {link.productUnit}</td><td>{link.batchQuantity == null ? 'Not supplied' : `${fmtMaterialQty(link.batchQuantity)} ${link.material.unit}`}</td><td>{fmtMoney(link.material.unitCost)} / {link.material.unit}<div className="small muted">{link.material.priceSource === 'mock' ? 'Mock price' : 'Manual price'}</div></td><td>{fmtMoney(link.quantity * link.material.unitCost)} / {link.productUnit}</td><td>{link.quantitySource === 'mock' ? 'Mock quantity' : 'Historical analysis'}</td></tr>)}</tbody></table></div> : <p className="muted">No material quantities are recorded for this product.</p>}
       </section>
 
       <section className="panel">

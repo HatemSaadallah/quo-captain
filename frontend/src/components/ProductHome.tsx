@@ -56,6 +56,7 @@ export function ProductCard({ r, badge, quotations, facets, estimator, onError, 
         <div className="pmeta">
           {sourceOf(r)} · {r.client ?? "—"}
           {dims(r) ? ` · ${dims(r)}` : ''}
+          <div>Lot: {r.lotto ?? 'Not assigned'}</div>
         </div>
         <div className="pmats">
           {mats.slice(0, 3).map((m) => (

@@ -3,6 +3,7 @@ import type { Quotation } from './quotation.interface';
 export interface Project {
   id: string;
   name: string;
+  brief?: string;
   customerId: string;
   customer: string;
   quotations: Quotation[];
@@ -24,3 +25,20 @@ export interface ProjectContact {
   company: string;
   email: string;
 }
+
+export interface ProjectRevision {
+  sourceQuotationId: string;
+  sourceUpdatedAt: string;
+  title: string;
+  excludeItemIds: string[];
+}
+export interface ProjectMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  mode?: 'llm' | 'preview';
+  content: string;
+  proposal: ProjectRevision | null;
+  createdQuotationId: string | null;
+  createdAt: string;
+}
+export interface ProjectSearchResult { reply: string; projectIds: string[]; mode?: 'llm' | 'preview' }

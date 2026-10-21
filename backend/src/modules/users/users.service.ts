@@ -30,7 +30,7 @@ export class UsersService {
   async create(input: CreateUserInput): Promise<AuthUser> {
     const email = input.email.trim().toLowerCase();
     if (await this.findByEmail(email)) throw new ConflictException(`User ${email} already exists`);
-    const u = await this.prisma.user.create({ data: { email, name: input.name.trim(), passwordHash: hashPassword(input.password), role: input.role ?? 'salesman' } });
+    const u = await this.prisma.user.create({ data: { email, name: input.name.trim(), passwordHash: hashPassword(input.password), role: input.role ?? 'salesperson' } });
     return toAuthUser(u);
   }
 }

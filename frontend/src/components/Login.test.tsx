@@ -11,14 +11,14 @@ describe('Login', () => {
       expect(method).toBe('POST');
       expect(path).toBe('/api/auth/login');
       expect(body).toEqual({ email: 'estimator@somec.local', password: 'somec2026' });
-      return { token: 'jwt-123', user: { id: 'u1', email: 'estimator@somec.local', name: 'Mock Estimator', role: 'salesman' } };
+      return { token: 'jwt-123', user: { id: 'u1', email: 'estimator@somec.local', name: 'Mock Salesperson', role: 'salesperson' } };
     });
     const onLogin = vi.fn();
     render(<Login onLogin={onLogin} />);
     await userEvent.type(screen.getByLabelText(/password/i), 'somec2026');
     await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ name: 'Mock Estimator' }));
+    expect(onLogin).toHaveBeenCalledWith(expect.objectContaining({ name: 'Mock Salesperson' }));
     expect(getToken()).toBe('jwt-123');
   });
 

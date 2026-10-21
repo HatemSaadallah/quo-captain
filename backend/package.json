@@ -22,7 +22,8 @@
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "db:push": "prisma db push",
     "prisma:generate": "prisma generate",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:seed-materials": "tsx prisma/run-seed-materials.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.1",

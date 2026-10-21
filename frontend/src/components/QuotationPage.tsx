@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { api, fmtMoney, type CatalogFacets, type CatalogRecord, type Quotation } from '../api';
+import { api, fmtMoney, type CatalogFacets, type Quotation } from '../api';
 import { navigate } from '../route';
-import { Cart } from './Cart';
 import { ElencoCosti } from './ElencoCosti';
-import { ProductSearch } from './ProductSearch';
 import { QuotationForm } from './QuotationForm';
 import { WorkbookView } from './WorkbookView';
+import { ReportEmailModal } from './ReportEmailModal';
 
 interface Props {
   quotation: Quotation;
@@ -17,20 +16,20 @@ interface Props {
   /** In the cart workspace the tabs switch locally instead of navigating. */
   onTab?: (tab: string) => void;
   onQuotation: (p: Quotation) => void;
-  onAdd: (record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>) => Promise<void>;
   onError: (msg: string) => void;
 }
 
 const TABS: Array<{ id: string; label: string; hint: string }> = [
   { id: 'elenco', label: 'Items & costs', hint: 'Every product in this quotation with quantity, unit cost and total (the ELENCO COSTI sheet). Edit quantities or override a cost here.' },
   { id: 'workbook', label: 'Cost breakdown', hint: 'Spreadsheet view of each item’s cost analysis. Click a cell to see where the number comes from and how it compares with past projects.' },
-  { id: 'products', label: 'Add products', hint: 'Search the catalog and add products to this quotation.' },
-  { id: 'export', label: 'Checks & exports', hint: 'Checks that run before exporting, and the Excel files generated so far.' },
 ];
 
-export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, facets, tab, onTab, onQuotation, onAdd, onError }: Props) {
+export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, facets, tab, onTab, onQuotation, onError }: Props) {
+  const activeTab = tab === 'workbook' ? 'workbook' : 'elenco';
   const [editing, setEditing] = useState(false);
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [reportName, setReportName] = useState<string | undefined>();
   const total = quotation.items.reduce((acc, it) => acc + (it.unitCostOverride ?? it.historicalUnitCost ?? 0) * it.quantity, 0);
 
   const downloadExcel = async (): Promise<void> => {
@@ -38,6 +37,7 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
     try {
       const res = await api.generate(quotation.id);
       await api.download(res.outputFile);
+      setReportName(res.outputFile); setEmailOpen(true);
       onQuotation(await api.quotation(quotation.id));
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -58,6 +58,7 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
     setExporting('pdf');
     try {
       await api.downloadPdf(quotation.id, quotation.reference);
+      setReportName(`${quotation.reference || 'quotation'} ELENCO COSTI.pdf`); setEmailOpen(true);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -99,6 +100,7 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
             )}
             {quotation.status === 'draft' && !isCart && <button onClick={onMakeCart}>Set as Draft Quotation</button>}
             <button onClick={() => navigate({ page: 'catalog' })}>+ Add products</button>
+            <button onClick={() => setEmailOpen(true)}>✉ Email contacts</button>
             <button onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit details'}</button>
           </div>
         </div>
@@ -118,16 +120,15 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
       </section>
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''} onClick={() => (onTab ? onTab(t.id) : navigate({ page: 'quotation', id: quotation.id, tab: t.id }))}>
+          <button key={t.id} role="tab" aria-selected={activeTab === t.id} className={activeTab === t.id ? 'active' : ''} onClick={() => (onTab ? onTab(t.id) : navigate({ page: 'quotation', id: quotation.id, tab: t.id }))}>
             {t.label}
           </button>
         ))}
       </div>
-      <div className="tab-hint">{TABS.find((t) => t.id === tab)?.hint}</div>
-      {tab === 'elenco' && <ElencoCosti quotation={quotation} onQuotation={onQuotation} onError={onError} />}
-      {tab === 'workbook' && <WorkbookView quotation={quotation} onQuotation={onQuotation} onError={onError} />}
-      {tab === 'products' && <ProductSearch facets={facets} canAdd onAdd={onAdd} onError={onError} addLabel={`Add to ${quotation.reference || 'quotation'}`} />}
-      {tab === 'export' && <Cart quotation={quotation} onQuotation={onQuotation} onError={onError} />}
+      <div className="tab-hint">{TABS.find((t) => t.id === activeTab)?.hint}</div>
+      {activeTab === 'elenco' && <ElencoCosti quotation={quotation} onQuotation={onQuotation} onError={onError} />}
+      {activeTab === 'workbook' && <WorkbookView quotation={quotation} onQuotation={onQuotation} onError={onError} />}
+      {emailOpen && <ReportEmailModal quotation={quotation} reportName={reportName} onClose={() => setEmailOpen(false)} />}
     </div>
   );
 }

@@ -67,7 +67,7 @@ Every API route except `POST /api/auth/login` needs `Authorization: Bearer <jwt>
 
 | User | Password | Role |
 |---|---|---|
-| `estimator@somec.local` | `somec2026` | salesman (owns the seeded quotation `TM2099-00`, 3 cart lines) |
+| `estimator@somec.local` | `somec2026` | salesperson (owns the seeded quotation `TM2099-00`, 3 cart lines) |
 | `admin@somec.local` | `somec2026` | admin |
 
 Passwords are hashed with Node's scrypt; tokens are signed with `JWT_SECRET` from `backend/.env` (12 h by default). `make demo` and the frontend log in with the estimator account.
@@ -84,6 +84,12 @@ npx prisma db push
 ```
 
 The seed step stops if an existing quotation has no customer value that can be repaired from the explicit seed corrections. New quotations require a project.
+
+## Raw materials
+
+The Materials tab uses database records linked to existing catalog products, with quantities per costing unit and original analysis-batch quantities. The normalized fixture in `backend/prisma/data/material-products.json` maps all 568 entries from `somec_products_index.json` to existing product IDs. The index contains product prices, but no raw-material purchase rates: the seed supplies 20 labelled mock rates. Historical component quantities come from existing analysis breakdowns; description-only component quantities are explicitly labelled mock.
+
+Run `npm run db:push` followed by `npm run db:seed-materials` in `backend` to apply the material schema and backfill existing products. The regular database seed also runs this step. Re-seeding preserves manually edited material prices.
 
 ## Web ELENCO COSTI and reference tabs
 
@@ -153,3 +159,23 @@ Not verified in this environment:
 The "Generated workbook & PDF" tab renders the quotation as a clickable web workbook instead of an Excel file: sheet tabs at the bottom (ELENCO COSTI plus one evaluated analysis sheet per row), a formula bar showing the clicked cell's formula, value and source, yellow input cells editable in place (quantity, dimensions, parameters such as `N3`/`N4`, manual unit cost), and the computed cells refreshed through the app engine. **Export PDF** downloads the ELENCO COSTI as a landscape PDF (`GET /api/quotations/:id/elenco-costi.pdf`); **Print** uses the browser's print view of the current sheet. `GET /api/quotations/:id/workbook` returns the grid.
 
 Selecting a row shows the **historical benchmark** (`GET /api/quotations/:id/items/:itemId/benchmark`): the most similar reference analyses with their source workbook/sheet/cell, client, date, quantity, dimensions, parameters and unit cost, min/median/max against this row's cost, a per-category cost comparison (materials, labour, installation…) and the historical quotations they come from.
+
+## Material market history
+
+Open a material for 15-day, 1-month, 6-month or 1-year charts. `GET /api/materials/:id/prices?range=6m` downloads monthly US BLS producer-price indexes directly from the public API, stores observations in PostgreSQL and refreshes after 24 hours. `npm run db:seed-materials` also installs the explicit material-to-index mappings.
+
+Charts display published price indexes in their original units, with no estimated EUR/unit view. Daily lines interpolate monthly observations positioned at month end; dates after the last observation hold that level constant. No daily market movement is fabricated. The UI shows original index values, preliminary flags, retrieval date and source links. Broad category proxies (including lumber for teak and iron/steel for stainless) are identified explicitly; they are US trends, not European supplier quotes. Provider failures surface as errors, without synthetic history or silently stale data.
+
+## Project workspace MVP
+
+Projects open at `#/projects/:id`. Save a customer brief/meeting transcript, ask project questions, and review a proposed quotation copy with exact item exclusions before creating a draft. Saved conversations and proposals live in PostgreSQL. Copies keep retained quantities, dimensions, overrides and customer/project links; originals stay unchanged. Stale proposals must be refreshed.
+
+Both project search bars use the existing `OPENAI_API_KEY` / `OPENAI_MODEL` configuration and structured LLM results validated against owned project records. When the provider is unavailable (including API quota limits), the UI explicitly labels **Preview mode**: deterministic name/customer/item matching over the same records supports simple reuse and exclusion demos. It does not simulate a successful model response. A failed provider is retried after five minutes. Briefs accept pasted text; automatic audio transcription is not included in this MVP.
+
+## Dashboard and customer overview
+
+Dashboard is the first sidebar tab and default landing page. It filters owned quotation data by date, customer and status, showing monthly estimated costs, a quotation histogram, customer portfolio, product quantities and material demand. Product and material quantities retain their units; incompatible BOM bases are excluded and disclosed. Usage means quotation demand, not actual purchasing or production. Revisions count separately. The Customers tab includes account summaries, activity charts, contacts and direct project/quotation links. Material pages show published market indexes and linked products; mock purchase-rate panels have been removed.
+
+## Report email templates
+
+After a successful Excel/PDF download, an email composer offers directory contacts and editable report-sharing, cost-update and follow-up templates. The quotation header also has **Email contacts**. **Open email draft** opens the default mail app; attach the downloaded report there and send it yourself. No SMTP/email-provider setup or automatic sending is included.

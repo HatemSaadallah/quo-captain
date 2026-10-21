@@ -1,8 +1,8 @@
 /**
- * Seed: a mock salesman user and sample quotations built from the
+ * Seed: a mock salesperson user and sample quotations built from the
  * extracted catalog. Idempotent. Run with `npm run db:seed` (after `npm run extract`).
  *
- *   login: estimator@somec.local / somec2026   (role salesman)
+ *   login: estimator@somec.local / somec2026   (role salesperson)
  *          admin@somec.local     / somec2026   (role admin)
  */
 import { PrismaClient } from '@prisma/client';
@@ -11,11 +11,12 @@ import type { Catalog } from '../src/common/interfaces/catalog.interface';
 import { hashPassword } from '../src/common/utils/password';
 import { CATALOG_FILE } from '../src/common/utils/paths';
 import { itemFromCatalog } from '../src/modules/quotations/quotation.rules';
+import { seedMaterials } from './seed-materials';
 
 const prisma = new PrismaClient();
 
 const USERS = [
-  { email: 'estimator@somec.local', name: 'Mock Estimator', password: 'somec2026', role: 'salesman' },
+  { email: 'estimator@somec.local', name: 'Mock Salesperson', password: 'somec2026', role: 'salesperson' },
   { email: 'admin@somec.local', name: 'Somec Admin', password: 'somec2026', role: 'admin' },
 ];
 
@@ -54,6 +55,7 @@ async function main(): Promise<void> {
   if (!existsSync(CATALOG_FILE)) {
     console.log(`catalog not found (${CATALOG_FILE}); run "npm run extract" and seed again to get the sample quotation`);
     await attachExistingQuotations();
+    await seedMaterials(prisma);
     return;
   }
   const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as Catalog;
@@ -109,6 +111,7 @@ async function main(): Promise<void> {
     await createQuotation(owner, catalog, { ...d, lines, status: d.reference === 'TM2118-00' ? 'draft' : 'active' });
   }
   await attachExistingQuotations();
+  await seedMaterials(prisma);
 }
 
 type Line = { id: string; quantity: number; params?: Record<string, number> };

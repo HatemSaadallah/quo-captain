@@ -17,8 +17,8 @@ model User {
   name         String
   /// scrypt$<salt>$<hash>, see src/common/utils/password.ts
   passwordHash String
-  /// salesman | admin
-  role         String      @default("salesman")
+  /// salesperson | admin
+  role         String      @default("salesperson")
   createdAt    DateTime    @default(now())
   quotations   Quotation[]
   customers    Customer[]
@@ -44,6 +44,8 @@ model Project {
   customer   Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   name       String
   quotations Quotation[]
+  brief      String @default("")
+  messages   ProjectMessage[]
   contacts   ProjectContact[]
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
@@ -100,7 +102,7 @@ model Quotation {
 /// stored with its provenance, inputs and embedding so cart rows can attach to it by similarity.
 model ReferenceTab {
   /// `<offer n°>#<ELENCO COSTI row>`, e.g. TM1643-06#10 (same id as the JSON catalog)
-  id               String          @id
+  id               String            @id
   workbook         String
   offerNo          String?
   client           String?
@@ -133,9 +135,9 @@ model ReferenceTab {
   dependsOnSheets  Json
   sourceCells      Json
   warnings         Json
-  lineItemCount    Int             @default(0)
-  errorCells       Int             @default(0)
-  hasExternalRefs  Boolean         @default(false)
+  lineItemCount    Int               @default(0)
+  errorCells       Int               @default(0)
+  hasExternalRefs  Boolean           @default(false)
   searchText       String
   embedding        Float[]
   embeddingModel   String?
@@ -149,6 +151,7 @@ model ReferenceTab {
   fidelity         String?
   extractedAt      DateTime
   items            QuotationItem[]
+  materials        ProductMaterial[]
 
   @@index([workbook, sheet])
   @@index([categoryName])
@@ -156,7 +159,7 @@ model ReferenceTab {
 
 /// User-created reusable catalog products. Embeddings are generated locally when each record is created.
 model CustomProduct {
-  id             String   @id
+  id             String            @id
   title          String
   description    String
   categoryName   String
@@ -168,9 +171,46 @@ model CustomProduct {
   embedding      Float[]
   embeddingModel String
   fingerprint    String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime          @default(now())
+  materials      ProductMaterial[]
 
   @@index([categoryName])
+}
+
+model RawMaterial {
+  id          String            @id
+  code        String            @unique
+  name        String
+  category    String
+  unit        String
+  unitCost    Float
+  priceSource String
+  sourceNote  String
+  products    ProductMaterial[]
+  marketSeriesId String?
+  marketSeries MarketSeries? @relation(fields: [marketSeriesId], references: [id])
+  marketNote String?
+  updatedAt   DateTime          @updatedAt
+}
+
+model ProductMaterial {
+  id              String         @id @default(cuid())
+  referenceTabId  String?
+  referenceTab    ReferenceTab?  @relation(fields: [referenceTabId], references: [id], onDelete: Cascade)
+  customProductId String?
+  customProduct   CustomProduct? @relation(fields: [customProductId], references: [id], onDelete: Cascade)
+  materialId      String
+  material        RawMaterial    @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  quantity        Float
+  batchQuantity   Float?
+  productUnit     String
+  quantitySource  String
+  sourceNote      String
+  sourceIndexId   String?
+
+  @@unique([referenceTabId, materialId])
+  @@unique([customProductId, materialId])
+  @@index([materialId])
 }
 
 /// Cached values of the workbook sheets an analysis sheet reads (DATI GEN. price list,
@@ -230,4 +270,27 @@ model Generation {
   createdAt   DateTime  @default(now())
 
   @@index([quotationId, createdAt])
+}
+
+model MarketSeries {
+  id String @id
+  title String
+  units String
+  sourceUrl String
+  observations Json @default("[]")
+  fetchedAt DateTime?
+  materials RawMaterial[]
+}
+
+model ProjectMessage {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role String
+  mode String @default("llm")
+  content String
+  proposal Json?
+  createdQuotationId String?
+  createdAt DateTime @default(now())
+  @@index([projectId, createdAt])
 }

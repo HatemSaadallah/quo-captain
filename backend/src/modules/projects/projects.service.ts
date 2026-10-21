@@ -26,7 +26,7 @@ export class ProjectsService {
       orderBy: { updatedAt: 'desc' },
     });
     return rows.map((p) => ({
-      id: p.id, name: p.name, customerId: p.customerId, customer: p.customer.name, contacts: p.contacts.map((pc) => pc.contact),
+      id: p.id, name: p.name, brief: p.brief, customerId: p.customerId, customer: p.customer.name, contacts: p.contacts.map((pc) => pc.contact),
       quotations: p.quotations.map((q) => ({
         id: q.id, ownerId: q.ownerId, projectId: p.id, projectName: p.name, name: q.name, customer: p.customer.name, reference: q.reference,
         date: q.date, estimator: q.estimator, templateWorkbook: q.templateWorkbook, status: q.status === 'active' ? 'active' : 'draft',
@@ -61,6 +61,28 @@ export class ProjectsService {
 
   async listContacts(): Promise<ProjectContact[]> {
     return this.prisma.contact.findMany({ orderBy: [{ company: 'asc' }, { name: 'asc' }] });
+  }
+
+  async listCustomers(ownerId: string) {
+    return this.prisma.customer.findMany({ where: { ownerId }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
+  }
+
+  async update(id: string, input: CreateProjectDto, ownerId: string): Promise<Project> {
+    await this.getOwned(id, ownerId);
+    const name = text(input.name, 'name');
+    const customerName = text(input.customer, 'customer');
+    const contactIds = Array.isArray(input.contactIds) ? [...new Set(input.contactIds.map((value) => text(value, 'contactIds')))] : [];
+    if (!contactIds.length) throw new BadRequestException('At least one project contact is required');
+    const contacts = await this.prisma.contact.findMany({ where: { id: { in: contactIds }, company: customerName } });
+    if (contacts.length !== contactIds.length) throw new BadRequestException('Select contacts belonging to the project customer');
+    await this.prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.upsert({ where: { ownerId_name: { ownerId, name: customerName } }, update: {}, create: { ownerId, name: customerName } });
+      await tx.project.update({ where: { id }, data: { name, customerId: customer.id } });
+      await tx.projectContact.deleteMany({ where: { projectId: id } });
+      await tx.projectContact.createMany({ data: contactIds.map((contactId) => ({ projectId: id, contactId })) });
+      await tx.quotation.updateMany({ where: { projectId: id, ownerId }, data: { customer: customer.name } });
+    });
+    return (await this.list(ownerId)).find((project) => project.id === id)!;
   }
 
   async updateContacts(id: string, input: unknown, ownerId: string): Promise<Project> {
