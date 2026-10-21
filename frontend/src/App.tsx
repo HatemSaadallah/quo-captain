@@ -8,7 +8,7 @@ import { Login } from './components/Login';
 import { NewQuotation } from './components/NewQuotation';
 import { QuotationList } from './components/QuotationList';
 import { QuotationPage } from './components/QuotationPage';
-import { CatalogAssistant } from './components/CatalogAssistant';
+import { WorkspaceAssistant } from './components/WorkspaceAssistant';
 import { navigate, useRoute } from './route';
 
 export default function App() {
@@ -214,7 +214,7 @@ export default function App() {
             }} facets={facets} tab={route.tab} onQuotation={onQuotation} onAdd={async (r, q, prm) => { await addTo(current.id, r, q, prm); }} onError={setError} /> : <section className="panel muted">{quotations.length ? 'Quotation not found.' : 'Loading…'}</section>)}
         {route.page === 'new' && <NewQuotation facets={facets} quotation={current} step={route.step} onQuotation={onQuotation} onAdd={async (r, q, prm) => { if (current) await addTo(current.id, r, q, prm); }} onError={setError} />}
       </main>
-      <CatalogAssistant onError={setError} />
+      <WorkspaceAssistant quotations={quotations} facets={facets} onError={setError} />
       {toast && (
         <div className="toast" role="status">
           <span className="toast-ok">✓</span>

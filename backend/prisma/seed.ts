@@ -100,6 +100,11 @@ async function createQuotation(
   const existing = await prisma.quotation.findFirst({ where: { ownerId: owner.id, reference: q.reference } });
   if (existing) {
     await prisma.quotation.update({ where: { id: existing.id }, data: { status: q.status } });
+    const existingItems = await prisma.quotationItem.findMany({ where: { quotationId: existing.id, catalogId: { not: null }, referenceTabId: null }, select: { id: true, catalogId: true } });
+    for (const item of existingItems) {
+      const tab = await prisma.referenceTab.findUnique({ where: { id: item.catalogId! }, select: { id: true } });
+      if (tab) await prisma.quotationItem.update({ where: { id: item.id }, data: { referenceTabId: tab.id } });
+    }
     console.log(`quotation ${q.reference} already exists (${existing.id}), status ${q.status}`);
     return;
   }
@@ -114,12 +119,14 @@ async function createQuotation(
       continue;
     }
     const item = itemFromCatalog(rec, line.quantity);
+    const tab = await prisma.referenceTab.findUnique({ where: { id: item.catalogId! }, select: { id: true } });
     for (const p of item.params) if (line.params && p.cell in line.params) p.value = line.params[p.cell];
     await prisma.quotationItem.create({
       data: {
         quotationId: quotation.id,
         sortOrder: ++order,
         catalogId: item.catalogId,
+        referenceTabId: tab?.id ?? null,
         sourceWorkbook: item.sourceWorkbook,
         sourceSheet: item.sourceSheet,
         sourceOfferNo: item.sourceOfferNo,

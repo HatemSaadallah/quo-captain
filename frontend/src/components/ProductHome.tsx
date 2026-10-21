@@ -125,7 +125,8 @@ export function ProductHome({ facets, quotations, estimator, onError, onAddToQuo
     setSaving(true);
     try {
       const record = await api.createCatalogProduct({ ...draft, L: draft.L ? Number(draft.L) : null, H: draft.H ? Number(draft.H) : null });
-      allCache = [record, ...(allCache ?? [])];
+      const existing = allCache ?? (facets ? await loadAll(facets) : []);
+      allCache = [record, ...existing.filter((item) => item.id !== record.id)];
       setAll(allCache);
       setHits(null);
       setCreating(false);
