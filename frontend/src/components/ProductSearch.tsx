@@ -6,11 +6,12 @@ interface Props {
   canAdd: boolean;
   onAdd: (record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>) => Promise<void>;
   onError: (msg: string) => void;
+  addLabel?: string;
 }
 
 const scoreLabel = (h: SearchHit): string => (h.semanticScore !== null ? `${Math.round(h.score * 100)}% match` : `${Math.round(h.lexicalScore * 100)}% text`);
 
-export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
+export function ProductSearch({ facets, canAdd, onAdd, onError, addLabel = 'Add to cart' }: Props) {
   const [q, setQ] = useState('prefabricated balcony 1600x2560');
   const [workbook, setWorkbook] = useState('');
   const [category, setCategory] = useState('');
@@ -62,7 +63,7 @@ export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
   return (
     <section className="panel">
       <h2>
-        B · Find a historical analysis
+        Find a historical analysis
         {result && (
           <span className="chip" title={`embedding index: ${result.embeddingStatus}`}>
             {result.semantic ? 'semantic + text search' : result.embeddingStatus === 'building' ? 'text search (semantic index warming up…)' : 'text search'}
@@ -127,7 +128,7 @@ export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
               </span>
             </div>
             <div className="small muted">
-              Project {selected.projectName} · client {selected.client} · {selected.projectDate} · estimator {selected.estimator} · class {selected.productClass ?? '—'} · analysis unit {selected.analysisUnit ?? '—'}
+              Historical project {selected.projectName} · client {selected.client} · {selected.projectDate} · estimator {selected.estimator} · class {selected.productClass ?? '—'} · analysis unit {selected.analysisUnit ?? '—'}
             </div>
           </div>
           <pre>{selected.description}</pre>
@@ -232,10 +233,10 @@ export function ProductSearch({ facets, canAdd, onAdd, onError }: Props) {
             </div>
             <div className="row" style={{ marginTop: 8 }}>
               <button className="primary" onClick={() => void add()} disabled={!canAdd || !selected.sheet}>
-                Add to cart
+                {addLabel}
               </button>
               {!selected.sheet && <span className="small" style={{ color: 'var(--err)' }}>This row has no analysis sheet in its workbook; it cannot be copied.</span>}
-              {!canAdd && selected.sheet && <span className="small muted">Create or select a project first.</span>}
+              {!canAdd && selected.sheet && <span className="small muted">Choose or create a quotation first.</span>}
             </div>
           </div>
 

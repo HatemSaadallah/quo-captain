@@ -1,15 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, fmtMoney, fmtNum, type ElencoCosti as ElencoCostiData, type Project, type SearchHit } from '../api';
+import { api, fmtMoney, fmtNum, type ElencoCosti as ElencoCostiData, type Quotation, type SearchHit } from '../api';
 
 interface Props {
-  project: Project;
-  onProject: (p: Project) => void;
+  quotation: Quotation;
+  onQuotation: (p: Quotation) => void;
   onError: (msg: string) => void;
 }
 
 const sourceBadge = (s: 'override' | 'computed' | 'historical' | 'none'): string => (s === 'override' ? 'badge warn' : s === 'computed' ? 'badge ok' : s === 'historical' ? 'badge' : 'badge err');
 
-export function ElencoCosti({ project, onProject, onError }: Props) {
+export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
   const [data, setData] = useState<ElencoCostiData | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ position: '', itemCode: '', description: '', unit: 'Pcs', quantity: '1', L: '', H: '' });
@@ -18,14 +18,14 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
 
   useEffect(() => {
     api
-      .elencoCosti(project.id)
+      .elencoCosti(quotation.id)
       .then(setData)
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
-  }, [project, onError]);
+  }, [quotation, onError]);
 
-  const guard = async (fn: () => Promise<Project>): Promise<void> => {
+  const guard = async (fn: () => Promise<Quotation>): Promise<void> => {
     try {
-      onProject(await fn());
+      onQuotation(await fn());
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     }
@@ -34,7 +34,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
   const addRow = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     await guard(() =>
-      api.addRow(project.id, {
+      api.addRow(quotation.id, {
         position: draft.position,
         itemCode: draft.itemCode,
         description: draft.description,
@@ -52,7 +52,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
     setSuggestFor(itemId);
     setSuggestions(null);
     try {
-      setSuggestions(await api.suggestions(project.id, itemId, 6));
+      setSuggestions(await api.suggestions(quotation.id, itemId, 6));
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
       setSuggestFor(null);
@@ -60,7 +60,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
   };
 
   const attach = async (itemId: string, tabId: string): Promise<void> => {
-    await guard(() => api.attach(project.id, itemId, tabId));
+    await guard(() => api.attach(quotation.id, itemId, tabId));
     setSuggestFor(null);
     setSuggestions(null);
   };
@@ -72,7 +72,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
       <h2>
         ELENCO COSTI
         <span className="muted small">
-          Offer n° {data.reference} · {project.customer} · {project.name}
+          Offer n° {data.reference} · {quotation.customer} · {quotation.name}
         </span>
       </h2>
       <table className="data elenco">
@@ -135,7 +135,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
                   key={r.itemId + String(r.unitCostOverride)}
                   onBlur={(e) => {
                     const v = e.target.value === '' ? null : Number(e.target.value);
-                    if (v !== r.unitCostOverride) void guard(() => api.updateItem(project.id, r.itemId, { unitCostOverride: v }));
+                    if (v !== r.unitCostOverride) void guard(() => api.updateItem(quotation.id, r.itemId, { unitCostOverride: v }));
                   }}
                 />
               </td>
@@ -148,7 +148,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
                       <button onClick={() => void suggest(r.itemId)} style={{ padding: '1px 6px' }}>
                         change
                       </button>{' '}
-                      <button onClick={() => void guard(() => api.detach(project.id, r.itemId))} style={{ padding: '1px 6px' }}>
+                      <button onClick={() => void guard(() => api.detach(quotation.id, r.itemId))} style={{ padding: '1px 6px' }}>
                         detach
                       </button>
                     </div>
@@ -175,7 +175,7 @@ export function ElencoCosti({ project, onProject, onError }: Props) {
               </td>
               <td>{r.lotto ?? ''}</td>
               <td>
-                <button className="danger" onClick={() => void guard(() => api.removeItem(project.id, r.itemId))} title="remove row">
+                <button className="danger" onClick={() => void guard(() => api.removeItem(quotation.id, r.itemId))} title="remove row">
                   ×
                 </button>
               </td>

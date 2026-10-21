@@ -6,7 +6,7 @@
  * no error cells and reconciling totals.
  */
 import type { CheckResult, GeneratedItemReport, ValidationReport, GenerationEngine, SheetErrorCount } from '../common/interfaces/generation.interface';
-import type { Project } from '../common/interfaces/project.interface';
+import type { Quotation } from '../common/interfaces/quotation.interface';
 import type { SheetData } from '../common/interfaces/xlsx.interface';
 import { sheetRef } from '../common/utils/a1';
 import { XlsxWorkbook } from '../common/utils/xlsx-reader';
@@ -43,7 +43,7 @@ function hasExternalFormula(sheet: SheetData): string[] {
   return out;
 }
 
-export async function validateGenerated(project: Project, outcome: GenerationOutcome, recalc: RecalcInfo, engine: GenerationEngine): Promise<ValidationReport> {
+export async function validateGenerated(quotation: Quotation, outcome: GenerationOutcome, recalc: RecalcInfo, engine: GenerationEngine): Promise<ValidationReport> {
   const wb = await XlsxWorkbook.open(outcome.outputFile);
   const tpl = await XlsxWorkbook.open(outcome.templatePath);
   const checks: CheckResult[] = [];
@@ -61,8 +61,8 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
     const m = /^A(\d+)$/.exec(addr);
     if (m && Number(m[1]) >= DATI_GEN.priceListHeaderRow && cell.v !== null && !cell.f) priceCodes.add(String(cell.v).trim());
   }
-  if (dg.cells.get(DATI_GEN.client)?.v !== project.customer) err('header', 'DATI GEN. client was not written', sheetRef(SHEETS.datiGen, DATI_GEN.client));
-  else ok('header', 'DATI GEN. header (date, client, project, estimator) written');
+  if (dg.cells.get(DATI_GEN.client)?.v !== quotation.customer) err('header', 'DATI GEN. client was not written', sheetRef(SHEETS.datiGen, DATI_GEN.client));
+  else ok('header', 'DATI GEN. header (date, client, quotation, estimator) written');
   if (!dg.cells.get(DATI_GEN.offerNo)?.f) err('header', 'DATI GEN.!C5 offer-number formula missing');
 
   const ec = await wb.sheet(SHEETS.elencoCosti);
@@ -86,7 +86,7 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
     const { item, row, sheet, boqRow } = p;
     const where = `'${sheet}'`;
     const warnings = [...p.warnings];
-    const base: GeneratedItemReport = { itemId: item.id, position: item.position, itemCode: item.itemCode, sourceWorkbook: item.sourceWorkbook ?? project.templateWorkbook, sourceSheet: item.sourceSheet ?? '', row, sheet, boqRow, quantity: item.quantity, historicalUnitCost: item.historicalUnitCost, unitCost: null, sheetUnitCost: null, totalCost: null, missingCodes: [], errorCells: 0, paramsWritten: p.paramsWritten, warnings };
+    const base: GeneratedItemReport = { itemId: item.id, position: item.position, itemCode: item.itemCode, sourceWorkbook: item.sourceWorkbook ?? quotation.templateWorkbook, sourceSheet: item.sourceSheet ?? '', row, sheet, boqRow, quantity: item.quantity, historicalUnitCost: item.historicalUnitCost, unitCost: null, sheetUnitCost: null, totalCost: null, missingCodes: [], errorCells: 0, paramsWritten: p.paramsWritten, warnings };
     if (!wb.hasSheet(sheet)) {
       err('sheet', `Analysis sheet '${sheet}' missing`, where);
       items.push({ ...base, warnings: ['sheet missing'] });
@@ -144,7 +144,7 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
       else if (Math.abs(unitCost - Math.round(sheetUnitCost * 10) / 10) > 0.11) err('reconciliation', `ELENCO COSTI!J${row}=${unitCost} differs from ${where}!E67=${sheetUnitCost.toFixed(2)}`, where);
       else ok('reconciliation', `ELENCO COSTI!J${row}=${unitCost} == ROUND(${where}!E67,1)`, where);
       if (unitCost !== null && item.historicalUnitCost !== null) {
-        const sameSource = item.sourceWorkbook === project.templateWorkbook && p.paramsWritten.every((w) => item.params.find((x) => x.cell === w.cell)?.original === w.value);
+        const sameSource = item.sourceWorkbook === quotation.templateWorkbook && p.paramsWritten.every((w) => item.params.find((x) => x.cell === w.cell)?.original === w.value);
         const diff = Math.abs(unitCost - item.historicalUnitCost);
         if (sameSource && diff > 0.11) warn('historical', `${where}: recalculated unit cost ${unitCost} differs from historical ${item.historicalUnitCost} although source == template and parameters unchanged`, where);
         else if (!sameSource) warn('historical', `${where}: recalculated ${unitCost} vs historical ${item.historicalUnitCost} (different price list or parameters, review)`, where);
@@ -197,7 +197,7 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
   const externalLinks = [...new Set(wb.externalLinks.map((e) => e.target))];
   if (externalLinks.length) warn('external-links', `${externalLinks.length} external links inherited from the template (files not available offline, opened with "do not update links"): ${externalLinks.map((l) => l.split(/[\\/]/).pop()).join(', ')}`);
 
-  const historicalEstimate = Math.round(project.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * it.quantity, 0) * 100) / 100;
+  const historicalEstimate = Math.round(quotation.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * it.quantity, 0) * 100) / 100;
   const structural = new Set(['sheet', 'elenco-costi', 'aggregation', 'fresh', 'header']);
   const hasError = checks.some((c) => c.level === 'error');
   // The cart's costs reconcile when recalculated, every item unit cost equals ROUND(E67,1), K402 equals the sum and no cart row has errors.
@@ -227,9 +227,9 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
     status,
     engine,
     generatedAt: new Date().toISOString(),
-    projectId: project.id,
-    reference: project.reference,
-    templateWorkbook: project.templateWorkbook,
+    quotationId: quotation.id,
+    reference: quotation.reference,
+    templateWorkbook: quotation.templateWorkbook,
     outputFile: outcome.outputFile,
     sheetsCopied: outcome.sheetsCopied,
     sheetsModified: outcome.sheetsModified,
