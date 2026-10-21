@@ -30,9 +30,16 @@ const pct = (v: number): string => `${(v * 100).toFixed(0).padStart(3)}%`;
 
 async function main(): Promise<void> {
   console.log('\n0. Login');
-  const login = await call<LoginResponse>('POST', '/auth/login', { email, password });
-  token = login.token;
-  console.log(`   ${login.user.name} <${login.user.email}> (${login.user.role})`);
+  let estimator = 'make demo';
+  try {
+    const login = await call<LoginResponse>('POST', '/auth/login', { email, password });
+    token = login.token;
+    estimator = login.user.name;
+    console.log(`   ${login.user.name} <${login.user.email}> (${login.user.role})`);
+  } catch (e) {
+    if (!(e instanceof Error && /-> 404/.test(e.message))) throw e;
+    console.log('   no auth endpoint on this API (pre-auth build), continuing without a token');
+  }
 
   console.log('\n1. Catalog');
   const facets = await call<CatalogFacets>('GET', '/catalog/facets');
@@ -49,7 +56,7 @@ async function main(): Promise<void> {
 
   console.log('\n4. Project + cart');
   const ref = 'TM2099-' + String(Date.now() % 100).padStart(2, '0');
-  let project = await call<Project>('POST', '/projects', { name: 'Demo - Nave 4 Balcony', customer: 'APEXA', reference: ref, date: new Date().toISOString().slice(0, 10), estimator: login.user.name, templateWorkbook: 'TM1643-06 Analisi.xlsx' });
+  let project = await call<Project>('POST', '/projects', { name: 'Demo - Nave 4 Balcony', customer: 'APEXA', reference: ref, date: new Date().toISOString().slice(0, 10), estimator, templateWorkbook: 'TM1643-06 Analisi.xlsx' });
   project = await call<Project>('POST', `/projects/${project.id}/items`, { catalogId: pick.record.id, quantity: 50 });
   const repeat = similar.find((h) => h.record.id === 'TM1823-03#10');
   if (repeat) project = await call<Project>('POST', `/projects/${project.id}/items`, { catalogId: repeat.record.id, quantity: 5 });
