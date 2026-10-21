@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, fmtMoney, type CatalogFacets, type CatalogRecord } from '../api';
 import { cleanTitle, dims, imageOf, materialsOf, MATERIALS, sourceOf, typologyOf, TYPOLOGIES } from '../product';
 import { navigate } from '../route';
+import { SearchSuggest } from './SearchSuggest';
 
 interface Props {
   facets: CatalogFacets | null;
@@ -81,13 +82,12 @@ export function ProductHome({ facets, onError }: Props) {
     if (facets && !all) loadAll(facets).then(setAll).catch((e: unknown) => onError(String(e)));
   }, [facets, all, onError]);
 
-  const search = async (e?: FormEvent): Promise<void> => {
-    e?.preventDefault();
+  const search = async (query = q): Promise<void> => {
     setShown(24);
-    if (!q.trim()) return setHits(null);
+    if (!query.trim()) return setHits(null);
     setBusy(true);
     try {
-      const res = await api.search(q, { limit: 80 });
+      const res = await api.search(query, { limit: 80 });
       setHits(res.hits.map((h) => h.record).filter((r) => r.sheet));
     } catch (err) {
       onError(String(err));
@@ -112,12 +112,18 @@ export function ProductHome({ facets, onError }: Props) {
           <div className="eyebrow">Somec Marine · Product intelligence</div>
           <h1>Every balcony, windscreen and divider we have ever costed.</h1>
           <p>Search {facets?.recordCount ?? '…'} engineered products from past cruise-ship offers and reuse their cost analysis in a new quotation.</p>
-          <form className="hero-search" onSubmit={(e) => void search(e)}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Try “glass windscreen 2000 high”, “teak decking”, “divider with door”…" aria-label="search products" />
-            <button className="primary" type="submit" disabled={busy}>
-              {busy ? <span className="spinner" /> : 'Search'}
-            </button>
-          </form>
+          <SearchSuggest
+            q={q}
+            setQ={setQ}
+            busy={busy}
+            onSubmit={(query) => void search(query)}
+            onTypology={(key) => {
+              setQ('');
+              setHits(null);
+              setTypology(key);
+              document.querySelector('.filters')?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          />
           <div className="hero-stats">
             <div>
               <b>{facets?.recordCount ?? '—'}</b>
