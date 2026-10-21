@@ -7,7 +7,7 @@ interface Props {
 
 type Group = 'Installers' | 'Buyers' | 'Management' | 'Sales' | 'Accounting' | 'Estimating';
 
-interface Contact {
+export interface Contact {
   name: string;
   role: string;
   group: Group;
@@ -23,7 +23,7 @@ interface Contact {
 
 // Prototype directory: fictional people. Emails use .local domains (like the app's login accounts) so nothing can reach a real inbox.
 const SOMEC = 'somec.local';
-const CONTACTS: Contact[] = [
+export const CONTACTS: Contact[] = [
   { name: 'Giulia Bortolin', role: 'Managing Director, Marine Division', group: 'Management', company: 'Somec', email: `g.bortolin@${SOMEC}`, phone: '+39 0422 812 101', location: 'San Vendemiano (TV)' },
   { name: 'Marco Dal Col', role: 'Operations Manager', group: 'Management', company: 'Somec', email: `m.dalcol@${SOMEC}`, phone: '+39 0422 812 104', location: 'San Vendemiano (TV)' },
   { name: 'Elena Furlan', role: 'Project Manager, Newbuildings', group: 'Management', company: 'Somec', email: `e.furlan@${SOMEC}`, phone: '+39 0422 812 117', location: 'San Vendemiano (TV)', tags: ['Nave 5', 'Nave 8'] },

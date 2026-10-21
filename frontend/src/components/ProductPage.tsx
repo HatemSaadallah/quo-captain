@@ -68,7 +68,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
           <div className="pdprice">
             {fmtMoney(r.unitCost)} <span>/ {r.unit ?? 'unit'}</span>
           </div>
-          <div className="small muted">Estimated unit cost from the original analysis (not a selling price).</div>
+          <div className="small muted">{r.custom ? 'Custom catalog product; no historical cost is recorded.' : 'Estimated unit cost from the original analysis (not a selling price).'}</div>
           <dl className="specs">
             <dt>Typology</dt>
             <dd>{ty.label}</dd>
@@ -91,9 +91,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
               {sourceOf(r)} · {r.projectDate ?? '—'} · {r.estimator ?? '—'}
             </dd>
             <dt>Source</dt>
-            <dd className="small">
-              {r.workbook} › sheet {r.sheet} › row {r.row}
-            </dd>
+            <dd className="small">{r.custom ? 'Custom catalog' : `${r.workbook} › sheet ${r.sheet} › row ${r.row}`}</dd>
           </dl>
           <div className="addbox">
             <label className="small muted" style={{ whiteSpace: 'nowrap' }}>

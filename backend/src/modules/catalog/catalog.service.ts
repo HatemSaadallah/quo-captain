@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import type { Catalog, CatalogFacets, CatalogRecord, CreateCatalogProductDto, EmbeddingIndex, EmbeddingStatus, SearchHit, SearchOptions, SearchResult, WorkbookSummary } from '../../common/interfaces/catalog.interface';
@@ -145,12 +145,12 @@ export class CatalogService implements OnModuleInit {
   }
 
   async createProduct(input: CreateCatalogProductDto, createdBy: string): Promise<CatalogRecord> {
-    if (!this.prisma) throw new Error('Catalog database is unavailable');
+    if (!this.prisma) throw new ServiceUnavailableException('Catalog database is unavailable');
     const title = input.title?.trim();
     const description = input.description?.trim();
     const categoryName = input.categoryName?.trim();
     const unit = input.unit?.trim();
-    if (!title || !description || !categoryName || !unit) throw new Error('Title, description, category and unit are required');
+    if (!title || !description || !categoryName || !unit) throw new BadRequestException('Title, description, category and unit are required');
     const id = `custom-${randomUUID()}`;
     const record = this.customRecord({ id, title, description, categoryName, itemCode: input.itemCode?.trim() || null, unit, L: input.L ?? null, H: input.H ?? null });
     const vector = (await embed([record.searchText]))[0];

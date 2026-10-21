@@ -12,6 +12,7 @@ interface Props {
 }
 
 export function AddProductButton({ record, quotations, facets, estimator, onAdd, onError }: Props) {
+  const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(false);
@@ -24,29 +25,32 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
     setBusy(false);
     if (ok) {
       setAdded(true);
+      setOpen(false);
       window.setTimeout(() => setAdded(false), 1600);
     }
   };
 
   return (
     <>
-      <select
-        className="add-product-select"
+      <button
+        type="button"
+        className="add-product-button"
         aria-label={`Add ${record.title ?? record.itemCode ?? 'product'} to quotation`}
-        value=""
         disabled={busy}
-        onChange={(e) => {
-          const id = e.target.value;
-          if (id === '__new__') setCreating(true);
-          else if (id) void add(id);
-          e.currentTarget.value = '';
-        }}
-      >
-        <option value="" disabled>{busy ? 'Adding…' : added ? 'Added ✓' : 'Add+'}</option>
-        {drafts.length > 0 && <optgroup label="Draft quotations">{drafts.map((q) => <option key={q.id} value={q.id}>{q.reference} · {q.name}</option>)}</optgroup>}
-        {finished.length > 0 && <optgroup label="Finished quotations">{finished.map((q) => <option key={q.id} value={q.id}>{q.reference} · {q.name}</option>)}</optgroup>}
-        <option value="__new__">Create a new draft quotation…</option>
-      </select>
+        onClick={() => setOpen(true)}
+      >{busy ? 'Adding…' : added ? 'Added ✓' : 'Add'}</button>
+      {open && !creating && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
+          <section className="panel add-quotation-modal" role="dialog" aria-modal="true" aria-labelledby="add-product-title">
+            <h2 id="add-product-title">Add to a quotation</h2>
+            <p className="small muted">Choose where to add <strong>{record.title ?? record.itemCode ?? 'this product'}</strong>.</p>
+            {drafts.length > 0 && <div className="quotation-choice-group"><h3>Draft quotations</h3>{drafts.map((q) => <button type="button" className="quotation-choice" key={q.id} disabled={busy} onClick={() => void add(q.id)}><span><strong>{q.reference}</strong><small>{q.name}</small></span><span aria-hidden="true">→</span></button>)}</div>}
+            {finished.length > 0 && <div className="quotation-choice-group"><h3>Finished quotations</h3>{finished.map((q) => <button type="button" className="quotation-choice" key={q.id} disabled={busy} onClick={() => void add(q.id)}><span><strong>{q.reference}</strong><small>{q.name}</small></span><span aria-hidden="true">→</span></button>)}</div>}
+            <button type="button" className="create-quotation-choice" onClick={() => { setOpen(false); setCreating(true); }}>＋ Create a new draft quotation</button>
+            <div className="row modal-actions"><button type="button" onClick={() => setOpen(false)}>Cancel</button></div>
+          </section>
+        </div>
+      )}
       {creating && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setCreating(false)}>
           <section className="panel add-quotation-modal" role="dialog" aria-modal="true" aria-labelledby="new-draft-title">
