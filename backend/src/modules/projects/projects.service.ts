@@ -18,7 +18,7 @@ import type {
 import { CatalogService } from '../catalog/catalog.service';
 import { CostingService } from '../costing/costing.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { computeElencoCosti, type ComputedUnitCost } from './elenco-costi';
+import { computeElencoCosti, unitsCompatible, type ComputedUnitCost } from './elenco-costi';
 import { attachTab, blankRow, itemFromCatalog, validateProject, type NewItem } from './project.rules';
 
 type ProjectRow = Prisma.ProjectGetPayload<{ include: { items: true; generations: true } }>;
@@ -244,6 +244,9 @@ export class ProjectsService {
     if (!input || typeof input.referenceTabId !== 'string') throw new BadRequestException('referenceTabId is required');
     const tab = this.catalog.get(input.referenceTabId);
     if (!tab.sheet) throw new BadRequestException(`Reference tab ${tab.id} has no analysis sheet in its workbook`);
+    if (!input.overwrite && it.unit.trim() && !unitsCompatible(it.unit, tab.unit)) {
+      throw new BadRequestException(`Row unit "${it.unit}" is not compatible with the reference tab's unit "${tab.unit ?? '?'}" (its unit cost is per ${tab.unit ?? '?'}); change the row unit, pick another tab, or attach with overwrite=true to take the tab's unit`);
+    }
     const merged = attachTab(it, tab, input.overwrite === true);
     merged.referenceTabId = await this.referenceTabIdFor(tab.id);
     const { sortOrder: _s, ...data } = { ...itemData(merged), sortOrder: 0 };
@@ -271,6 +274,10 @@ export class ProjectsService {
     if (!row) throw new NotFoundException(`Item ${itemId} not found`);
     const data: Prisma.ProjectItemUpdateInput = {};
     for (const k of ['position', 'itemCode', 'description', 'unit', 'notes'] as const) if (patch[k] !== undefined) data[k] = requireText(patch[k], k);
+    if (patch.unit !== undefined && row.catalogId && this.catalog.has(row.catalogId)) {
+      const tabUnit = this.catalog.get(row.catalogId).unit;
+      if (!unitsCompatible(String(data.unit ?? ''), tabUnit)) throw new BadRequestException(`Unit "${String(data.unit)}" is not compatible with the attached reference tab (unit cost per ${tabUnit ?? '?'}); detach the tab first or keep a compatible unit`);
+    }
     if (patch.quantity !== undefined) data.quantity = requirePositive(patch.quantity, 'quantity');
     if (patch.L !== undefined) data.L = optionalPositive(patch.L, 'L');
     if (patch.H !== undefined) data.H = optionalPositive(patch.H, 'H');
@@ -306,7 +313,7 @@ export class ProjectsService {
   }
 
   validateProject(p: Project): ProjectValidation {
-    return validateProject(p, this.catalog.workbooks.find((w) => w.workbook === p.templateWorkbook) ?? null);
+    return validateProject(p, this.catalog.workbooks.find((w) => w.workbook === p.templateWorkbook) ?? null, (id) => (this.catalog.has(id) ? this.catalog.get(id).unit : undefined));
   }
 
   /** The web ELENCO COSTI: the sheet's own formulas applied to the project's rows; J from the app engine when the tab's logic is stored. */

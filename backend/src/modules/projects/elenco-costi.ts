@@ -24,8 +24,24 @@ export const ELENCO_COSTI_FORMULAS: Record<string, string> = {
 };
 
 const round = (v: number, d: number): number => Math.round(v * 10 ** d) / 10 ** d;
-const isM = (unit: string): boolean => unit.trim().toLowerCase() === 'm';
+const isM = (unit: string): boolean => /^(m|ml)$/i.test(unit.trim());
 const isM2 = (unit: string): boolean => /^(m²|m2|mq)$/i.test(unit.trim());
+
+/** Documented aliases of the measurement units used in ELENCO COSTI (D) and the analysis sheets (T1). */
+export function unitClass(unit: string | null | undefined): 'pcs' | 'm' | 'm2' | 'kg' | 'forfait' | 'other' {
+  const u = (unit ?? '').trim().toLowerCase();
+  if (u === '' || /^(pcs|pz|pc|pezzi|n°|nr|cad)$/.test(u)) return 'pcs';
+  if (/^(m|ml)$/.test(u)) return 'm';
+  if (/^(m²|m2|mq)$/.test(u)) return 'm2';
+  if (u === 'kg') return 'kg';
+  if (/^(forfait|a corpo|lump sum)$/.test(u)) return 'forfait';
+  return 'other';
+}
+
+/** A unit cost is only meaningful when the row's unit and the reference tab's unit are the same class. */
+export function unitsCompatible(rowUnit: string, tabUnit: string | null | undefined): boolean {
+  return unitClass(rowUnit) === unitClass(tabUnit);
+}
 
 export function m2Unit(unit: string, L: number | null, H: number | null): number {
   const f = L ?? 0;
@@ -57,7 +73,7 @@ export function computeRow(item: ProjectItem, line: number, templateWorkbook: st
   const h = m2Unit(item.unit, item.L, item.H);
   const i = m2Total(item.unit, item.quantity, h);
   const { value: j, source } = unitCostOf(item, computed);
-  const k = j === null ? null : round(j * item.quantity, 2);
+  const k = j === null ? null : j * item.quantity; // K = J*E, no intermediate rounding (SUM(K) in the sheet is unrounded)
   if (!item.catalogId) warnings.push('no reference analysis attached: unit cost unknown until a tab is attached or overridden');
   else if (item.sourceWorkbook && item.sourceWorkbook !== templateWorkbook) warnings.push(`unit cost uses the price list of ${item.sourceWorkbook} (different price list than the template)`);
   if (source === 'computed') {
@@ -77,8 +93,8 @@ export function computeRow(item: ProjectItem, line: number, templateWorkbook: st
     quantity: item.quantity,
     L: item.L,
     H: item.H,
-    m2Unit: round(h, 6),
-    m2Total: round(i, 6),
+    m2Unit: h,
+    m2Total: i,
     unitCost: j,
     totalCost: k,
     unitCostSource: source,
@@ -107,14 +123,15 @@ export function computeElencoCosti(project: Project, computed: Map<string, Compu
     s.rows++;
     byPos.set(key, s);
   }
+  // No rounding of sums: the sheet sums unrounded K values; the UI formats to cents.
   const summary = [...byPos.values()]
-    .map((s) => ({ ...s, m2Total: round(s.m2Total, 4), totalCost: round(s.totalCost, 2), unitCost: s.m2Total !== 0 ? round(s.totalCost / s.m2Total, 2) : null }))
+    .map((s) => ({ ...s, unitCost: s.m2Total !== 0 ? s.totalCost / s.m2Total : null }))
     .sort((a, b) => a.position.localeCompare(b.position));
   return {
     projectId: project.id,
     reference: project.reference,
     rows,
-    totals: { m2Total: round(m2, 4), totalCost: round(total, 2), rowsWithoutCost: without, complete: without === 0 },
+    totals: { m2Total: m2, totalCost: total, rowsWithoutCost: without, complete: without === 0 },
     summary,
     formulas: ELENCO_COSTI_FORMULAS,
     note: 'Unit costs marked "computed" are recalculated by the app from the stored logic of the attached reference analysis (its formulas, its workbook price list) with this row\'s quantity and parameters; "historical" ones are the cached Excel values; "override" are manual. All are estimated costs, not selling prices.',

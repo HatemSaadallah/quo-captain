@@ -81,6 +81,26 @@ describe('ELENCO COSTI formulas (same as the sheet, verified on TM1643-06 rows 1
     expect(ec.totals.m2Total).toBeCloseTo(2916.352 + 559.344 + 4901, 3);
   });
 
+  it('keeps intermediate precision: K = J*E and SUM(K) are not rounded per line', () => {
+    const rows = [1, 2, 3].map((n) => item({ id: `r${n}`, itemCode: `01-0${n}`, quantity: 0.125, historicalUnitCost: 1.1 }));
+    const ec = computeElencoCosti(project(rows));
+    expect(ec.rows[0].totalCost).toBeCloseTo(0.1375, 10);
+    expect(ec.totals.totalCost).toBeCloseTo(0.4125, 10);
+    expect(ec.summary[0].totalCost).toBeCloseTo(0.4125, 10);
+  });
+
+  it('classifies measurement units with their documented aliases', async () => {
+    const { unitsCompatible, unitClass } = await import('./elenco-costi');
+    expect(unitClass('Pcs')).toBe('pcs');
+    expect(unitClass('PZ')).toBe('pcs');
+    expect(unitClass('m')).toBe('m');
+    expect(unitClass('ML')).toBe('m');
+    expect(unitClass('m²')).toBe('m2');
+    expect(unitClass('MQ')).toBe('m2');
+    expect(unitsCompatible('m', 'Pcs')).toBe(false);
+    expect(unitsCompatible('mq', 'm²')).toBe(true);
+  });
+
   it('warns when parameters changed or the price list differs', () => {
     const changed = item({ params: [{ cell: 'N4', label: 'PROFONDITA', unit: 'MM', value: 1700, original: 1594 }] });
     const other = item({ id: 'o', sourceWorkbook: 'TM1823-03 Analisi.xlsx', sourceOfferNo: 'TM1823-03' });

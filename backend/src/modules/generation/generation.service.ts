@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { ExcelStatus, GenerationResult, ValidationReport } from '../../common/interfaces/generation.interface';
 import { INPUT_DIR, OUTPUT_DIR } from '../../common/utils/paths';
@@ -8,6 +8,7 @@ import { detectExcel, recalculateWithExcel } from '../../excel/excel-automation'
 import { generateWorkbook, safeFileStem } from '../../excel/generator';
 import { validateGenerated } from '../../excel/validator';
 import { CatalogService } from '../catalog/catalog.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 
 export interface OutputEntry {
@@ -26,6 +27,7 @@ export class GenerationService {
   constructor(
     private readonly projects: ProjectsService,
     private readonly catalog: CatalogService,
+    private readonly prisma: PrismaService,
   ) {}
 
   excelStatus(force = false): Promise<ExcelStatus> {
@@ -87,29 +89,32 @@ export class GenerationService {
     throw new Error('Could not allocate a unique output directory');
   }
 
-  listOutputs(): OutputEntry[] {
-    if (!existsSync(OUTPUT_DIR)) return [];
+  /** Output files of the user's own generations (Generation -> Project.ownerId). */
+  async listOutputs(userId: string): Promise<OutputEntry[]> {
+    const gens = await this.prisma.generation.findMany({ where: { project: { ownerId: userId } }, orderBy: { createdAt: 'desc' } });
     const out: OutputEntry[] = [];
-    for (const folder of readdirSync(OUTPUT_DIR)) {
-      const dir = path.join(OUTPUT_DIR, folder);
-      if (!statSync(dir).isDirectory()) continue;
-      for (const file of readdirSync(dir)) {
-        const st = statSync(path.join(dir, file));
-        out.push({ folder, file, size: st.size, modifiedAt: st.mtime.toISOString() });
+    for (const g of gens) {
+      for (const rel of [g.file, g.reportFile]) {
+        const abs = path.join(OUTPUT_DIR, rel);
+        if (!existsSync(abs)) continue;
+        const st = statSync(abs);
+        out.push({ folder: rel.split('/')[0], file: rel.split('/').slice(1).join('/'), size: st.size, modifiedAt: st.mtime.toISOString() });
       }
     }
-    return out.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+    return out;
   }
 
-  /** Absolute path of an output file, refusing anything outside data/output. */
-  resolveOutput(folder: string, file: string): string {
+  /** Absolute path of an output file: the folder must belong to a generation of one of the user's projects. */
+  async resolveOutput(folder: string, file: string, userId: string): Promise<string> {
     if (!SAFE_NAME.test(folder) || !SAFE_NAME.test(file)) throw new BadRequestException('Invalid output name');
+    const owned = await this.prisma.generation.findFirst({ where: { project: { ownerId: userId }, OR: [{ file: { startsWith: `${folder}/` } }, { reportFile: { startsWith: `${folder}/` } }] }, select: { id: true } });
+    if (!owned) throw new NotFoundException('Output not found');
     const p = path.resolve(OUTPUT_DIR, folder, file);
-    if (!p.startsWith(path.resolve(OUTPUT_DIR) + path.sep) || !existsSync(p)) throw new NotFoundException('Output not found');
+    if (!p.startsWith(path.resolve(OUTPUT_DIR, folder) + path.sep) || !existsSync(p)) throw new NotFoundException('Output not found');
     return p;
   }
 
-  readReport(folder: string): ValidationReport {
-    return JSON.parse(readFileSync(this.resolveOutput(folder, 'validation_report.json'), 'utf8')) as ValidationReport;
+  async readReport(folder: string, userId: string): Promise<ValidationReport> {
+    return JSON.parse(readFileSync(await this.resolveOutput(folder, 'validation_report.json', userId), 'utf8')) as ValidationReport;
   }
 }

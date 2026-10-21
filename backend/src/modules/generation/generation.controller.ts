@@ -20,17 +20,17 @@ export class GenerationController {
   }
 
   @Get('outputs')
-  outputs(): OutputEntry[] {
-    return this.generation.listOutputs();
+  outputs(@CurrentUser() user: AuthUser): Promise<OutputEntry[]> {
+    return this.generation.listOutputs(user.id);
   }
 
   @Get('outputs/:folder/report')
-  report(@Param('folder') folder: string): ValidationReport {
-    return this.generation.readReport(folder);
+  report(@Param('folder') folder: string, @CurrentUser() user: AuthUser): Promise<ValidationReport> {
+    return this.generation.readReport(folder, user.id);
   }
 
   @Get('outputs/:folder/:file')
-  download(@Param('folder') folder: string, @Param('file') file: string, @Res() res: Response): void {
-    res.download(this.generation.resolveOutput(folder, file), file);
+  async download(@Param('folder') folder: string, @Param('file') file: string, @CurrentUser() user: AuthUser, @Res() res: Response): Promise<void> {
+    res.download(await this.generation.resolveOutput(folder, file, user.id), file);
   }
 }
