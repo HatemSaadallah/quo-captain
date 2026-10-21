@@ -8,7 +8,7 @@ Costs everywhere in this tool are **estimated costs** read from the workbooks. S
 
 | Part | Tech |
 |---|---|
-| Backend | NestJS 11 (CommonJS, strict TypeScript), Prisma 6 on PostgreSQL (projects, cart items, generation history) |
+| Backend | NestJS 11 (CommonJS, strict TypeScript), Prisma 6 on PostgreSQL (users, projects, cart items, generation history), JWT login |
 | Excel engine | Own OOXML reader/editor on the zip parts (`backend/src/common/utils/xlsx-reader.ts`, `xlsx-editor.ts`); Microsoft Excel via AppleScript for recalculation when scriptable (macOS) |
 | Search | Local embeddings with transformers.js (`Xenova/paraphrase-multilingual-MiniLM-L12-v2`, downloaded once to `data/models`) + lexical/dimension matching, hybrid ranking |
 | Frontend | React 19 + Vite + TypeScript, types shared with the backend |
@@ -52,11 +52,25 @@ npm install
 npm run dev                      # http://localhost:5173 (proxies /api to :3000)
 ```
 
-Tests (real workbooks, ~30 s):
+Tests (real workbooks, ~30 s) and frontend component tests:
 
 ```bash
 cd backend && npm test
+cd frontend && npm test
 ```
+
+Or everything at once: `make all` (install, database + seed, catalog extraction, build, tests, API demo).
+
+## Login and users
+
+Every API route except `POST /api/auth/login` needs `Authorization: Bearer <jwt>`. Projects belong to the user who created them. `npx prisma db seed` (also run by `make db`) creates two mock users and a sample project for the first one:
+
+| User | Password | Role |
+|---|---|---|
+| `estimator@somec.local` | `somec2026` | estimator (owns the seeded project `TM2099-00`, 3 cart lines) |
+| `admin@somec.local` | `somec2026` | admin |
+
+Passwords are hashed with Node's scrypt; tokens are signed with `JWT_SECRET` from `backend/.env` (12 h by default). `make demo` and the frontend log in with the estimator account.
 
 ## Workflow
 
@@ -69,6 +83,7 @@ cd backend && npm test
 
 | Method | Path | Purpose |
 |---|---|---|
+| POST | `/api/auth/login` · GET `/api/auth/me` | login (public), current user |
 | GET | `/api/catalog/facets` | workbooks, categories, embedding status |
 | GET | `/api/catalog/search?q=&workbook=&category=&limit=&mode=lexical` | hybrid search (`semantic:false` + `embeddingStatus` while the index warms up) |
 | GET | `/api/catalog/:id` · `/api/catalog/:id/similar` | record, nearest neighbours |

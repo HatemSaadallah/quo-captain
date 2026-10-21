@@ -1,14 +1,33 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type CatalogFacets, type CatalogRecord, type Project } from './api';
+import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Project } from './api';
 import { Cart } from './components/Cart';
+import { Login } from './components/Login';
 import { ProductSearch } from './components/ProductSearch';
 import { ProjectSetup } from './components/ProjectSetup';
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined); // undefined = checking stored token
   const [facets, setFacets] = useState<CatalogFacets | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onUnauthorized(() => {
+      setUser(null);
+      setCurrent(null);
+      setProjects([]);
+    });
+    if (!getToken()) {
+      setUser(null);
+      return;
+    }
+    api
+      .me()
+      .then(setUser)
+      .catch(() => setUser(null));
+    return () => onUnauthorized(null);
+  }, []);
 
   const loadProjects = useCallback(async (): Promise<void> => {
     try {
@@ -19,9 +38,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!user) return;
     api.facets().then(setFacets).catch((e: unknown) => setError(`Backend not reachable: ${e instanceof Error ? e.message : String(e)}`));
     void loadProjects();
-  }, [loadProjects]);
+  }, [user, loadProjects]);
 
   const onAdd = async (record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>): Promise<void> => {
     if (!current) return;
@@ -42,6 +62,17 @@ export default function App() {
     void loadProjects();
   };
 
+  const logout = (): void => {
+    api.logout();
+    setUser(null);
+    setCurrent(null);
+    setProjects([]);
+    setFacets(null);
+  };
+
+  if (user === undefined) return <main className="login muted">Checking session…</main>;
+  if (!user) return <Login onLogin={setUser} />;
+
   return (
     <>
       <header className="topbar">
@@ -59,6 +90,14 @@ export default function App() {
             </button>
           </div>
         )}
+        <div className="user" style={{ marginLeft: error ? 16 : 'auto' }}>
+          <span className="small">
+            {user.name} <span className="sub">({user.role})</span>
+          </span>{' '}
+          <button onClick={logout} style={{ padding: '2px 8px' }}>
+            Sign out
+          </button>
+        </div>
       </header>
       <main className="layout">
         <div className="stack">
