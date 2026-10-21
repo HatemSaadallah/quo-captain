@@ -62,6 +62,8 @@ export interface ValidationReport {
     /** Σ quantity × historical unit cost (indicative). */
     historicalEstimate: number;
   };
+  /** True when recalculated and every cart cost reconciles (item J == ROUND(E67,1), K402 == Σ, no error in cart rows, no external input in the cost chain); independent of the workbook-wide status. */
+  cartReconciled: boolean;
   errorCellsTotal: number;
   /** Error cells per structural sheet: in the template, in the output, and in the cart's own rows. */
   errorCellsBySheet: SheetErrorCount[];

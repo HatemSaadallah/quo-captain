@@ -200,21 +200,28 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
   const historicalEstimate = Math.round(project.items.reduce((acc, it) => acc + (it.historicalUnitCost ?? 0) * it.quantity, 0) * 100) / 100;
   const structural = new Set(['sheet', 'elenco-costi', 'aggregation', 'fresh', 'header']);
   const hasError = checks.some((c) => c.level === 'error');
-  const blockingWarnings = checks.some((c) => c.level === 'warning' && !['external-links', 'errors-cached'].includes(c.check));
+  // The cart's costs reconcile when recalculated, every item unit cost equals ROUND(E67,1), K402 equals the sum and no cart row has errors.
+  const cartReconciled = recalc.performed && !checks.some((c) => c.level === 'error' && ['reconciliation', 'totals', 'external-links-impact', 'errors'].includes(c.check));
+  const anyErrorCell = errorCellsBySheet.some((e) => e.output > 0) || errorCellsTotal > 0;
+  // The whole workbook is only `validated` when nothing in it is unresolved: recalculated, no external links at all,
+  // no error cell anywhere (inherited ones included) and no warnings beyond informational ones.
+  const blockingWarnings = checks.some((c) => c.level === 'warning' && !['errors-cached'].includes(c.check));
   const status: ValidationReport['status'] = hasError
     ? checks.some((c) => c.level === 'error' && structural.has(c.check))
       ? 'failed'
       : 'requires_review'
-    : recalc.performed && !blockingWarnings
+    : recalc.performed && !blockingWarnings && externalLinks.length === 0 && !anyErrorCell
       ? 'validated'
       : 'requires_review';
   const summary =
     status === 'validated'
-      ? `Validated: ${outcome.items.length} analysis sheets, recalculated by Excel, no errors in the cost chain, totals reconcile (ELENCO COSTI!K402 = ${elencoCostiTotal?.toFixed(2)}).`
+      ? `Validated: ${outcome.items.length} analysis sheets, recalculated by Excel, no external links, no error cells, totals reconcile (ELENCO COSTI!K402 = ${elencoCostiTotal?.toFixed(2)}).`
       : status === 'failed'
         ? 'Generation produced a structurally invalid workbook; do not use it.'
         : recalc.performed
-          ? 'Workbook recalculated but needs estimator review (see warnings/errors).'
+          ? cartReconciled
+            ? `Cart costs reconcile (ELENCO COSTI!K402 = ${elencoCostiTotal?.toFixed(2)}), but the workbook keeps unresolved dependencies or inherited errors (see warnings): estimator review required.`
+            : 'Workbook recalculated but needs estimator review (see warnings/errors).'
           : 'Draft: structure written and formulas linked, but NOT recalculated (Excel unavailable). Open in Excel: it recalculates on load; then review costs.';
   return {
     status,
@@ -231,6 +238,7 @@ export async function validateGenerated(project: Project, outcome: GenerationOut
     items,
     checks,
     totals: { elencoCostiTotal, sumOfItems: sumKnown ? Math.round(sumOfItems * 100) / 100 : null, historicalEstimate },
+    cartReconciled,
     errorCellsTotal,
     errorCellsBySheet,
     summary,
