@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, fmtMoney, type CatalogFacets, type CatalogRecord, type Quotation } from '../api';
-import { cleanTitle, dims, imageOf, isProduct, materialsOf, MATERIALS, productCost, sourceOf, typologyOf, TYPOLOGIES } from '../product';
+import { cleanTitle, dims, imageOf, isProduct, materialsOf, MATERIALS, productCost, setCustomImages, suggestImages, sourceOf, typologyOf, TYPOLOGIES } from '../product';
 import { navigate } from '../route';
 import { SearchSuggest } from './SearchSuggest';
 import { AddProductButton } from './AddProductButton';
@@ -86,6 +86,10 @@ export function ProductHome({ facets, quotations, estimator, onError, onAddToQuo
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState({ title: '', description: '', categoryName: '', itemCode: '', unit: 'Pcs', L: '', H: '' });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [preset, setPreset] = useState<string | null>(null);
+  const suggestions = suggestImages(`${draft.title} ${draft.categoryName} ${draft.description}`);
+  const chosenPreset = preset && suggestions.includes(preset) ? preset : suggestions[0];
 
   useEffect(() => {
     if (facets && !all) loadAll(facets).then(setAll).catch((e: unknown) => onError(String(e)));
@@ -126,6 +130,11 @@ export function ProductHome({ facets, quotations, estimator, onError, onAddToQuo
     setSaving(true);
     try {
       const record = await api.createCatalogProduct({ ...draft, L: draft.L ? Number(draft.L) : null, H: draft.H ? Number(draft.H) : null });
+      // Image is optional: an uploaded file, otherwise the suggested photo picked from the description.
+      await api.setProductImage(record.id, imageFile ? { file: imageFile } : { preset: chosenPreset }).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+      setCustomImages(await api.catalogImages().catch(() => ({})));
+      setImageFile(null);
+      setPreset(null);
       const existing = allCache ?? (facets ? await loadAll(facets) : []);
       allCache = [record, ...existing.filter((item) => item.id !== record.id)];
       setAll(allCache);
@@ -221,11 +230,37 @@ export function ProductHome({ facets, quotations, estimator, onError, onAddToQuo
       {list.length === 0 && (all || hits) && <div className="muted">No product matches these filters.</div>}
       {creating && <div className="modal-backdrop" onClick={() => setCreating(false)}><form className="panel stack" onSubmit={(e) => void createProduct(e)} onClick={(e) => e.stopPropagation()} style={{ width: 'min(620px, 94vw)', margin: '10vh auto', maxHeight: '80vh', overflow: 'auto' }}>
         <div className="section-head"><h2>New catalog product</h2><button type="button" onClick={() => setCreating(false)}>×</button></div>
-        <p className="muted small">The product is embedded locally for semantic search as soon as you save it.</p>
         <label>Product name *<input required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
         <label>Description *<textarea required rows={4} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
         <div className="grid2"><label>Category *<input required value={draft.categoryName} onChange={(e) => setDraft({ ...draft, categoryName: e.target.value })} /></label><label>Unit *<input required value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} /></label></div>
         <div className="grid2"><label>Item code<input value={draft.itemCode} onChange={(e) => setDraft({ ...draft, itemCode: e.target.value })} /></label><label>Length (mm)<input type="number" min="0" value={draft.L} onChange={(e) => setDraft({ ...draft, L: e.target.value })} /></label><label>Height (mm)<input type="number" min="0" value={draft.H} onChange={(e) => setDraft({ ...draft, H: e.target.value })} /></label></div>
+        <div className="np-image">
+          <div className="np-image-head">
+            <span>Image <em>(optional)</em></span>
+            <label className="np-upload">
+              {imageFile ? 'Change image' : 'Upload image'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => setImageFile(e.target.files?.[0] ?? null)} />
+            </label>
+          </div>
+          {imageFile ? (
+            <div className="np-preview">
+              <img src={URL.createObjectURL(imageFile)} alt="Uploaded product" />
+              <div>
+                <b>{imageFile.name}</b>
+                <button type="button" className="q-link" onClick={() => setImageFile(null)}>Remove and use a suggestion</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="small muted">No image? Pick one suggested from the description.</p>
+              <div className="np-suggest">
+                {suggestions.map((src) => (
+                  <button type="button" key={src} className={src === chosenPreset ? 'on' : ''} onClick={() => setPreset(src)} aria-label="Use this suggested image" aria-pressed={src === chosenPreset} style={{ backgroundImage: `url(${src})` }} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <button className="primary" disabled={saving}>{saving ? 'Saving and embedding…' : 'Save product'}</button>
       </form></div>}
     </div>

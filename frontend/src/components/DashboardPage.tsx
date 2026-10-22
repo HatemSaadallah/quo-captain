@@ -107,7 +107,6 @@ export function DashboardPage({ initialCustomerId }: { initialCustomerId?: strin
         </div>
       </>}
       {(data.totals.uncostedItems > 0 || data.totals.unmappedLines > 0 || data.totals.incompatibleLines > 0) && <div className="dash-notice dash-data-notice"><strong>Data to review</strong>{data.totals.uncostedItems > 0 && <span>{data.totals.uncostedItems} rows have no cost; totals are partial.</span>}{data.totals.unmappedLines > 0 && <span>{data.totals.unmappedLines} rows have no material links.</span>}{data.totals.incompatibleLines > 0 && <span>{data.totals.incompatibleLines} rows have incompatible BOM units and are excluded from material demand.</span>}</div>}
-      <p className="dash-footnote">Costs are estimates, not selling prices. Demand reflects quotations, not purchases or production. Revisions and separate quotations are counted individually.</p>
     </>}
   </div>;
 }

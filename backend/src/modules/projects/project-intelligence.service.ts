@@ -58,6 +58,32 @@ export class ProjectIntelligenceService {
     return { reply: result.reply, mode, projectIds: [...new Set(result.projectIds)].filter((id): id is string => typeof id === 'string' && projects.some((project) => project.id === id)).slice(0, 8) };
   }
 
+  /** Natural-language customer search over a compact per-customer summary. */
+  async searchCustomers(query: unknown, ownerId: string): Promise<{ reply: string; customers: string[]; mode: 'llm' | 'preview' }> {
+    const request = stringField(query);
+    const projects = await this.projects.list(ownerId);
+    const byCustomer = new Map<string, Project[]>();
+    for (const p of projects) byCustomer.set(p.customer, [...(byCustomer.get(p.customer) ?? []), p]);
+    const summaries = [...byCustomer.entries()].map(([name, list]) => ({
+      name,
+      contacts: [...new Set(list.flatMap((p) => p.contacts.map((c) => `${c.name} (${c.role})`)))].slice(0, 6),
+      projects: list.map((p) => p.name).slice(0, 12),
+      quotations: list.reduce((n, p) => n + p.quotations.length, 0),
+      lastQuotation: list.flatMap((p) => p.quotations.map((q) => q.date)).sort().pop() ?? null,
+      products: [...new Set(list.flatMap((p) => p.quotations.flatMap((q) => q.items.map((i) => short(i.description, 36)))))].slice(0, 10),
+    }));
+    if (!summaries.length) return { reply: 'No customers yet.', customers: [], mode: 'preview' };
+    try {
+      const result = await this.complete('Find the customers that match the request (names, contacts, roles, projects, products, recency, size). Return matching customer names exactly as given, best first, and a one-sentence reply. Empty list if none match.', { request, customers: summaries }, { type: 'object', properties: { reply: { type: 'string' }, customers: { type: 'array', items: { type: 'string' } } }, required: ['reply', 'customers'], additionalProperties: false });
+      const names = (Array.isArray(result.customers) ? result.customers : []).filter((n): n is string => typeof n === 'string' && byCustomer.has(n));
+      return { reply: typeof result.reply === 'string' ? result.reply : '', customers: names, mode: 'llm' };
+    } catch {
+      const words = request.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+      const hits = summaries.filter((c) => words.some((w) => JSON.stringify(c).toLowerCase().includes(w))).map((c) => c.name);
+      return { reply: hits.length ? `Found ${hits.length} customer(s) by keyword.` : 'No customer matches.', customers: hits, mode: 'preview' };
+    }
+  }
+
   async transcript(id: string, ownerId: string): Promise<ProjectMessage[]> {
     await this.projects.getOwned(id, ownerId);
     const rows = await this.prisma.projectMessage.findMany({ where: { projectId: id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });

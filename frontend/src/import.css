@@ -33,3 +33,39 @@
 @keyframes imp-pulse { 50% { opacity: 0.4; } }
 @media (prefers-reduced-motion: reduce) { .imp-steps li.now .imp-step-dot { animation: none; } }
 @media (max-width: 700px) { .imp-stats { grid-template-columns: 1fr; } }
+
+/* Two-stage import (upload, review, import) */
+.imp { max-width: 1080px; }
+.imp-progress { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; }
+.imp-progress li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding-right: 18px; position: relative; }
+.imp-progress li:not(:last-child)::after { content: ''; width: 36px; height: 1px; background: var(--line); margin-left: 10px; }
+.imp-progress li span { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 700; background: #fff; }
+.imp-progress li.now { color: var(--ink); font-weight: 600; }
+.imp-progress li.now span { background: #00939b; border-color: #00939b; color: #fff; }
+.imp-progress li.done span { background: #e2f1ea; border-color: #23684d; color: #23684d; }
+.imp-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+.imp-card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.imp-card-head h2 { margin: 0; font-size: 17px; }
+.imp-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 14px; }
+.imp-buckets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.imp-buckets button { text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.imp-buckets button b { font-size: 24px; letter-spacing: -0.02em; }
+.imp-buckets button span { font-weight: 600; font-size: 13px; }
+.imp-buckets button small { font-size: 11px; color: var(--muted); }
+.imp-buckets button.on { border: 2px solid #00939b; padding: 11px 13px; box-shadow: 0 6px 16px #17303a0f; }
+.imp-buckets .b-ready b { color: #23684d; }
+.imp-buckets .b-match b { color: #2a78d6; }
+.imp-buckets .b-review b { color: #b6750f; }
+.imp-lines { padding: 0; max-height: 460px; overflow: auto; }
+.imp-lines table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.imp-lines th { position: sticky; top: 0; background: #f5f8f8; text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.imp-lines td { padding: 10px 14px; border-bottom: 1px solid #eef3f3; vertical-align: top; }
+.imp-lines .num { text-align: right; white-space: nowrap; }
+.imp-line-title { max-width: 420px; }
+.imp-pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.p-ready { background: #e2f1ea; color: #23684d; }
+.p-match { background: #e5efff; color: #1f5fb0; }
+.p-review { background: #fbf0dc; color: #8a5f12; }
+.imp-actions.sticky { position: sticky; bottom: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; box-shadow: 0 10px 28px #17303a12; }
+.imp-reject { margin-left: auto; color: #a3401f; }
+@media (max-width: 760px) { .imp-buckets { grid-template-columns: 1fr 1fr; } }
