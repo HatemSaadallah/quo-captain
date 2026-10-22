@@ -77,7 +77,7 @@ export function QuotationList({ quotations, cartId, status, onDelete }: Props) {
     <div className="stack">
       <div className="section-head">
         <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>Quotations</h1>
+          <h1 style={{ margin: 0 }}>Quotations</h1>
           <div className="muted small">
             {rows.length} of {quotations.length} quotations · {fmtMoney(rows.reduce((s, q) => s + totalOf(q), 0))} estimated cost in view
           </div>

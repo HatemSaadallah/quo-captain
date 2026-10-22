@@ -67,3 +67,30 @@ Excel 16.111 now answers AppleScript (the earlier modal is gone). Findings while
 ### 14:40 — PR 8: the calculation logic extracted into the database and evaluated by the app
 
 Per the user's direction ("extract the data and the logic from the Excels and map it inside a DB", "no need to render Excel in the browser"): `ReferenceTab.cells` stores every input/formula cell of each tab, `WorkbookSnapshot` the cached values of DATI GEN. / BDG Costi / indiretti / ELENCO COSTI / costi parz. per workbook, and `formula-engine.ts` + `sheet-evaluator.ts` evaluate a tab with the project's quantity, text and parameter overrides. Validation against the originals, as you asked: with each tab's historical inputs the engine reproduces Excel's cached E67 to the cent on 508 of 538 checkable tabs (TM1643-06 83/84, TM1823-03 90/91, TM1837-02 54/55, TM2030-00 215/216, TM2086-01 57/80, TM1641-03 9/12 — the other TM1641-03 tabs have no cached E67 at all). Known misses: TM2086-01's 23 (not yet diagnosed) and one tab per workbook; `fidelity` is stored per tab and shown as a row warning. Unsupported formulas are reported (`unsupported`), never silently 0; rows without a tab stay cost-less. J in the web ELENCO COSTI is now `computed` whenever the tab's logic is stored (quantity and dimension changes move the cost), `historical` otherwise, `override` when manual. Excel export (PR 4) is unchanged and optional.
+
+## Browser pass (Claude, 2026-10-21) — answers your standing request
+
+Tested commit `e3a1cee` plus your uncommitted frontend changes (Icon.tsx, workspace.css, App/CartWorkspace/Dashboard/ProjectFinder/Projects/QuotationList edits), live on http://localhost:5173 in Chrome at 1456×839.
+
+- **Pages:** Dashboard, Catalog, Product, Quotations (draft workspace), Projects, Customers, Materials, Contacts all render. **Zero console errors or exceptions** across the pass.
+- **Auth:** sign out → login page; wrong password → "Invalid credentials"; seeded `estimator@somec.local` login → back to the page. API login also verified.
+- **Fixed by me (file you are not editing):** `QuotationPage.tsx` header showed both a "Draft" badge and a "DRAFT QUOTATION" pill. The pill now reads "Receiving products" (tooltip: catalog adds go into this draft).
+- **For you (App.tsx is in your working tree, so I did not touch it):** a cart created from "Add to cart" with no draft open, or via "+ New cart" with no name, is named "Draft quotation", and that placeholder becomes a project card titled "Draft quotation" on Projects. Suggest naming it after the customer/date or asking for the project when the first product is added.
+- **Left as is, on purpose:** Product page bill of materials labels "Mock price" / "Mock quantity". Your log says mock prices were removed from charts; the product table still shows them, honestly labelled. Keep the labels unless real prices replace the data.
+- Not exercised: Email contacts (opens the user's mail app) and Download Excel in the browser (would save a file); Excel generation was verified via API earlier (~2 s, Analisi structure intact).
+
+## Claim (Claude, 2026-10-21): quotation page redesign in progress
+
+The user asked me to revamp the quotation page. Until I log "done" here, please don't edit: `frontend/src/components/QuotationPage.tsx`, `CartWorkspace.tsx`, `ElencoCosti.tsx`, and the new `frontend/src/quotation.css`. I'm building on your current uncommitted versions and your `workspace.css` tokens/Icon component; I won't touch App.tsx, workspace.css or your other pages.
+- **Done (Claude):** quotation page redesign finished; QuotationPage/CartWorkspace/ElencoCosti/quotation.css are free again. I updated `ReportEmailModal.test.tsx` for the renamed "Download PDF" button. Frontend 23/23 pass. Next I'm integrating the user's GROK_API_KEY into the existing LLM features and adding an insights chat page.
+
+## Claim (Claude, 19:22): Grok/Groq LLM, insights chat, global search
+
+User asked: use GROK_API_KEY (it is a Groq `gsk_` key) for the existing LLM features, test/fix the chatbot, a top-bar button to a multi-tab insights chat page, and a natural-language global search. I added `backend/src/common/utils/llm.ts` (Groq/xAI/OpenAI by key prefix) and routed `assistant.service.ts` + `project-intelligence.service.ts` through it; search context is compacted for Groq's 8k tokens/min tier. Now editing `App.tsx`, `route.ts`, `ProjectFinder.tsx` and adding `InsightsPage.tsx`; please hold off on those until I log done.
+- **Done (Claude, 2026-10-22):** files released. Summary for you:
+  - `GROK_API_KEY` is a **Groq** key (`gsk_`). `backend/src/common/utils/llm.ts` picks Groq/xAI/OpenAI by key and logs token usage per call ("LLM usage").
+  - Assistant now answers data questions through **SomecQL** (`backend/src/common/utils/somecql.ts`, 4 tests): the model writes one pipe query over `lines`, `quotations`, `products`; only result rows go back. Tools `analyze_quotations` and `search_quotations` were removed. `/api/assistant/chat` now returns `{ reply, queries }`.
+  - Project search sends a compact summary (Groq free tier = 8k tokens/min) with low reasoning; falls back to preview on 413/429, now logged.
+  - New `InsightsPage.tsx` (route `#/insights?q=`), multi-tab, starter prompts, shows the queries used. Top bar (`ProjectFinder.tsx`) now does global search (LLM projects + semantic products + "Ask Insights") and has an Insights button. I updated `ProjectWorkspace.test.tsx` for the new search labels.
+  - Bug worth knowing: Chrome's `scrollIntoView` now returns a promise; an effect with an expression body that calls it crashes the whole app under StrictMode ("destroy is not a function"). Always use a block body there.
+  - Tests: frontend 23/23, backend 98/98.

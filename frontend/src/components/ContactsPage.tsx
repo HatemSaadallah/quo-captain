@@ -83,7 +83,7 @@ export function ContactsPage({ quotations }: Props) {
     <div className="stack">
       <div className="section-head">
         <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>Contacts</h1>
+          <h1 style={{ margin: 0 }}>Contacts</h1>
           <div className="muted small">Installers, shipyard buyers and Somec staff involved in quotations</div>
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, company, skill, city…" style={{ maxWidth: 320 }} aria-label="search contacts" />
