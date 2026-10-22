@@ -9,6 +9,7 @@ export type Route =
   | { page: 'customers'; id?: string }
   | { page: 'materials'; id?: string }
   | { page: 'contacts' }
+  | { page: 'insights'; q?: string }
   | { page: 'quotation'; id: string; tab: string }
   | { page: 'new'; id?: string; step: number };
 
@@ -21,6 +22,7 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'quotations' && parts[1]) return { page: 'quotation', id: parts[1], tab: params.get('tab') === 'workbook' ? 'workbook' : 'elenco' };
   if (parts[0] === 'quotations') return { page: 'quotations', status: params.get('status') ?? undefined };
   if (parts[0] === 'contacts') return { page: 'contacts' };
+  if (parts[0] === 'insights') return { page: 'insights', q: params.get('q') ?? undefined };
   if (parts[0] === 'projects') return { page: 'projects', id: parts[1] ? decodeURIComponent(parts[1]) : undefined };
   if (parts[0] === 'customers') return { page: 'customers', id: parts[1] };
   if (parts[0] === 'materials') return { page: 'materials', id: parts[1] ? decodeURIComponent(parts[1]) : undefined };
@@ -42,6 +44,8 @@ export function toHash(r: Route): string {
       return r.status ? `#/quotations?status=${r.status}` : '#/quotations';
     case 'contacts':
       return '#/contacts';
+    case 'insights':
+      return r.q ? `#/insights?q=${encodeURIComponent(r.q)}` : '#/insights';
     case 'projects':
       return r.id ? `#/projects/${encodeURIComponent(r.id)}` : '#/projects';
     case 'customers':

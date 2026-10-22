@@ -62,7 +62,7 @@ export function materialsOf(r: CatalogRecord): string[] {
   return MATERIALS.filter((m) => m.test.test(text)).map((m) => m.label);
 }
 
-export function imageOf(r: CatalogRecord): string {
+export function imageOf(r: Pick<CatalogRecord, "id" | "title" | "categoryName" | "description">): string {
   const t = typologyOf(r).key;
   const set = IMAGE_SET[t] ?? t;
   return `/products/${set}-${(hash(r.id) % (IMAGE_COUNT[set] ?? 1)) + 1}.jpg`;

@@ -14,8 +14,8 @@ describe('Project search and workspace', () => {
   it('finds and opens an actual project, clearly labelling preview results', async () => {
     mockFetch((_method, path) => path === '/api/projects/search' ? { reply: 'Found the balcony project.', projectIds: ['project1'], mode: 'preview' } : [project]);
     render(<ProjectFinder />); const user = userEvent.setup();
-    await user.type(screen.getByRole('textbox', { name: 'Find a project with natural language' }), 'last balcony for APEXA');
-    await user.click(screen.getByRole('button', { name: '✦ Ask Somec' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search everything in plain language' }), 'last balcony for APEXA');
+    await user.click(screen.getByRole('button', { name: /^Search$/ }));
     await screen.findByText('Found the balcony project.');
     expect(screen.getByText(/Preview mode/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Nave 17/ }));

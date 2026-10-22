@@ -1,15 +1,29 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, fmtMoney, fmtNum, type ElencoCosti as ElencoCostiData, type Quotation, type SearchHit } from '../api';
+import { imageOf, typologyOf } from '../product';
+import '../quotation.css';
 
 interface Props {
   quotation: Quotation;
   onQuotation: (p: Quotation) => void;
   onError: (msg: string) => void;
+  /** Reports the computed sheet upward so the page header shows the same total as the table. */
+  onData?: (data: ElencoCostiData) => void;
 }
 
-const sourceBadge = (s: 'override' | 'computed' | 'historical' | 'none'): string => (s === 'override' ? 'badge warn' : s === 'computed' ? 'badge ok' : s === 'historical' ? 'badge' : 'badge err');
+type Row = ElencoCostiData['rows'][number];
 
-export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
+const SOURCE: Record<Row['unitCostSource'], { label: string; hint: string }> = {
+  computed: { label: 'Recalculated', hint: 'Recalculated from the historical analysis for this quantity and size' },
+  historical: { label: 'Historical', hint: 'Unit cost as it was in the original offer' },
+  override: { label: 'Manual price', hint: 'Unit cost entered by hand' },
+  none: { label: 'No price', hint: 'Attach a historical analysis or enter a price' },
+};
+
+const firstLine = (s: string): string => s.split(/\r?\n/)[0];
+const product = (r: Row) => ({ id: r.tab?.id ?? r.itemId, title: firstLine(r.description), categoryName: null, description: r.description });
+
+export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) {
   const [data, setData] = useState<ElencoCostiData | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ position: '', itemCode: '', description: '', unit: 'Pcs', quantity: '1', L: '', H: '' });
@@ -17,23 +31,33 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
   const [suggestions, setSuggestions] = useState<SearchHit[] | null>(null);
 
   useEffect(() => {
+    let live = true;
     api
       .elencoCosti(quotation.id)
-      .then(setData)
+      .then((d) => {
+        if (!live) return;
+        setData(d);
+        onData?.(d);
+      })
       .catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
-  }, [quotation, onError]);
+    return () => {
+      live = false;
+    };
+  }, [quotation, onError, onData]);
 
-  const guard = async (fn: () => Promise<Quotation>): Promise<void> => {
+  const guard = async (fn: () => Promise<Quotation>): Promise<boolean> => {
     try {
       onQuotation(await fn());
+      return true;
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
+      return false;
     }
   };
 
   const addRow = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
-    await guard(() =>
+    const ok = await guard(() =>
       api.addRow(quotation.id, {
         position: draft.position,
         itemCode: draft.itemCode,
@@ -44,6 +68,7 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
         H: draft.H === '' ? null : Number(draft.H),
       }),
     );
+    if (!ok) return; // keep what the user typed so they can fix it
     setAdding(false);
     setDraft({ position: '', itemCode: '', description: '', unit: 'Pcs', quantity: '1', L: '', H: '' });
   };
@@ -52,7 +77,8 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
     setSuggestFor(itemId);
     setSuggestions(null);
     try {
-      setSuggestions(await api.suggestions(quotation.id, itemId, 6));
+      const hits = await api.suggestions(quotation.id, itemId, 6);
+      setSuggestions((cur) => (cur === null ? hits : cur));
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
       setSuggestFor(null);
@@ -65,71 +91,103 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
     setSuggestions(null);
   };
 
-  if (!data) return <section className="panel muted">Computing ELENCO COSTI…</section>;
+  const saveQuantity = (r: Row, raw: string): void => {
+    const v = Number(raw);
+    if (!(v > 0)) return onError('Quantity must be a positive number');
+    if (v !== r.quantity) void guard(() => api.updateItem(quotation.id, r.itemId, { quantity: v }));
+  };
+
+  if (!data) return <section className="q-ledger q-loading">Calculating costs…</section>;
 
   return (
-    <section className="panel sheet">
-      <h2>
-        ELENCO COSTI
-        <span className="muted small">
-          Offer n° {data.reference} · {quotation.customer} · {quotation.name}
-        </span>
-      </h2>
-      <table className="data elenco">
-        <thead>
-          <tr>
-            <th>Pos.</th>
-            <th>Item</th>
-            <th>DESCRIPTION</th>
-            <th>M.U.</th>
-            <th className="num">Q.ty</th>
-            <th className="num">L (mm)</th>
-            <th className="num">H (mm)</th>
-            <th className="num">m² unit</th>
-            <th className="num">m² total</th>
-            <th className="num">Unit Cost €</th>
-            <th className="num">Total Cost €</th>
-            <th>Detail sheet Ref.</th>
-            <th>Lotto</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {data.rows.map((r) => (
-            <tr key={r.itemId} data-testid={`row-${r.itemId}`}>
-              <td>{r.position}</td>
-              <td>{r.itemCode}</td>
-              <td style={{ minWidth: 220 }} title={r.description}>
-                {r.description.split(/\r?\n/)[0]}
-                {r.warnings.length > 0 && (
-                  <ul className="issues small" hidden>
-                    {r.warnings.map((w, i) => (
-                      <li key={i} className={r.unitCostSource === 'none' ? 'error' : 'warning'}>
-                        {w}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </td>
-              <td>{r.unit}</td>
-              <td className="num">{fmtNum(r.quantity, 3)}</td>
-              <td className="num">{fmtNum(r.L)}</td>
-              <td className="num">{fmtNum(r.H)}</td>
-              <td className="num">{fmtNum(r.m2Unit, 3)}</td>
-              <td className="num">{fmtNum(r.m2Total, 3)}</td>
-              <td className="num">
-                <div>{r.unitCost === null ? <span className="badge err">missing</span> : fmtMoney(r.unitCost)}</div>
-                <div className="small">
-                  <span className={sourceBadge(r.unitCostSource)} title={r.historicalUnitCost !== null ? `historical ${fmtMoney(r.historicalUnitCost)}` : ''}>
-                    {r.unitCostSource}
-                  </span>
+    <section className="q-ledger" aria-label="Line items">
+      <div className="q-ledger-head" role="row">
+        <span>Pos.</span>
+        <span>Product</span>
+        <span className="num">Quantity</span>
+        <span className="num">Unit cost</span>
+        <span className="num">Total</span>
+        <span />
+      </div>
+
+      {data.rows.length === 0 && (
+        <div className="q-empty">
+          <p>This quotation has no products yet.</p>
+          <p className="muted">Add products from the catalog, or type a line from the customer's bill of quantities below.</p>
+        </div>
+      )}
+
+      {data.rows.map((r) => {
+        const src = SOURCE[r.unitCostSource];
+        return (
+          <div key={r.itemId} className="q-line" data-testid={`row-${r.itemId}`}>
+            <div className="q-line-main">
+              <span className="q-pos">{r.position || '—'}</span>
+              <div className="q-product">
+                <span className="q-thumb" style={{ backgroundImage: `url(${imageOf(product(r))})` }} aria-hidden="true" />
+                <div className="q-product-text">
+                  <div className="q-title" title={r.description}>
+                    {firstLine(r.description)}
+                  </div>
+                  <div className="q-meta">
+                    <span>{typologyOf(product(r)).label}</span>
+                    {r.itemCode && <span>Item {r.itemCode}</span>}
+                    {r.L || r.H ? (
+                      <span>
+                        {fmtNum(r.L)} × {fmtNum(r.H)} mm
+                      </span>
+                    ) : null}
+                    {r.m2Total > 0 && <span>{fmtNum(r.m2Total, 2)} m²</span>}
+                    {r.lotto && <span>Lot {r.lotto}</span>}
+                  </div>
+                  <div className="q-ref">
+                    {r.tab ? (
+                      <>
+                        <span>
+                          Based on <b>{r.tab.offerNo ?? r.tab.workbook}</b>, sheet {r.tab.sheet}
+                        </span>
+                        <button className="q-link" onClick={() => void suggest(r.itemId)}>
+                          Change
+                        </button>
+                        <button className="q-link" onClick={() => void guard(() => api.detach(quotation.id, r.itemId))}>
+                          Detach
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="q-warn">{r.warnings.find((w) => /reference|attach/i.test(w)) ?? 'no reference analysis attached'}</span>
+                        <button className="q-attach" onClick={() => void suggest(r.itemId)}>
+                          Attach by similarity
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
+              </div>
+              <label className="q-qty">
                 <input
-                  className="narrow"
+                  type="number"
+                  step="any"
+                  min={0.001}
+                  defaultValue={r.quantity}
+                  key={`${r.itemId}-${r.quantity}`}
+                  aria-label={`quantity ${r.itemCode || r.line}`}
+                  onBlur={(e) => saveQuantity(r, e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                />
+                <span>{r.unit}</span>
+              </label>
+              <div className="q-unit num">
+                <div className={r.unitCost === null ? 'q-missing' : ''}>{r.unitCost === null ? 'No price' : fmtMoney(r.unitCost)}</div>
+                <span className={`q-source ${r.unitCostSource}`} title={r.historicalUnitCost !== null ? `${src.hint}. Historical: ${fmtMoney(r.historicalUnitCost)}` : src.hint}>
+                  {src.label}
+                </span>
+                <input
+                  className="q-override"
                   type="number"
                   step="any"
                   min={0}
-                  placeholder="override"
+                  placeholder="Set price"
                   aria-label={`override unit cost ${r.itemCode || r.line}`}
                   defaultValue={r.unitCostOverride ?? ''}
                   key={r.itemId + String(r.unitCostOverride)}
@@ -138,78 +196,58 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
                     if (v !== r.unitCostOverride) void guard(() => api.updateItem(quotation.id, r.itemId, { unitCostOverride: v }));
                   }}
                 />
-              </td>
-              <td className="num">{r.totalCost === null ? '—' : fmtMoney(r.totalCost)}</td>
-              <td className="small">
-                {r.tab ? (
-                  <>
-                    <span className="chip">{r.tab.offerNo ?? r.tab.workbook}</span> sheet <b>{r.tab.sheet}</b>
-                    <div>
-                      <button onClick={() => void suggest(r.itemId)} style={{ padding: '1px 6px' }}>
-                        change
-                      </button>{' '}
-                      <button onClick={() => void guard(() => api.detach(quotation.id, r.itemId))} style={{ padding: '1px 6px' }}>
-                        detach
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <button className="primary" onClick={() => void suggest(r.itemId)} style={{ padding: '2px 8px' }}>
-                    Attach by similarity
+              </div>
+              <div className="q-total num">{r.totalCost === null ? '—' : fmtMoney(r.totalCost)}</div>
+              <button className="q-remove" onClick={() => void guard(() => api.removeItem(quotation.id, r.itemId))} title="Remove this line" aria-label={`remove ${r.itemCode || r.line}`}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                  <path d="M4 7h16 M10 11v6 M14 11v6 M6 7l1 13h10l1-13 M9 7V4h6v3" />
+                </svg>
+              </button>
+            </div>
+
+            {suggestFor === r.itemId && (
+              <div className="q-suggest">
+                <div className="q-suggest-head">
+                  <span>Closest historical analyses for this line</span>
+                  <button className="q-link" onClick={() => setSuggestFor(null)}>
+                    Close
                   </button>
-                )}
-                {suggestFor === r.itemId && (
-                  <div className="suggestions">
-                    {suggestions === null && <span className="muted">searching similar analyses…</span>}
-                    {suggestions?.length === 0 && <span className="muted">no similar analysis found</span>}
-                    {suggestions?.map((h) => (
-                      <button key={h.record.id} onClick={() => void attach(r.itemId, h.record.id)} title={h.record.description ?? ''}>
-                        {Math.round(h.score * 100)}% · {h.record.title} <span className="muted">· {h.record.offerNo ?? h.record.workbook} sheet {h.record.sheet} · {fmtMoney(h.record.unitCost)}</span>
-                      </button>
-                    ))}
-                    <button onClick={() => setSuggestFor(null)} style={{ padding: '1px 6px' }}>
-                      close
+                </div>
+                {suggestions === null && <span className="muted">Searching…</span>}
+                {suggestions?.length === 0 && <span className="muted">No similar analysis found. Enter a price instead.</span>}
+                <div className="q-suggest-list">
+                  {suggestions?.map((h) => (
+                    <button key={h.record.id} onClick={() => void attach(r.itemId, h.record.id)} title={h.record.description ?? ''}>
+                      {Math.round(h.score * 100)}% · {h.record.title}
+                      <span className="muted">
+                        {' '}
+                        {h.record.offerNo ?? h.record.workbook}, sheet {h.record.sheet} · {fmtMoney(h.record.unitCost)}
+                      </span>
                     </button>
-                  </div>
-                )}
-              </td>
-              <td>{r.lotto ?? ''}</td>
-              <td>
-                <button className="danger" onClick={() => void guard(() => api.removeItem(quotation.id, r.itemId))} title="remove row">
-                  ×
-                </button>
-              </td>
-            </tr>
-          ))}
-          <tr className="total">
-            <td colSpan={8}>TOTAL COST</td>
-            <td className="num">{fmtNum(data.totals.m2Total, 2)} m²</td>
-            <td />
-            <td className="num">
-              <b>{fmtMoney(data.totals.totalCost)}</b>
-              {!data.totals.complete && <div className="small" style={{ color: 'var(--err)' }}>{data.totals.rowsWithoutCost} row(s) without unit cost</div>}
-            </td>
-            <td colSpan={3} />
-          </tr>
-        </tbody>
-      </table>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
 
       {adding ? (
-        <form className="grid2" onSubmit={(e) => void addRow(e)} style={{ marginTop: 10 }} aria-label="new row">
+        <form className="q-boq" onSubmit={(e) => void addRow(e)} aria-label="new row">
           <label className="field">
             Pos.<input value={draft.position} onChange={(e) => setDraft({ ...draft, position: e.target.value })} placeholder="04" />
           </label>
           <label className="field">
             Item<input value={draft.itemCode} onChange={(e) => setDraft({ ...draft, itemCode: e.target.value })} placeholder="04-01" />
           </label>
-          <label className="field" style={{ gridColumn: '1 / span 2' }}>
+          <label className="field q-boq-desc">
             Description *<textarea required value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Glass balustrade on aluminium balcony, H 1130 mm" />
           </label>
           <label className="field">
-            M.U.<input value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} />
+            Unit<input value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} />
           </label>
           <label className="field">
-            Q.ty *<input type="number" step="any" min={0.001} required value={draft.quantity} onChange={(e) => setDraft({ ...draft, quantity: e.target.value })} />
+            Quantity *<input type="number" step="any" min={0.001} required value={draft.quantity} onChange={(e) => setDraft({ ...draft, quantity: e.target.value })} />
           </label>
           <label className="field">
             L (mm)<input type="number" step="any" value={draft.L} onChange={(e) => setDraft({ ...draft, L: e.target.value })} />
@@ -217,9 +255,9 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
           <label className="field">
             H (mm)<input type="number" step="any" value={draft.H} onChange={(e) => setDraft({ ...draft, H: e.target.value })} />
           </label>
-          <div className="row">
+          <div className="q-boq-actions">
             <button className="primary" type="submit">
-              Add row
+              Add line
             </button>
             <button type="button" onClick={() => setAdding(false)}>
               Cancel
@@ -227,45 +265,52 @@ export function ElencoCosti({ quotation, onQuotation, onError }: Props) {
           </div>
         </form>
       ) : (
-        <div className="row" style={{ marginTop: 10 }}>
-          <button onClick={() => setAdding(true)}>+ Add row from BOQ</button>
-          <span className="muted small">Type the customer's line; then attach the most similar historical analysis to get its unit cost.</span>
-        </div>
+        <button className="q-add-line" onClick={() => setAdding(true)}>
+          <span aria-hidden="true">＋</span> Add a line from the customer's bill of quantities
+        </button>
       )}
 
-      <h3>Summary by position</h3>
-      <table className="data">
-        <thead>
-          <tr>
-            <th>POS</th>
-            <th className="num">rows</th>
-            <th className="num">m²</th>
-            <th className="num">Unit Cost €/m²</th>
-            <th className="num">Total Cost €</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.summary.map((s) => (
-            <tr key={s.position}>
-              <td>{s.position}</td>
-              <td className="num">{s.rows}</td>
-              <td className="num">{fmtNum(s.m2Total, 2)}</td>
-              <td className="num">{s.unitCost === null ? '—' : fmtMoney(s.unitCost)}</td>
-              <td className="num">{fmtMoney(s.totalCost)}</td>
+      <div className="q-foot">
+        <span>TOTAL COST</span>
+        <span className="muted">{fmtNum(data.totals.m2Total, 2)} m²</span>
+        <span className="q-foot-total">
+          <b>{fmtMoney(data.totals.totalCost)}</b>
+          {!data.totals.complete && <small>{data.totals.rowsWithoutCost} row(s) without unit cost</small>}
+        </span>
+      </div>
+
+      <details className="q-details">
+        <summary>Totals by position and sheet formulas</summary>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Position</th>
+              <th className="num">Lines</th>
+              <th className="num">m²</th>
+              <th className="num">Cost per m²</th>
+              <th className="num">Total</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <details className="small muted" style={{ marginTop: 8 }}>
-        <summary>Formulas (as in the sheet)</summary>
-        <ul>
+          </thead>
+          <tbody>
+            {data.summary.map((s) => (
+              <tr key={s.position}>
+                <td>{s.position}</td>
+                <td className="num">{s.rows}</td>
+                <td className="num">{fmtNum(s.m2Total, 2)}</td>
+                <td className="num">{s.unitCost === null ? '—' : fmtMoney(s.unitCost)}</td>
+                <td className="num">{fmtMoney(s.totalCost)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <ul className="small muted">
           {Object.entries(data.formulas).map(([k, v]) => (
             <li key={k}>
               <b>{k}</b>: <code>{v}</code>
             </li>
           ))}
         </ul>
-        <p>{data.note}</p>
+        <p className="small muted">{data.note}</p>
       </details>
     </section>
   );
