@@ -81,7 +81,7 @@ export default function App() {
     [loadQuotations],
   );
 
-  const addTo = async (quotationId: string, record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>, custom?: { L: number | null; H: number | null; description: string }): Promise<boolean> => {
+  const addTo = async (quotationId: string, record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>, custom?: { L: number | null; H: number | null; description: string; lotto?: string; notes?: string }): Promise<boolean> => {
     try {
       let p = await api.addItem(quotationId, { catalogId: record.id, quantity });
       const added = p.items[p.items.length - 1];
@@ -92,6 +92,8 @@ export default function App() {
         ...(custom && custom.L !== added.L ? { L: custom.L } : {}),
         ...(custom && custom.H !== added.H ? { H: custom.H } : {}),
         ...(custom && custom.description.trim() && custom.description !== added.description ? { description: custom.description } : {}),
+        ...(custom?.lotto !== undefined && custom.lotto !== (added.lotto ?? '') ? { lotto: custom.lotto || null } : {}),
+        ...(custom?.notes ? { notes: custom.notes } : {}),
       };
       if (Object.keys(patch).length) p = await api.updateItem(p.id, added.id, patch);
       onQuotation(p);
