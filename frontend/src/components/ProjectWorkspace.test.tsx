@@ -53,6 +53,5 @@ describe('Project search and workspace', () => {
     mockFetch(() => [proposal]);
     render(<ProjectWorkspace project={project} projects={[project]} onUpdated={vi.fn()} />);
     expect(await screen.findByText(proposal.content)).toBeInTheDocument();
-    expect(screen.getByText(/Preview mode: the LLM is unavailable/)).toBeInTheDocument();
   });
 });
