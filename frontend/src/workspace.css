@@ -136,7 +136,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .hero-inner { padding: 40px; }
 .hero h1 { font-size: 32px; line-height: 1.2; letter-spacing: -.03em; max-width: 670px; }
 .hero .eyebrow { color: #b0d6cd; }
-.pgrid { gap: 20px; }
+.pgrid { gap: 24px; }
 .pcard { border-color: var(--line); border-radius: 13px; box-shadow: var(--shadow); }
 .pcard:hover { box-shadow: 0 8px 24px #244c4b12; transform: translateY(-2px); }
 .pbody { padding: 18px; gap: 9px; }
