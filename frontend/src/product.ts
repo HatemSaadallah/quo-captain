@@ -62,7 +62,23 @@ export function materialsOf(r: CatalogRecord): string[] {
   return MATERIALS.filter((m) => m.test.test(text)).map((m) => m.label);
 }
 
+/** Products with their own picture (uploaded or chosen); loaded at sign-in. */
+let customImages: Record<string, string> = {};
+export const setCustomImages = (m: Record<string, string>): void => {
+  customImages = m;
+};
+
+/** Library photos that fit a description, best typology first: offered when a new product has no image. */
+export function suggestImages(text: string): string[] {
+  const t = typologyOf({ title: text, categoryName: null, description: text }).key;
+  const set = IMAGE_SET[t] ?? t;
+  const own = Array.from({ length: IMAGE_COUNT[set] ?? 1 }, (_, i) => `/products/${set}-${i + 1}.jpg`);
+  const others = Object.entries(IMAGE_COUNT).filter(([k]) => k !== set && k !== 'cleaning' && k !== 'piping').map(([k]) => `/products/${k}-1.jpg`);
+  return [...own, ...others].slice(0, 8);
+}
+
 export function imageOf(r: Pick<CatalogRecord, "id" | "title" | "categoryName" | "description">): string {
+  if (customImages[r.id]) return customImages[r.id];
   const t = typologyOf(r).key;
   const set = IMAGE_SET[t] ?? t;
   return `/products/${set}-${(hash(r.id) % (IMAGE_COUNT[set] ?? 1)) + 1}.jpg`;

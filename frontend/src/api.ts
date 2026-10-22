@@ -88,20 +88,32 @@ export const api = {
 
   facets: (): Promise<CatalogFacets> => request('/api/catalog/facets'),
   outputs: (): Promise<Array<{ folder: string; file: string; size: number; modifiedAt: string }>> => request('/api/outputs'),
+  /** Stage 1: upload and review (nothing saved). */
+  previewImport: async (file: File): Promise<ImportPreview> => {
+    const form = new FormData();
+    form.append('file', file);
+    const token = getToken();
+    const res = await fetch('/api/imports/preview', { method: 'POST', body: form, headers: token ? { authorization: `Bearer ${token}` } : {} });
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    if (!res.ok) throw new Error(body.message ?? `Upload failed (${res.status})`);
+    return body as ImportPreview;
+  },
+  commitImport: (token: string, header: ImportPreview['header']): Promise<ImportResult> => request(`/api/imports/${encodeURIComponent(token)}/commit`, { method: 'POST', ...json(header) }),
+  rejectImport: (token: string): Promise<{ ok: true }> => request(`/api/imports/${encodeURIComponent(token)}/reject`, { method: 'POST' }),
   /** Upload an Analisi workbook; the backend creates the project and a draft quotation. */
-  importWorkbook: async (file: File): Promise<{ quotationId: string; projectId: string; reference: string; name: string; customer: string; lines: number; linkedToCatalog: number; totalEstimatedCost: number }> => {
+  importWorkbook: async (file: File): Promise<ImportResult> => {
     const form = new FormData();
     form.append('file', file);
     const token = getToken();
     const res = await fetch('/api/imports', { method: 'POST', body: form, headers: token ? { authorization: `Bearer ${token}` } : {} });
     const body = (await res.json().catch(() => ({}))) as { message?: string };
     if (!res.ok) throw new Error(body.message ?? `Import failed (${res.status})`);
-    return body as Awaited<ReturnType<typeof api.importWorkbook>>;
+    return body as ImportResult;
   },
   sendEmail: (dto: { quotationId: string; to: string[]; subject: string; body: string; attachPdf: boolean }): Promise<{ id: string; to: string[] }> => request('/api/emails', { method: 'POST', ...json(dto) }),
   previewProduct: (id: string, spec: { quantity: number; L: number | null; H: number | null; description: string; params: Array<{ cell: string; value: number | string | null }> }): Promise<{ unitCost: number | null; historicalUnitCost: number | null; totalCost: number | null; computed: boolean; m2Unit: number | null }> =>
     request(`/api/catalog/${encodeURIComponent(id)}/preview`, { method: 'POST', ...json(spec) }),
-  assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string; queries?: string[]; cached?: boolean; data?: { columns: string[]; rows: Array<Record<string, string | number | null>>; query: string; chart: 'bar' | 'line' | 'pie' | 'histogram' | null } | null }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
+  assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string; queries?: string[]; cached?: boolean; actions?: Array<{ type: 'project' | 'quotation'; id: string; label: string }>; data?: { columns: string[]; rows: Array<Record<string, string | number | null>>; query: string; chart: 'bar' | 'line' | 'pie' | 'histogram' | null } | null }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
   customProducts: (): Promise<CatalogRecord[]> => request('/api/catalog/custom'),
   createCatalogProduct: (dto: CreateCatalogProductDto): Promise<CatalogRecord> => request('/api/catalog', { method: 'POST', ...json(dto) }),
   search: (q: string, opts: { workbook?: string; category?: string; limit?: number } = {}): Promise<SearchResult> => {
@@ -115,6 +127,19 @@ export const api = {
 
   projects: (): Promise<Project[]> => request('/api/projects'),
   dashboard: (filters: { from?: string; to?: string; customerId?: string; status?: string }): Promise<DashboardData> => request(`/api/dashboard?${new URLSearchParams(Object.entries(filters).filter(([, value]) => Boolean(value)) as Array<[string, string]>).toString()}`),
+  catalogImages: (): Promise<Record<string, string>> => request('/api/catalog/images'),
+  setProductImage: async (id: string, image: { file?: File; preset?: string }): Promise<void> => {
+    const token = getToken();
+    const auth: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
+    let res: Response;
+    if (image.file) {
+      const form = new FormData();
+      form.append('file', image.file);
+      res = await fetch(`/api/catalog/${encodeURIComponent(id)}/image`, { method: 'POST', body: form, headers: auth });
+    } else res = await fetch(`/api/catalog/${encodeURIComponent(id)}/image`, { method: 'POST', body: JSON.stringify({ preset: image.preset }), headers: { ...auth, 'content-type': 'application/json' } });
+    if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Image upload failed (${res.status})`);
+  },
+  searchCustomers: (query: string): Promise<{ reply: string; customers: string[]; mode: 'llm' | 'preview' }> => request('/api/customers/search', { method: 'POST', ...json({ query }) }),
   searchProjects: (query: string): Promise<ProjectSearchResult> => request('/api/projects/search', { method: 'POST', ...json({ query }) }),
   projectMessages: (id: string): Promise<ProjectMessage[]> => request(`/api/projects/${enc(id)}/messages`),
   projectChat: (id: string, message: string): Promise<ProjectMessage[]> => request(`/api/projects/${enc(id)}/messages`, { method: 'POST', ...json({ message }) }),
@@ -164,6 +189,17 @@ export const api = {
     saveBlob(await res.blob(), relativeFile.split('/').pop() ?? 'download');
   },
 };
+
+export interface ImportResult { quotationId: string; projectId: string; reference: string; name: string; customer: string; lines: number; linkedToCatalog: number; totalEstimatedCost: number }
+
+export interface ImportPreview {
+  token: string;
+  fileName: string;
+  header: { reference: string; name: string; customer: string; date: string; estimator: string };
+  counts: { ready: number; match: number; review: number };
+  totalEstimatedCost: number;
+  lines: Array<{ row: number; position: string | null; itemCode: string | null; title: string; unit: string | null; quantity: number; unitCost: number | null; status: 'ready' | 'match' | 'review'; reason: string }>;
+}
 
 export function saveBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);

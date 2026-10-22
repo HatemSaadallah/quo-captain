@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { api } from '../api';
+import { api, fmtMoney } from '../api';
 import { navigate } from '../route';
 import { CONTACTS } from './ContactsPage';
 import { InsightChart, type ChartData } from './InsightChart';
 import '../insights.css';
 
-type Message = { role: 'user' | 'assistant'; content: string; error?: boolean; queries?: string[]; data?: ChartData | null; cached?: boolean };
+type Action = { type: 'project' | 'quotation'; id: string; label: string };
+type Message = { role: 'user' | 'assistant'; content: string; error?: boolean; queries?: string[]; data?: ChartData | null; cached?: boolean; actions?: Action[]; file?: string };
 type Tab = { id: number; title: string; messages: Message[] };
 
 const STORE = 'somec.insights.tabs';
@@ -81,11 +82,13 @@ function Markdown({ text }: { text: string }) {
   return <>{out}</>;
 }
 
-export function InsightsPage({ initial }: { initial?: string }) {
+export function InsightsPage({ initial, onCreated }: { initial?: string; onCreated?: () => void }) {
   const [tabs, setTabs] = useState<Tab[]>(load);
   const [activeId, setActiveId] = useState<number>(() => load()[0].id);
   const [draft, setDraft] = useState('');
   const [busyTab, setBusyTab] = useState<number | null>(null);
+  const [attached, setAttached] = useState<{ name: string; text: string } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const handled = useRef<string | null>(null);
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
@@ -126,14 +129,17 @@ export function InsightsPage({ initial }: { initial?: string }) {
     const question = text.trim();
     if (!question || busyTab !== null) return;
     const before = tabs.find((t) => t.id === tabId)?.messages ?? [];
-    const thread = [...before, { role: 'user' as const, content: question }];
+    const file = attached;
+    setAttached(null);
+    const thread: Message[] = [...before, { role: 'user' as const, content: file ? `${question}\n\n[Attached file: ${file.name}]\n${file.text}` : question, file: file?.name }];
     setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: thread, title: t.messages.length ? t.title : question.slice(0, 40) } : t)));
     setDraft('');
     setBusyTab(tabId);
     try {
       const send = thread.filter((m) => !m.error).slice(-HISTORY).map(({ role, content }) => ({ role, content }));
-      const { reply, queries, data, cached } = await api.assistantChat(send, CONTACTS);
-      setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: [...thread, { role: 'assistant', content: reply, queries, data, cached }] } : t)));
+      const { reply, queries, data, cached, actions } = await api.assistantChat(send, CONTACTS);
+      if (actions?.length) onCreated?.();
+      setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: [...thread, { role: 'assistant', content: reply, queries, data, cached, actions }] } : t)));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: [...thread, { role: 'assistant', content: `${msg} Try again in a minute, or ask a narrower question.`, error: true }] } : t)));
@@ -151,6 +157,31 @@ export function InsightsPage({ initial }: { initial?: string }) {
     navigate({ page: 'insights' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
+
+  /** Attach a file: Analisi workbooks are imported; text files go to the assistant as context. */
+  const onFile = async (f: File | undefined): Promise<void> => {
+    if (!f) return;
+    const tabId = active?.id ?? activeId;
+    const say = (content: string, extra: Partial<Message> = {}): void =>
+      setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: [...t.messages, { role: 'user', content: `Attached ${f.name}`, file: f.name }, { role: 'assistant', content, ...extra }] } : t)));
+    if (/\.xlsx$/i.test(f.name)) {
+      setBusyTab(tabId);
+      try {
+        const r = await api.importWorkbook(f);
+        onCreated?.();
+        say(`**${r.reference} imported** from ${f.name}: ${r.lines} lines (${r.linkedToCatalog} linked to historical analyses), estimated cost ${fmtMoney(r.totalEstimatedCost)}, customer ${r.customer}. Ask me about it or open the draft.`, { actions: [{ type: 'quotation', id: r.quotationId, label: `Open draft ${r.reference}` }] });
+      } catch (e) {
+        say(`${e instanceof Error ? e.message : String(e)}`, { error: true });
+      } finally {
+        setBusyTab(null);
+      }
+    } else if (/\.(txt|csv|md|json|tsv)$/i.test(f.name) || f.type.startsWith('text/')) {
+      const text = (await f.text()).slice(0, 6000); // keep the prompt small
+      setAttached({ name: f.name, text });
+    } else {
+      say(`I can't read ${f.name} yet. Attach an Analisi workbook (.xlsx) to import it, or a text/CSV file to use as context.`, { error: true });
+    }
+  };
 
   const busy = busyTab === active?.id;
 
@@ -196,7 +227,17 @@ export function InsightsPage({ initial }: { initial?: string }) {
         )}
         {active?.messages.map((m, i) => (
           <div key={i} className={`in-msg ${m.role} ${m.error ? 'error' : ''}`}>
-            {m.role === 'assistant' ? <Markdown text={m.content} /> : <p>{m.content}</p>}
+            {m.role === 'assistant' ? <Markdown text={m.content} /> : <p>{m.file ? m.content.split('\n\n[Attached file:')[0] : m.content}</p>}
+            {m.file && m.role === 'user' && <span className="in-file">📎 {m.file}</span>}
+            {m.actions && m.actions.length > 0 && (
+              <div className="in-actions">
+                {m.actions.map((a) => (
+                  <button key={a.id} className="primary" onClick={() => navigate(a.type === 'quotation' ? { page: 'quotation', id: a.id, tab: 'elenco' } : { page: 'projects', id: a.id })}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {m.data && <InsightChart data={m.data} />}
             {m.queries && m.queries.length > 0 && (
               <details className="in-queries">
@@ -229,6 +270,18 @@ export function InsightsPage({ initial }: { initial?: string }) {
           void ask(draft);
         }}
       >
+        <input ref={fileInput} type="file" hidden accept=".xlsx,.csv,.txt,.md,.json,.tsv,.pdf,image/*" onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ''; }} />
+        <button type="button" className="in-attach" onClick={() => fileInput.current?.click()} aria-label="Attach a file" title="Attach a file (Analisi .xlsx to import, or text/CSV as context)">
+          📎
+        </button>
+        {attached && (
+          <span className="in-attached">
+            {attached.name}
+            <button type="button" aria-label="Remove attachment" onClick={() => setAttached(null)}>
+              ×
+            </button>
+          </span>
+        )}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
