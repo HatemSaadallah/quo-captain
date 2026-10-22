@@ -28,9 +28,15 @@ export function Login({ onLogin }: Props) {
   return (
     <main className="login">
       <form className="panel stack" onSubmit={(e) => void submit(e)} aria-label="login form">
-        <img src="/somec-logo.svg" alt="Somec Group" className="login-logo" />
+        <div className="login-brand">
+          <img src="/quo-captain.svg" alt="" className="login-mark" />
+          <div>
+            <strong>Quo-Captain</strong>
+            <span>by <img src="/somec-logo.svg" alt="Somec Group" className="login-logo" /></span>
+          </div>
+        </div>
         <h2>Sign in</h2>
-        <p className="muted small">Somec quotation cost-analysis workspace. Demo account: estimator@somec.local / somec2026.</p>
+        <p className="muted small">Quotation cost analysis for Somec's cruise-ship glazing and flooring. Demo account: estimator@somec.local / somec2026.</p>
         <label className="field">
           Email
           <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
