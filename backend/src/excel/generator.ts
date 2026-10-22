@@ -105,10 +105,8 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
   const free = freeItemRows(tpl.sheetNames, ec);
   if (quotation.items.length > free.length) throw new Error(`Template has ${free.length} free item rows, cart has ${quotation.items.length}`);
   const planned: PlannedItem[] = quotation.items.map((item, i) => ({ item, row: free[i], sheet: String(free[i]), boqRow: BOQ.firstRow + i, paramsWritten: [], warnings: [] }));
-  for (const p of planned) {
-    if (!p.item.catalogId || !p.item.sourceWorkbook) throw new Error(`Item ${p.item.itemCode} has no reference analysis attached, there is no source analysis sheet to copy`);
-    if (!p.item.sourceSheet) throw new Error(`Item ${p.item.itemCode} has no source analysis sheet`);
-  }
+  // Lines without a reference analysis (e.g. labour, transport) are exported as priced rows with no analysis sheet.
+  const isFree = (it: PlannedItem['item']): boolean => !it.catalogId || !it.sourceWorkbook || !it.sourceSheet;
 
   // --- 1. quotation header
   await ed.setCells(SHEETS.datiGen, {
@@ -152,8 +150,51 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
     [SHEETS.mdo]: colRange('A', 'U'),
   };
 
+  /** ELENCO COSTI row (== sheet name) and its BOQ row: quantity input lives in BOQ, like the historical workbooks. */
+  const writeLine = async (p: PlannedItem): Promise<void> => {
+    const { item, row, boqRow } = p;
+      await ed.setCells(SHEETS.elencoCosti, {
+        [c.pos + row]: { v: item.position },
+        [c.item + row]: { v: item.itemCode },
+        [c.description + row]: { v: item.description },
+        [c.unit + row]: { v: item.unit },
+        [c.qty + row]: { f: `${SHEETS.boq}!I${boqRow}` },
+        [c.L + row]: { v: item.L },
+        [c.H + row]: { v: item.H },
+        [c.lotto + row]: { v: item.lotto },
+      });
+      for (const [col, f] of ecRowTemplate) {
+        if (!ec.cells.get(col + row)?.f) await ed.setCell(SHEETS.elencoCosti, col + row, { f: shiftFormula(f, row - EC.firstRow, 0) });
+      }
+
+      // BOQ row: quantity input lives here, exactly like the historical workbooks
+      const b = BOQ.cols;
+      await ed.setCells(SHEETS.boq, {
+        [b.pos + boqRow]: { v: item.position },
+        [b.item + boqRow]: { v: item.itemCode },
+        [b.description + boqRow]: {
+          f: boqDescFormula
+            ? shiftFormula(boqDescFormula, boqRow - BOQ.firstRow, 0)
+            : `IFERROR(LEFT(VLOOKUP(B${boqRow},'ELENCO COSTI'!$B$5:$C$400,2,FALSE),SEARCH(CHAR(10),VLOOKUP(B${boqRow},'ELENCO COSTI'!$B$5:$C$400,2,FALSE))),LEFT(VLOOKUP(B${boqRow},'ELENCO COSTI'!$B$5:$C$400,2,FALSE),50))`,
+        },
+        [b.L + boqRow]: { v: item.L },
+        [b.H + boqRow]: { v: item.H },
+        [b.m2Unit + boqRow]: { f: `$F${boqRow}*$G${boqRow}/1000000` },
+        [b.pcs + boqRow]: { v: item.quantity },
+        [b.length + boqRow]: { f: `F${boqRow}*$I${boqRow}/1000` },
+        [b.surface + boqRow]: { f: `H${boqRow}*$I${boqRow}` },
+      });
+
+  };
+
   for (const p of planned) {
-    const { item, row, sheet, boqRow } = p;
+    const { item, row, sheet } = p;
+    if (isFree(item)) {
+      await writeLine(p);
+      await ed.setCell(SHEETS.elencoCosti, c.unitCost + row, { v: item.unitCostOverride ?? 0 });
+      p.warnings.push(item.unitCostOverride === null ? 'no analysis sheet and no price: exported with unit cost 0' : 'priced line without analysis sheet (manual unit cost)');
+      continue;
+    }
     const sourceWorkbook = item.sourceWorkbook ?? quotation.templateWorkbook;
     let src: JSZip;
     if (sourceWorkbook === quotation.templateWorkbook) src = ed.zip;
@@ -180,38 +221,7 @@ export async function generateWorkbook(input: GenerationInput): Promise<Generati
       p.paramsWritten.push({ cell: prm.cell, value: prm.value });
     }
 
-    // ELENCO COSTI row (== sheet name)
-    await ed.setCells(SHEETS.elencoCosti, {
-      [c.pos + row]: { v: item.position },
-      [c.item + row]: { v: item.itemCode },
-      [c.description + row]: { v: item.description },
-      [c.unit + row]: { v: item.unit },
-      [c.qty + row]: { f: `${SHEETS.boq}!I${boqRow}` },
-      [c.L + row]: { v: item.L },
-      [c.H + row]: { v: item.H },
-      [c.lotto + row]: { v: item.lotto },
-    });
-    for (const [col, f] of ecRowTemplate) {
-      if (!ec.cells.get(col + row)?.f) await ed.setCell(SHEETS.elencoCosti, col + row, { f: shiftFormula(f, row - EC.firstRow, 0) });
-    }
-
-    // BOQ row: quantity input lives here, exactly like the historical workbooks
-    const b = BOQ.cols;
-    await ed.setCells(SHEETS.boq, {
-      [b.pos + boqRow]: { v: item.position },
-      [b.item + boqRow]: { v: item.itemCode },
-      [b.description + boqRow]: {
-        f: boqDescFormula
-          ? shiftFormula(boqDescFormula, boqRow - BOQ.firstRow, 0)
-          : `IFERROR(LEFT(VLOOKUP(B${boqRow},'ELENCO COSTI'!$B$5:$C$400,2,FALSE),SEARCH(CHAR(10),VLOOKUP(B${boqRow},'ELENCO COSTI'!$B$5:$C$400,2,FALSE))),LEFT(VLOOKUP(B${boqRow},'ELENCO COSTI'!$B$5:$C$400,2,FALSE),50))`,
-      },
-      [b.L + boqRow]: { v: item.L },
-      [b.H + boqRow]: { v: item.H },
-      [b.m2Unit + boqRow]: { f: `$F${boqRow}*$G${boqRow}/1000000` },
-      [b.pcs + boqRow]: { v: item.quantity },
-      [b.length + boqRow]: { f: `F${boqRow}*$I${boqRow}/1000` },
-      [b.surface + boqRow]: { f: `H${boqRow}*$I${boqRow}` },
-    });
+    await writeLine(p);
 
     // aggregation rows: the workbook's own INDIRECT template formulas, shifted to this row
     for (const [sheetName, cols] of Object.entries(aggCols)) await writeTemplateFormulas(ed, tpl, sheetName, cols, row);

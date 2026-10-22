@@ -83,7 +83,7 @@ export function QuotationList({ quotations, cartId, status, onDelete }: Props) {
           </div>
         </div>
         <button className="primary" onClick={() => navigate({ page: 'quotations' })}>
-          🛒 Open Draft Quotations
+          Open draft workspace
         </button>
       </div>
 

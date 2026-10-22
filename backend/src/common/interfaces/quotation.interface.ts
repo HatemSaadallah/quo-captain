@@ -197,4 +197,6 @@ export interface ElencoCosti {
   summary: ElencoCostiSummaryRow[];
   formulas: Record<string, string>;
   note: string;
+  /** Labour and transport taken out of product lines (they are quoted as separate lines). */
+  separate?: { labour: number; transport: number; hasLabourLine: boolean; hasTransportLine: boolean };
 }

@@ -16,8 +16,11 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [added, setAdded] = useState(false);
-  const drafts = quotations.filter((q) => q.status === 'draft');
-  const finished = quotations.filter((q) => q.status === 'active');
+  const [query, setQuery] = useState('');
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (q: Quotation): boolean => !words.length || words.every((w) => `${q.reference} ${q.name} ${q.customer} ${q.projectName ?? ''}`.toLowerCase().includes(w));
+  const drafts = quotations.filter((q) => q.status === 'draft' && matches(q));
+  const finished = quotations.filter((q) => q.status === 'active' && matches(q));
 
   const add = async (quotationId: string): Promise<void> => {
     setBusy(true);
@@ -44,9 +47,13 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
           <section className="panel add-quotation-modal" role="dialog" aria-modal="true" aria-labelledby="add-product-title">
             <h2 id="add-product-title">Add to a quotation</h2>
             <p className="small muted">Choose where to add <strong>{record.title ?? record.itemCode ?? 'this product'}</strong>.</p>
-            {drafts.length > 0 && <div className="quotation-choice-group"><h3>Draft quotations</h3>{drafts.map((q) => <button type="button" className="quotation-choice" key={q.id} disabled={busy} onClick={() => void add(q.id)}><span><strong>{q.reference}</strong><small>{q.name}</small></span><span aria-hidden="true">→</span></button>)}</div>}
-            {finished.length > 0 && <div className="quotation-choice-group"><h3>Finished quotations</h3>{finished.map((q) => <button type="button" className="quotation-choice" key={q.id} disabled={busy} onClick={() => void add(q.id)}><span><strong>{q.reference}</strong><small>{q.name}</small></span><span aria-hidden="true">→</span></button>)}</div>}
-            <button type="button" className="create-quotation-choice" onClick={() => { setOpen(false); setCreating(true); }}>＋ Create a new draft quotation</button>
+            <button type="button" className="create-quotation-choice top" onClick={() => { setOpen(false); setCreating(true); }}>＋ Create a new draft quotation with this product</button>
+            <input className="quotation-search" type="search" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search quotations by reference, name or customer…" aria-label="Search quotations" />
+            <div className="quotation-choice-scroll">
+              {drafts.length > 0 && <div className="quotation-choice-group"><h3>Draft quotations</h3>{drafts.map((q) => <button type="button" className="quotation-choice" key={q.id} disabled={busy} onClick={() => void add(q.id)}><span><strong>{q.reference}</strong><small>{q.name}{q.customer ? ` · ${q.customer}` : ''}</small></span><span aria-hidden="true">→</span></button>)}</div>}
+              {finished.length > 0 && <div className="quotation-choice-group"><h3>Finished quotations</h3>{finished.map((q) => <button type="button" className="quotation-choice" key={q.id} disabled={busy} onClick={() => void add(q.id)}><span><strong>{q.reference}</strong><small>{q.name}{q.customer ? ` · ${q.customer}` : ''}</small></span><span aria-hidden="true">→</span></button>)}</div>}
+              {!drafts.length && !finished.length && <p className="small muted">No quotation matches “{query}”. Create a new draft instead.</p>}
+            </div>
             <div className="row modal-actions"><button type="button" onClick={() => setOpen(false)}>Cancel</button></div>
           </section>
         </div>
@@ -62,7 +69,13 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
               onError={onError}
               onSaved={async (quotation) => {
                 setCreating(false);
-                await onAdd(record, quotation.id);
+                setBusy(true);
+                const ok = await onAdd(record, quotation.id); // the product goes straight into the new draft
+                setBusy(false);
+                if (ok) {
+                  setAdded(true);
+                  window.setTimeout(() => setAdded(false), 1600);
+                }
               }}
               submitLabel="Create draft & add product"
             />

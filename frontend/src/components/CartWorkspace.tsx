@@ -19,7 +19,7 @@ interface Props {
 /** Several draft quotations ("carts") open side by side, one per project; the selected one receives catalog adds. */
 export function CartWorkspace({ drafts, current, facets, estimator, onError, onSelect, onDelete, onCreated, children }: Props) {
   const [open, setCreating] = useState(false);
-  const creating = open || drafts.length === 0;
+  const creating = open;
 
   return (
     <div className="q-workspace">
@@ -52,11 +52,18 @@ export function CartWorkspace({ drafts, current, facets, estimator, onError, onS
       </div>
 
       {creating && (
-        <div className="modal-backdrop" role="presentation">
+        <div className="modal-backdrop" role="presentation" onClick={(e) => e.target === e.currentTarget && setCreating(false)} onKeyDown={(e) => e.key === 'Escape' && setCreating(false)}>
           <section className="panel add-quotation-modal" role="dialog" aria-modal="true" aria-labelledby="workspace-new-draft-title">
-            <h2 id="workspace-new-draft-title">New draft quotation</h2>
+            <div className="modal-title-row">
+              <h2 id="workspace-new-draft-title">New draft quotation</h2>
+              <button type="button" className="modal-close" aria-label="Close" onClick={() => setCreating(false)}>
+                ×
+              </button>
+            </div>
             <QuotationForm facets={facets} estimator={estimator} onError={onError} onSaved={(quotation) => { onCreated(quotation); setCreating(false); }} submitLabel="Create draft quotation" />
-            {drafts.length > 0 && <button type="button" onClick={() => setCreating(false)}>Cancel</button>}
+            <button type="button" onClick={() => setCreating(false)}>
+              Cancel
+            </button>
           </section>
         </div>
       )}
@@ -65,11 +72,15 @@ export function CartWorkspace({ drafts, current, facets, estimator, onError, onS
         children
       ) : (
         <section className="panel empty-cart">
-          <h2>No draft quotation selected</h2>
-          <p className="muted">Create a draft quotation with its basic details, then add products from the catalog.</p>
-          <button className="primary" onClick={() => navigate({ page: 'catalog' })}>
-            Browse catalog
-          </button>
+          <h2>No draft quotation yet</h2>
+          <p className="muted">Start a draft for a project, import an existing Analisi workbook, or add products from the catalog.</p>
+          <div className="row" style={{ justifyContent: 'center' }}>
+            <button className="primary" onClick={() => setCreating(true)}>
+              New draft
+            </button>
+            <button onClick={() => navigate({ page: 'import' })}>Import workbook</button>
+            <button onClick={() => navigate({ page: 'catalog' })}>Browse catalog</button>
+          </div>
         </section>
       )}
     </div>
