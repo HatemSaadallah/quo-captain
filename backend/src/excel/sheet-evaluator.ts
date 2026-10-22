@@ -81,6 +81,14 @@ export function snapshotFromStored(stored: StoredCell[]): SheetSnapshot {
 
 /** Rows present per column span, cached per sheet (bounds whole-column ranges). */
 class RowIndex {
+  /** One index per snapshot, shared by every evaluation: rebuilding it per quotation line dominated costing time. */
+  static readonly shared = new WeakMap<SheetSnapshot, RowIndex>();
+  static of(snap: SheetSnapshot): RowIndex {
+    let i = RowIndex.shared.get(snap);
+    if (!i) RowIndex.shared.set(snap, (i = new RowIndex(snap)));
+    return i;
+  }
+
   private readonly byCol = new Map<number, number[]>();
   private readonly keyIndex = new Map<string, Map<string, number>>();
   constructor(snap: SheetSnapshot) {
@@ -151,7 +159,6 @@ export function inputsForRow(snapshots: WorkbookSnapshots, row: number): Evaluat
 export class SheetEvaluator {
   private readonly memo = new Map<string, Value>();
   private readonly busy = new Set<string>();
-  private readonly indexes = new Map<string, RowIndex>();
   private readonly subEvaluators = new Map<string, SheetEvaluator>();
   readonly errors: Record<string, string> = {};
   readonly unsupported: Record<string, string> = {};
@@ -164,12 +171,6 @@ export class SheetEvaluator {
     private readonly inputs: EvaluationInputs,
     private readonly row: number,
   ) {}
-
-  private index(name: string, snap: SheetSnapshot): RowIndex {
-    let i = this.indexes.get(name);
-    if (!i) this.indexes.set(name, (i = new RowIndex(snap)));
-    return i;
-  }
 
   private quotationRowValue(sheet: string, col: string, row: number): Value | undefined {
     if (sheet === SHEETS.elencoCosti && row === this.row) {
@@ -199,19 +200,19 @@ export class SheetEvaluator {
           // lookups into the item list see only the quotation's own row
           const snap = this.snapshots.sheets.get(name);
           const rows = new Set<number>([this.row]);
-          if (snap) for (const r of this.index(name, snap).rows(c1, c2, r1, r2)) if (r < 6 || r > 400) rows.add(r);
+          if (snap) for (const r of RowIndex.of(snap).rows(c1, c2, r1, r2)) if (r < 6 || r > 400) rows.add(r);
           return [...rows].filter((r) => r >= r1 && r <= r2).sort((a, b) => a - b);
         }
         const snap = name === this.sheetName ? this.snap : this.snapshots.sheets.get(name);
         if (!snap) return [];
-        return this.index(name, snap).rows(c1, c2, r1, Math.min(r2, snap.maxRow));
+        return RowIndex.of(snap).rows(c1, c2, r1, Math.min(r2, snap.maxRow));
       },
       findRow: (s, col, r1, r2, key) => {
         const name = s ?? sheet;
         if (name === this.sheetName || name === SHEETS.elencoCosti || name === SHEETS.costiParz) return undefined;
         const snap = this.snapshots.sheets.get(name);
         if (!snap) return null;
-        return this.index(name, snap).find(col, r1, Math.min(r2, snap.maxRow), key, (c, r) => this.get(name, numToCol(c), r));
+        return RowIndex.of(snap).find(col, r1, Math.min(r2, snap.maxRow), key, (c, r) => this.get(name, numToCol(c), r));
       },
     };
   }

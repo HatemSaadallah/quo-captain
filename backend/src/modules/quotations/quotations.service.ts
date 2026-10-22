@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, type OnApplicationBootstrap } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { SearchHit } from '../../common/interfaces/catalog.interface';
 import type {
@@ -128,12 +128,34 @@ const LABOUR_LINE = /^\s*(labou?r|installation|manodopera|installazione|posa in 
 const TRANSPORT_LINE = /^\s*(transport|trasport|freight|shipping|delivery|logistic)/i;
 
 @Injectable()
-export class QuotationsService {
+export class QuotationsService implements OnApplicationBootstrap {
+  private readonly log = new Logger(QuotationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: CatalogService,
     private readonly costing: CostingService,
   ) {}
+
+  onApplicationBootstrap(): void {
+    if (process.env.VITEST) return; // unit tests build services without a database
+    void this.prisma.quotationItem
+      .findMany({ where: { catalogId: { not: null }, unitCostOverride: null } })
+      .then((rows) => this.warm(rows.map(toItem)))
+      .catch((e: unknown) => this.log.warn(`cost warm-up skipped: ${e instanceof Error ? e.message : String(e)}`));
+  }
+
+  /** Computes lines in the background (yielding between them) so opening a large quotation shows its costs at once. */
+  async warm(items: QuotationItem[]): Promise<void> {
+    const t = Date.now();
+    const lines = items.filter((it) => it.catalogId && it.unitCostOverride === null);
+    await this.costing.prefetch(lines);
+    for (const it of lines) {
+      await this.costing.compute(it);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    this.log.log(`costs ready for ${lines.length} lines in ${Date.now() - t} ms`);
+  }
 
   /** API shape of a quotation, with each line's product cost (labour and transport quoted separately). */
   private dto(row: QuotationRow): Quotation {
@@ -359,6 +381,7 @@ export class QuotationsService {
     let labour = 0;
     let transport = 0;
     const items = [];
+    await this.costing.prefetch(p.items.filter((it) => it.catalogId && it.unitCostOverride === null));
     for (const it of p.items) {
       const rec = it.catalogId && this.catalog.has(it.catalogId) ? this.catalog.get(it.catalogId) : null;
       const { labour: labourShare, transport: transportShare } = separateShares(rec?.costBreakdown ?? []);
