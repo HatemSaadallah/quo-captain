@@ -12,3 +12,4 @@
 - 2026-10-21: Dashboard is now the first/default tab: customer/date/status filters, quotation/cost charts and unit-aware product/BOM demand. Polished Customers with stats/charts; removed material mock-price panels. Live dashboard totals reconciled against all 26 quotations.
 - 2026-10-21: Added post-download contact email drafts with three editable templates; sending and report attachment happen in the user's mail app. Frontend 23/23 and backend 94/94 tests pass; builds and live dashboard checks pass.
 - 2026-10-21: Rebuilt both apps; all 117 tests pass. Restarted backend/frontend; verified production assets and authenticated APIs on localhost and IPv4.
+- 2026-10-22: Refined dashboard priorities and shared site styling; seven pages checked on desktop/mobile. Rebuilt 3D viewer after review with Claude: product framing, glazed/tapered geometry, softer lighting, dimensions and camera controls. Frontend 25/25 pass; 16 scene variants checked.
