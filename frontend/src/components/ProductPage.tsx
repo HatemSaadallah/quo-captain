@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { api, fmtMoney, fmtMaterialQty, type CatalogFacets, type CatalogRecord, type Quotation, type ProductMaterial } from '../api';
 import { cleanTitle, imageOf, LABOUR_CATEGORY, locationOf, productCost, rankSimilar, separateShare, sourceOf, TRANSPORT_CATEGORY, typologyOf, type SimilarProduct } from '../product';
 import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
-import { Product3D } from './Product3D';
+// three.js is large: load the 3D viewer only when it is opened.
+const Product3D = lazy(() => import('./Product3D').then((m) => ({ default: m.Product3D })));
 import { EditableSpecs, defaultSpec, specChanged, useSpecPreview, type CustomSpec } from './SpecCustomizer';
 import '../product.css';
 import { AddProductButton } from './AddProductButton';
@@ -66,7 +67,11 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
   const total = breakdown.reduce((s, c) => s + c.unitCost, 0) || 1;
   return (
     <div className="stack">
-      {show3d && <Product3D kind={ty.key} L={spec?.L ?? r.L} H={spec?.H ?? r.H} title={cleanTitle(r)} onClose={() => setShow3d(false)} />}
+      {show3d && (
+        <Suspense fallback={<div className="p3d-backdrop"><div className="p3d-loading">Loading 3D view…</div></div>}>
+          <Product3D kind={ty.key} L={spec?.L ?? r.L} H={spec?.H ?? r.H} title={cleanTitle(r)} onClose={() => setShow3d(false)} />
+        </Suspense>
+      )}
       <div className="crumbs">
         <a href="#/catalog">Catalog</a> › <span>{ty.label}</span> › <b>{cleanTitle(r)}</b>
       </div>

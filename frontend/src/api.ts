@@ -139,6 +139,8 @@ export const api = {
     } else res = await fetch(`/api/catalog/${encodeURIComponent(id)}/image`, { method: 'POST', body: JSON.stringify({ preset: image.preset }), headers: { ...auth, 'content-type': 'application/json' } });
     if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message ?? `Image upload failed (${res.status})`);
   },
+  projectRequirements: (projectId: string, body: { text: string; fileName?: string }): Promise<{ summary: string; mode: 'llm' | 'preview'; needs: Array<{ description: string; quantity: number | null; unit: string | null; products: Array<{ id: string; title: string; category: string | null; unit: string | null; unitCost: number | null; score: number; source: string }> }> }> =>
+    request(`/api/projects/${encodeURIComponent(projectId)}/requirements`, { method: 'POST', ...json(body) }),
   searchCustomers: (query: string): Promise<{ reply: string; customers: string[]; mode: 'llm' | 'preview' }> => request('/api/customers/search', { method: 'POST', ...json({ query }) }),
   searchProjects: (query: string): Promise<ProjectSearchResult> => request('/api/projects/search', { method: 'POST', ...json({ query }) }),
   projectMessages: (id: string): Promise<ProjectMessage[]> => request(`/api/projects/${enc(id)}/messages`),

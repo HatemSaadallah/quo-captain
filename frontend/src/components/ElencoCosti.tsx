@@ -114,7 +114,12 @@ export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) 
   /** Adds a priced labour or transport line, pre-filled with what the original analyses allowed for. */
   const addSeparateLine = async (kind: 'labour' | 'transport', amount: number): Promise<void> => {
     await guard(async () => {
-      const q = await api.addRow(quotation.id, { position: '99', itemCode: kind === 'labour' ? '99-01' : '99-02', description: kind === 'labour' ? 'Labour - site installation, site management and travel' : 'Transport', unit: 'forfait', quantity: 1 });
+      // Prefer the catalog products for labour / transport; fall back to a typed line.
+      const custom = await api.customProducts().catch(() => []);
+      const product = custom.find((r) => (kind === 'labour' ? /labour/i : /transport/i).test(r.title ?? ''));
+      const q = product
+        ? await api.addItem(quotation.id, { catalogId: product.id, quantity: 1 })
+        : await api.addRow(quotation.id, { position: '99', itemCode: kind === 'labour' ? '99-01' : '99-02', description: kind === 'labour' ? 'Site labour (installation, site management, travel)' : 'Transport to shipyard', unit: 'forfait', quantity: 1 });
       const added = q.items[q.items.length - 1];
       return amount > 0 && added ? api.updateItem(quotation.id, added.id, { unitCostOverride: Math.round(amount * 100) / 100 }) : q;
     });
@@ -353,9 +358,16 @@ export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) 
           <div className="q-remind-text">
             <b>Don't forget to include {missing.join(' and ')}.</b>
             <span>
-              Product lines exclude them. The original analyses allowed {!sep.hasLabourLine && <>{fmtMoney(sep.labour)} for labour</>}
-              {missing.length === 2 && ' and '}
-              {!sep.hasTransportLine && <>{fmtMoney(sep.transport)} for transport</>} on these products.
+              Product lines exclude them.
+              {(!sep.hasLabourLine && sep.labour > 0) || (!sep.hasTransportLine && sep.transport > 0) ? (
+                <>
+                  {' '}The original analyses allowed {!sep.hasLabourLine && sep.labour > 0 && <>{fmtMoney(sep.labour)} for labour</>}
+                  {!sep.hasLabourLine && sep.labour > 0 && !sep.hasTransportLine && sep.transport > 0 && ' and '}
+                  {!sep.hasTransportLine && sep.transport > 0 && <>{fmtMoney(sep.transport)} for transport</>} on these products.
+                </>
+              ) : (
+                ' Add them as separate lines and set their price.'
+              )}
             </span>
           </div>
           <div className="q-remind-actions">
