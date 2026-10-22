@@ -17,6 +17,7 @@ import { QuotationList } from './components/QuotationList';
 import { QuotationPage } from './components/QuotationPage';
 import { WorkspaceAssistant } from './components/WorkspaceAssistant';
 import { Icon, type IconName } from './components/Icon';
+import { setCustomImages } from './product';
 import { navigate, useRoute } from './route';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
   const [facets, setFacets] = useState<CatalogFacets | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [, setImagesVersion] = useState(0); // re-render once custom product images are known
   const [cartId, setCartIdState] = useState<string | null>(() => {
     try {
       return localStorage.getItem('somec.cart');
@@ -68,6 +70,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+    api.catalogImages().then((m) => { setCustomImages(m); setImagesVersion((v) => v + 1); }).catch(() => undefined);
     api.facets().then(setFacets).catch((e: unknown) => setError(`Backend not reachable: ${e instanceof Error ? e.message : String(e)}`));
     void loadQuotations();
   }, [user, loadQuotations]);
@@ -173,7 +176,7 @@ export default function App() {
         {route.page === 'catalog' && <ProductHome facets={facets} quotations={quotations} estimator={user.name} initialQuery={route.q} initialCreate={route.create} onError={setError} onAddToQuotation={(r, id) => addTo(id, r, 1, [])} />}
         {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity, custom) => addTo(id, r, quantity, custom?.params ?? [], custom)} onError={setError} />}
         {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
-        {route.page === 'insights' && <InsightsPage initial={route.q} />}
+        {route.page === 'insights' && <InsightsPage initial={route.q} onCreated={() => void loadQuotations()} />}
         {route.page === 'import' && <ImportPage onImported={async (quotationId) => { await loadQuotations(); setCartId(quotationId); navigate({ page: 'quotations' }); }} />}
         {route.page === 'projects' && <ProjectsPage projectId={route.id} estimator={user.name} onError={setError} onUpdated={() => void loadQuotations()} onQuotationCreated={(q) => { onQuotation(q); setCartId(q.id); navigate({ page: 'quotations' }); }} />}
         {route.page === 'customers' && <CustomersPage customerId={route.id} onError={setError} />}

@@ -81,3 +81,10 @@
 .ic-legend small { color: #64767e; text-align: right; }
 .ic-note { font-size: 11px; color: #64767e; margin: 4px 0 0; }
 @media (prefers-reduced-motion: reduce) { .ic-pie path { transition: none; } }
+.in-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.in-file { display: inline-block; margin-top: 6px; font-size: 12px; background: rgba(255,255,255,0.18); padding: 2px 8px; border-radius: 6px; }
+.in-attach { border: none; background: transparent; font-size: 18px; padding: 6px 8px; align-self: center; }
+.in-attach:hover:not(:disabled) { background: #eef3f3; }
+.in-attached { display: inline-flex; align-items: center; gap: 4px; align-self: center; font-size: 12px; background: #eef5f4; color: #1f6b70; padding: 3px 4px 3px 10px; border-radius: 999px; white-space: nowrap; }
+.in-attached button { border: none; background: transparent; padding: 0 6px; font-size: 14px; color: #1f6b70; }
+.finder-results .finder-create-row { background: #1f6b70; } .finder-results .finder-create-row strong { color: #fff; } .finder-results .finder-create-row small, .finder-results .finder-create-row span[aria-hidden] { color: #d4ecea; } .finder-results .finder-create-row:hover { background: #185559 !important; }
