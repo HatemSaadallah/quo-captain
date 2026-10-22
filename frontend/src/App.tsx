@@ -20,6 +20,7 @@ import { WorkspaceAssistant } from './components/WorkspaceAssistant';
 import { Icon, type IconName } from './components/Icon';
 import { setCustomImages } from './product';
 import { navigate, useRoute } from './route';
+import { currentTextSize, currentTheme, setTextSize, setTheme } from './theme';
 
 export default function App() {
   const route = useRoute();
@@ -28,6 +29,8 @@ export default function App() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [, setImagesVersion] = useState(0); // re-render once custom product images are known
+  const [theme, setThemeState] = useState(currentTheme);
+  const [textSize, setTextSizeState] = useState(currentTextSize);
   const [cartId, setCartIdState] = useState<string | null>(() => {
     try {
       return localStorage.getItem('somec.cart');
@@ -161,7 +164,11 @@ export default function App() {
           {navItem('import', 'Import', 'upload', route.page === 'import')}
         </nav>
         <div className="sidebar-foot">
-          <div className="sidebar-account"><span className="sidebar-user-avatar">{user.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span className="sidebar-user-copy"><strong>{user.name}</strong><small>{user.role}</small></span></div>
+          <div className="sidebar-account"><span className="sidebar-user-avatar">{user.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span className="sidebar-user-copy"><strong>{user.name}</strong><small>{user.role === 'admin' ? 'Administrator' : 'Salesperson'}</small></span></div>
+          <div className="sidebar-prefs">
+            <button className="sidebar-signout" aria-pressed={theme === 'dark'} onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); setThemeState(next); }}><Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} /> Dark mode</button>
+            <button className="sidebar-signout" aria-pressed={textSize === 'large'} onClick={() => { const next = textSize === 'large' ? 'normal' : 'large'; setTextSize(next); setTextSizeState(next); }}><Icon name="text" size={17} /> Large text</button>
+          </div>
           <button className="sidebar-signout" onClick={logout}><Icon name="signout" size={17} /> Sign out</button>
         </div>
       </aside>

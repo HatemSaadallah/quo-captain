@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/somec-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Somec Quotation Generator</title>
+    <script>
+      // Theme and text size before first paint (no light flash). Large text is the default for presentations.
+      try {
+        const theme = localStorage.getItem('somec.theme');
+        document.documentElement.dataset.theme = theme === 'dark' || theme === 'light' ? theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.text = localStorage.getItem('somec.text') === 'normal' ? 'normal' : 'large';
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

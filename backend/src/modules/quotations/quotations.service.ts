@@ -16,6 +16,7 @@ import type {
   UpdateQuotationDto,
 } from '../../common/interfaces/quotation.interface';
 import type { Benchmark, BenchmarkCategoryRow, BenchmarkExample, GridSheet, WorkbookView } from '../../common/interfaces/workbook-view.interface';
+import { productUnitCost, separateShares } from '../../common/utils/separate-costs';
 import { EC } from '../../excel/somec-schema';
 import { CatalogService } from '../catalog/catalog.service';
 import { CostingService } from '../costing/costing.service';
@@ -123,8 +124,6 @@ function itemData(it: NewItem): Prisma.QuotationItemUncheckedCreateWithoutQuotat
 
 /** Every method is scoped to the authenticated user: a quotation is only visible to its owner. */
 /** Cost-breakdown categories that are labour or transport, and line descriptions that quote them separately. */
-const LABOUR = /INSTALLAZIONE DI CANTIERE|GESTIONE DI CANTIERE|VIAGGI E TRASFERTE/i;
-const TRANSPORT = /TRASPORT/i;
 const LABOUR_LINE = /^\s*(labou?r|installation|manodopera|installazione|posa in opera|montaggio|site management)/i;
 const TRANSPORT_LINE = /^\s*(transport|trasport|freight|shipping|delivery|logistic)/i;
 
@@ -136,15 +135,21 @@ export class QuotationsService {
     private readonly costing: CostingService,
   ) {}
 
+  /** API shape of a quotation, with each line's product cost (labour and transport quoted separately). */
+  private dto(row: QuotationRow): Quotation {
+    const q = toQuotation(row);
+    return { ...q, items: q.items.map((it) => ({ ...it, productUnitCost: productUnitCost(it, this.catalog.costParts(it.catalogId)) })) };
+  }
+
   async list(userId: string): Promise<Quotation[]> {
     const rows = await this.prisma.quotation.findMany({ where: { ownerId: userId }, include: INCLUDE, orderBy: { updatedAt: 'desc' } });
-    return rows.map(toQuotation);
+    return rows.map((row) => this.dto(row));
   }
 
   async get(id: string, userId: string): Promise<Quotation> {
     const row = await this.prisma.quotation.findFirst({ where: { id, ownerId: userId }, include: INCLUDE });
     if (!row) throw new NotFoundException(`Quotation ${id} not found`);
-    return toQuotation(row);
+    return this.dto(row);
   }
 
   async create(input: CreateQuotationDto, userId: string): Promise<Quotation> {
@@ -168,7 +173,7 @@ export class QuotationsService {
       },
       include: INCLUDE,
     });
-    return toQuotation(row);
+    return this.dto(row);
   }
 
   async update(id: string, patch: UpdateQuotationDto, userId: string): Promise<Quotation> {
@@ -192,7 +197,7 @@ export class QuotationsService {
       data.status = patch.status;
     }
     const row = await this.prisma.quotation.update({ where: { id }, data, include: INCLUDE });
-    return toQuotation(row);
+    return this.dto(row);
   }
 
   async delete(id: string, userId: string): Promise<void> {
@@ -356,11 +361,7 @@ export class QuotationsService {
     const items = [];
     for (const it of p.items) {
       const rec = it.catalogId && this.catalog.has(it.catalogId) ? this.catalog.get(it.catalogId) : null;
-      const parts = rec?.costBreakdown ?? [];
-      const all = parts.reduce((acc, b) => acc + (b.unitCost ?? 0), 0);
-      const share = (re: RegExp): number => (all > 0 ? parts.filter((b) => re.test(b.category)).reduce((acc, b) => acc + (b.unitCost ?? 0), 0) / all : 0);
-      const labourShare = share(LABOUR);
-      const transportShare = share(TRANSPORT);
+      const { labour: labourShare, transport: transportShare } = separateShares(rec?.costBreakdown ?? []);
       const keep = 1 - labourShare - transportShare;
       let unit: number | null = it.historicalUnitCost;
       if (it.catalogId && it.unitCostOverride === null) {

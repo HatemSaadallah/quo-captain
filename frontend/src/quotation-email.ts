@@ -1,9 +1,9 @@
-import { fmtMoney, type Quotation } from './api';
+import { fmtMoney, quotationCost, type Quotation } from './api';
 
 export type EmailTemplate = 'report' | 'prices' | 'followup';
 export function quotationEmail(quotation: Quotation, template: EmailTemplate): { subject: string; body: string } {
   const reference = quotation.reference || quotation.name;
-  const total = quotation.items.reduce((sum, item) => sum + item.quantity * (item.unitCostOverride ?? item.historicalUnitCost ?? 0), 0);
+  const total = quotationCost(quotation);
   const missing = quotation.items.filter((item) => item.unitCostOverride === null && item.historicalUnitCost === null).length;
   const greeting = `Hello,\n\n`;
   const signature = `\n\nBest regards,\n${quotation.estimator || 'Somec team'}`;

@@ -33,7 +33,7 @@ export const CONTACTS: Contact[] = [
   { name: 'Francesca Rizzo', role: 'Finance & Accounting Manager', group: 'Accounting', company: 'Somec', email: `f.rizzo@${SOMEC}`, phone: '+39 0422 000 150', location: 'Treviso, IT' },
   { name: 'Paolo Gallo', role: 'Accounts Payable', group: 'Accounting', company: 'Somec', email: `p.gallo@${SOMEC}`, phone: '+39 0422 000 152', location: 'Treviso, IT' },
   { name: 'Chiara Conti', role: 'Management Controller', group: 'Accounting', company: 'Somec', email: `c.conti@${SOMEC}`, phone: '+39 0422 000 155', location: 'Treviso, IT' },
-  { name: 'Mock Estimator', role: 'Cost Estimator', group: 'Estimating', company: 'Somec', email: `estimator@${SOMEC}`, phone: '+39 0422 000 170', location: 'Treviso, IT', tags: ['Glazing', 'Flooring'] },
+  { name: 'Elena Moretti', role: 'Salesperson', group: 'Sales', company: 'Somec', email: `e.moretti@${SOMEC}`, phone: '+39 0422 000 170', location: 'Treviso, IT', tags: ['Glazing', 'Flooring'] },
   { name: 'Luca Ferrari', role: 'Senior Cost Estimator', group: 'Estimating', company: 'Somec', email: `l.ferrari@${SOMEC}`, phone: '+39 0422 000 172', location: 'Treviso, IT', tags: ['Prefab balconies'] },
   { name: 'Davide Marino', role: 'Site Manager, Installation', group: 'Installers', company: 'Somec Installation Team A', email: `d.marino@${SOMEC}`, phone: '+39 300 000 2201', location: 'Monfalcone, IT', tags: ['Glazing', 'Windscreens'], status: 'On site · Nave 5' },
   { name: 'Ivan Horvat', role: 'Lead Installer', group: 'Installers', company: 'Adriatica Montaggi Navali', email: 'i.horvat@adriaticamontaggi.local', phone: '+39 0481 410 778', location: 'Monfalcone, IT', tags: ['Balustrades', 'Handrails'], status: 'Available from Nov 2026' },

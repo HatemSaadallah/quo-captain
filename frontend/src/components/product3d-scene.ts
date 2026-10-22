@@ -35,7 +35,9 @@ function deckTexture(): THREE.CanvasTexture {
 }
 
 export function createProductScene(spec: ProductSpec, onShip: boolean) {
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(onShip ? '#dce8ed' : '#edf0f0');
+  // The studio follows the page theme when the viewer opens; the ship keeps its daylight sky.
+  const studio = document.documentElement.dataset.theme === 'dark' ? { sky: '#1b2225', floor: '#232c2f' } : { sky: '#edf0f0', floor: '#e7edeb' };
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(onShip ? '#dce8ed' : studio.sky);
   if (onShip) scene.fog = new THREE.Fog('#dce8ed', 100, 1100);
   const product = new THREE.Group(); product.name = 'product'; scene.add(product);
   const setting = new THREE.Group(); setting.name = 'setting'; scene.add(setting);
@@ -119,8 +121,8 @@ export function createProductScene(spec: ProductSpec, onShip: boolean) {
     setting.add(cruise.ship, cruise.ocean, cruise.wake, cruise.selected);
     shipBounds = cruise.bounds; installation = cruise.selected;
   } else {
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(radius * 40, radius * 40), new THREE.MeshStandardMaterial({ color: '#e7edeb', roughness: .93 })); floor.rotation.x = -Math.PI / 2; floor.position.y = groundY; floor.receiveShadow = true; setting.add(floor);
-    scene.fog = new THREE.Fog('#edf0f0', radius * 5, radius * 16);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(radius * 40, radius * 40), new THREE.MeshStandardMaterial({ color: studio.floor, roughness: .93 })); floor.rotation.x = -Math.PI / 2; floor.position.y = groundY; floor.receiveShadow = true; setting.add(floor);
+    scene.fog = new THREE.Fog(studio.sky, radius * 5, radius * 16);
   }
   scene.add(new THREE.HemisphereLight('#f5fbff', '#b7b9aa', 1.25));
   const sun = new THREE.DirectionalLight('#fff6e7', 2.6); sun.position.set(-4, 8, 6); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.normalBias = .025; sun.shadow.bias = -.00015; sun.shadow.radius = 4;

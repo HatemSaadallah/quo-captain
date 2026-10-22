@@ -151,7 +151,7 @@ export function ImportPage({ onImported }: { onImported: (quotationId: string) =
                   <th>File</th>
                   <th>Quotation</th>
                   <th className="num">Lines</th>
-                  <th className="num">Estimated cost</th>
+                  <th className="num">Workbook total</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -219,7 +219,7 @@ export function ImportPage({ onImported }: { onImported: (quotationId: string) =
             <button role="tab" aria-selected={filter === 'all'} className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>
               <b>{preview.lines.length}</b>
               <span>All lines</span>
-              <small>{fmtMoney(preview.totalEstimatedCost)} estimated</small>
+              <small>{fmtMoney(preview.totalEstimatedCost)} in the workbook</small>
             </button>
             {(['ready', 'match', 'review'] as const).map((k) => (
               <button key={k} role="tab" aria-selected={filter === k} className={`${filter === k ? 'on' : ''} b-${k}`} onClick={() => setFilter(k)}>
@@ -304,7 +304,7 @@ export function ImportPage({ onImported }: { onImported: (quotationId: string) =
               </dd>
             </div>
             <div>
-              <dt>Estimated cost</dt>
+              <dt>Workbook total</dt>
               <dd>{fmtMoney(result.totalEstimatedCost)}</dd>
             </div>
           </dl>

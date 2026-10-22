@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, fmtMaterialQty, type RawMaterial, type MaterialDetail } from '../api';
 import { navigate } from '../route';
+import { Icon } from './Icon';
 import { MaterialPriceChart } from './MaterialPriceChart';
 import '../materials.css';
 
@@ -33,7 +34,7 @@ export function MaterialsPage({ materialId, onError }: { materialId?: string; on
     {detail && <MaterialPriceChart key={detail.material.id} materialId={detail.material.id} />}
     <section className="inventory-card">
       <div className="inventory-toolbar">
-        <label className="inventory-search"><span aria-hidden="true">⌕</span><input aria-label="Search materials" placeholder={detail ? 'Search products, codes or lots…' : 'Search materials or codes…'} value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></label>
+        <label className="inventory-search"><Icon name="search" size={16} /><input aria-label="Search materials" placeholder={detail ? 'Search products, codes or lots…' : 'Search materials or codes…'} value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></label>
         {!detail && <><select aria-label="Filter material category" value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }}><option value="">All categories</option>{categories.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="Sort materials" value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="name">Name A–Z</option><option value="products">Most used</option></select></>}
       </div>
       <div className="table-scroll"><table className="inventory-table material-table">
@@ -43,7 +44,7 @@ export function MaterialsPage({ materialId, onError }: { materialId?: string; on
           <td><button className="inventory-link" onClick={() => navigate({ page: 'product', id: product.id })}>{product.title}</button><span className="inventory-cell-sub inventory-code">{product.itemCode}</span></td>
           <td><span className="lot-label">{product.lot ?? 'Not assigned'}</span></td>
           <td className="inventory-number"><span className="inventory-cell-main">{fmtMaterialQty(product.quantity)} {detail.material.unit}</span><span className="inventory-cell-sub">per 1 {product.productUnit}</span></td>
-          <td><span className={`inventory-badge ${product.quantitySource === 'mock' ? 'mock' : 'historical'}`}>{product.quantitySource === 'mock' ? 'Mock quantity' : 'Historical'}</span></td>
+          <td><span className={`inventory-badge ${product.quantitySource === 'mock' ? 'mock' : 'historical'}`}>{product.quantitySource === 'mock' ? 'Estimated' : 'Historical'}</span></td>
         </tr>) : list.slice((page - 1) * pageSize, page * pageSize).map((material) => <tr key={material.id}>
           <td><div className="inventory-identity"><span className="material-mark" aria-hidden="true">{material.category === 'Glass' ? '◇' : material.category === 'Timber' ? '≋' : '▱'}</span><div><button className="inventory-link" onClick={() => { setQuery(''); navigate({ page: 'materials', id: material.id }); }}>{material.name}<span className="inventory-link-arrow" aria-hidden="true">↗</span></button><span className="inventory-cell-sub inventory-code">{material.code}</span></div></div></td>
           <td><span className="inventory-category">{material.category}</span></td>
