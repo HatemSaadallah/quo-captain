@@ -17,8 +17,8 @@ type Role = 'page' | 'bg' | 'text' | 'border' | 'accent';
 
 const DARK = ':root[data-theme="dark"]';
 const KEEP = /\.(sidebar|nav-)/; // the sidebar is dark in both themes: mirrored unchanged
-const PAGE = 0.165; // page background lightness
-const SURFACE = 0.215; // cards sit one step above the page
+const PAGE = 0.255; // page background: dark grey, not black
+const SURFACE = 0.3; // cards sit one step above the page
 
 const toLinear = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const toGamma = (c: number): number => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
@@ -54,14 +54,14 @@ export function darkColor(role: Role, rgba: Rgba): Rgba {
   const to = (l: number, c: number): Rgba => fromOklch(l, c, h, alpha);
   switch (role) {
     case 'page':
-      return to(PAGE, C * 0.5);
+      return to(PAGE, Math.min(C * 0.5, 0.006));
     case 'bg':
       if (L >= 0.995) return to(SURFACE, C);
-      if (L >= 0.75) return to(Math.min(0.42, SURFACE + (0.995 - L) * 1.15), Math.min(C * 1.1, 0.06));
+      if (L >= 0.75) return to(Math.min(0.5, SURFACE + (0.995 - L) * 1.15), Math.min(C * 1.1, 0.06));
       return rgba; // accents, mid tones and already-dark fills keep their colour
     case 'border':
       if (L >= 0.995) return to(SURFACE, C); // white gaps between chart marks stay surface-coloured
-      if (L >= 0.75) return to(Math.min(0.45, SURFACE + 0.07 + (1 - L) * 1.1), Math.min(C, 0.03));
+      if (L >= 0.75) return to(Math.min(0.52, SURFACE + 0.07 + (1 - L) * 1.1), Math.min(C, 0.03));
       return rgba;
     case 'text':
       if (L >= 0.7) return rgba; // already light: it sits on a dark or coloured fill
