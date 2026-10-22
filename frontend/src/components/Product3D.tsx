@@ -1,255 +1,119 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { createProductScene, disposeScene, productSpec } from './product3d-scene';
+import { Icon } from './Icon';
 import '../product3d.css';
 
-type Kind = 'windscreen' | 'balustrade' | 'handrail' | 'divider' | 'door' | 'balcony' | 'deck' | 'other';
+type View = 'perspective' | 'front' | 'top' | 'ship' | 'detail';
+interface Props { kind: string; L: number | null; H: number | null; title: string; moduleMm?: number | null; onClose: () => void }
 
-interface Props {
-  kind: string;
-  /** Millimetres; missing values fall back to typical sizes for the typology. */
-  L: number | null;
-  H: number | null;
-  title: string;
-  /** Module width in mm from the analysis (e.g. the balcony "interasse"), when known. */
-  moduleMm?: number | null;
-  onClose: () => void;
-}
-
-const DEFAULTS: Record<Kind, [number, number]> = { windscreen: [2560, 1450], balustrade: [2560, 1100], handrail: [3000, 1100], divider: [1850, 2000], door: [1800, 2100], balcony: [2560, 1600], deck: [3800, 1600], other: [2000, 1200] };
-
-/** Parametric 3D model of a product, built from its own dimensions, optionally on a cruise-ship deck. */
 export function Product3D({ kind, L, H, title, moduleMm, onClose }: Props) {
   const mount = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLElement>(null);
+  const viewControl = useRef<(view: View) => void>(() => undefined);
+  const dimensionControl = useRef<THREE.Group | null>(null);
+  const orbit = useRef<OrbitControls | null>(null);
   const [onShip, setOnShip] = useState(true);
-  const KINDS: readonly string[] = ['windscreen', 'balustrade', 'handrail', 'divider', 'door', 'balcony', 'deck'];
-  const k: Kind = KINDS.includes(kind) ? (kind as Kind) : 'other';
-  const [dl, dh] = DEFAULTS[k];
-  const w = Math.min(Math.max((L ?? dl) / 1000, 0.6), 12);
-  const h = Math.min(Math.max((H ?? dh) / 1000, 0.4), 4);
-  // Shape variants named in the product title
-  const incline = /inclin/i.test(title) ? Number(/(\d{2})\s*°/.exec(title)?.[1] ?? 20) : 0;
-  const curved = /curv|facet|shaped/i.test(title);
-  const module = moduleMm && moduleMm > 300 && moduleMm < 6000 ? moduleMm / 1000 : null;
+  const [view, setView] = useState<View | 'custom'>('perspective');
+  const [rotating, setRotating] = useState(false);
+  const [dimensions, setDimensions] = useState(true);
+  const [error, setError] = useState('');
+  const spec = useMemo(() => productSpec(kind, L, H, title, moduleMm), [kind, L, H, title, moduleMm]);
 
   useEffect(() => {
-    const el = mount.current;
-    if (!el) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(el.clientWidth, el.clientHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    dialog.current?.querySelector<HTMLButtonElement>('.p3d-close')?.focus();
+    return () => { document.body.style.overflow = overflow; previous?.focus(); };
+  }, []);
+
+  useEffect(() => {
+    const el = mount.current; if (!el) return;
+    setError(''); setRotating(false); setView('perspective');
+    let renderer: THREE.WebGLRenderer;
+    try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); }
+    catch { setError('The 3D viewer could not start. Enable hardware acceleration in your browser and reopen this view.'); return; }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .95; renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.domElement.tabIndex = 0; renderer.domElement.setAttribute('aria-label', 'Interactive 3D product. Drag to orbit, scroll to zoom, or use arrow keys to rotate.');
     el.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(onShip ? '#9fd1ec' : '#eef3f4');
-    if (onShip) scene.fog = new THREE.Fog('#bfe0f0', 30, 140);
-    const camera = new THREE.PerspectiveCamera(42, el.clientWidth / el.clientHeight, 0.1, 400);
-    // Aim at the product itself: deck-edge items sit at z = 2.3, doors in the superstructure, dividers mid-deck.
-    const focusZ = !onShip ? 0 : k === 'door' ? -6.25 : k === 'divider' ? 0.4 : k === 'balcony' || k === 'deck' ? 1.2 : 2.3;
-    const reach = Math.max(w, h) * 1.15 + 2.2;
-    camera.position.set(reach * 0.55, h * 0.7 + 1.4, focusZ - reach * (k === 'door' ? -0.9 : 0.85));
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, h / 2, focusZ);
-    controls.enableDamping = true;
-    controls.minDistance = 1.5;
-    controls.maxDistance = 40;
-    controls.maxPolarAngle = Math.PI * 0.49;
-    controls.autoRotate = !reduce;
-    controls.autoRotateSpeed = 0.6;
-
-    scene.add(new THREE.HemisphereLight('#ffffff', '#5b7a86', 1.1));
-    const sun = new THREE.DirectionalLight('#fff3dc', 2.2);
-    sun.position.set(6, 10, 4);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    scene.add(sun);
-
-    // Materials
-    const glass = new THREE.MeshStandardMaterial({ color: '#9fd4dc', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
-    const steel = new THREE.MeshStandardMaterial({ color: '#d5dcdf', metalness: 0.35, roughness: 0.3 });
-    const alu = new THREE.MeshStandardMaterial({ color: '#e7ecee', metalness: 0.25, roughness: 0.4 });
-    const teak = new THREE.MeshStandardMaterial({ color: '#a8743f', roughness: 0.75 });
-    const hullWhite = new THREE.MeshStandardMaterial({ color: '#f7f8f8', roughness: 0.6 });
-    const box = (sx: number, sy: number, sz: number, m: THREE.Material, x: number, y: number, z: number): THREE.Mesh => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), m);
-      mesh.position.set(x, y, z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      scene.add(mesh);
-      return mesh;
-    };
-    const tube = (len: number, r: number, m: THREE.Material, x: number, y: number, z: number, horizontal = false): void => {
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 20), m);
-      mesh.position.set(x, y, z);
-      if (horizontal) mesh.rotation.z = Math.PI / 2;
-      mesh.castShadow = true;
-      scene.add(mesh);
-    };
-
-    // Setting: teak deck, superstructure and sea, or a plain studio floor
-    if (onShip) {
-      const deckW = Math.max(w + 8, 14);
-      box(deckW, 0.25, 9, teak, 0, -0.125, -2);
-      for (let x = -deckW / 2; x < deckW / 2; x += 0.14) box(0.006, 0.252, 9, new THREE.MeshStandardMaterial({ color: '#6f4a26' }), x, -0.125, -2);
-      box(deckW, 0.6, 0.15, hullWhite, 0, -0.42, 2.48);
-      box(deckW, 6, 0.4, hullWhite, 0, 3, -6.5);
-      for (let i = -3; i <= 3; i++) box(1.4, 1.1, 0.05, new THREE.MeshStandardMaterial({ color: '#2b4d5c', metalness: 0.4, roughness: 0.2 }), i * 2.2, 2.2, -6.28);
-      box(deckW, 0.18, 0.5, new THREE.MeshStandardMaterial({ color: '#1d3a4a' }), 0, 5.2, -6.3);
-      const sea = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: '#1f6d93', roughness: 0.35, metalness: 0.1 }));
-      sea.rotation.x = -Math.PI / 2;
-      sea.position.y = -9;
-      scene.add(sea);
-      // two loungers for scale (about 2 m long)
-      for (const lx of [-2.6, 2.4]) {
-        box(0.7, 0.35, 1.9, new THREE.MeshStandardMaterial({ color: '#f1efe8' }), lx, 0.18, -3.6);
-        box(0.7, 0.05, 0.6, new THREE.MeshStandardMaterial({ color: '#2a6f7a' }), lx, 0.55, -4.35).rotation.x = -0.6;
+    const { scene, bounds, dimensions: guides, radius, shipBounds, installation } = createProductScene(spec, onShip);
+    const detailBounds = (installation ? new THREE.Box3().setFromObject(installation) : bounds.clone()).union(bounds).expandByScalar(Math.max(1.5, radius * .8));
+    dimensionControl.current = guides;
+    const environment = new RoomEnvironment(); const pmrem = new THREE.PMREMGenerator(renderer); const envMap = pmrem.fromScene(environment, .04);
+    scene.environment = envMap.texture; scene.environmentIntensity = .75; environment.dispose(); pmrem.dispose();
+    const center = bounds.getCenter(new THREE.Vector3());
+    const camera = new THREE.PerspectiveCamera(38, 1, .02, Math.max(300, radius * 60));
+    const controls = new OrbitControls(camera, renderer.domElement); orbit.current = controls;
+    controls.target.copy(center); controls.enableDamping = true; controls.dampingFactor = .08; controls.enablePan = false;
+    controls.minDistance = radius * 1.25; controls.maxDistance = Math.max(radius * 9, shipBounds ? shipBounds.getBoundingSphere(new THREE.Sphere()).radius * 2.5 : 0);
+    controls.minPolarAngle = .015; controls.maxPolarAngle = Math.PI * .485;
+    if (onShip) { controls.minAzimuthAngle = -Math.PI * .48; controls.maxAzimuthAngle = Math.PI * .48; }
+    controls.autoRotateSpeed = .65;
+    let currentView: View = 'perspective'; let touched = false;
+    const fit = (next: View): void => {
+      currentView = next; touched = false; controls.autoRotate = false; setRotating(false);
+      const vertical = THREE.MathUtils.degToRad(camera.fov); const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * camera.aspect);
+      const box = next === 'ship' && shipBounds ? shipBounds : next === 'detail' ? detailBounds : bounds; const center = box.getCenter(new THREE.Vector3());
+      const direction = (next === 'ship' ? new THREE.Vector3(.9, .55, 1.6) : next === 'detail' ? new THREE.Vector3(.55, .3, 1.5) : next === 'top' ? new THREE.Vector3(0, 1, .015) : next === 'front' ? new THREE.Vector3(0, .18, 1) : new THREE.Vector3(1.05, .8, 1.4)).normalize();
+      const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), direction).normalize();
+      const up = new THREE.Vector3().crossVectors(direction, right).normalize();
+      const framed = box.clone().expandByScalar(.22);
+      let distance = controls.minDistance;
+      for (const x of [framed.min.x, framed.max.x]) for (const y of [framed.min.y, framed.max.y]) for (const z of [framed.min.z, framed.max.z]) {
+        const corner = new THREE.Vector3(x, y, z).sub(center); const depth = corner.dot(direction);
+        distance = Math.max(distance, Math.abs(corner.dot(right)) / Math.tan(horizontal / 2) + depth, Math.abs(corner.dot(up)) / Math.tan(vertical / 2) + depth);
       }
-    } else {
-      const floor = new THREE.Mesh(new THREE.CircleGeometry(Math.max(w, 4) * 1.2, 64), new THREE.MeshStandardMaterial({ color: '#e1e8ea' }));
-      floor.rotation.x = -Math.PI / 2;
-      floor.receiveShadow = true;
-      scene.add(floor);
-    }
-
-    // The product, at the deck edge (z = 2.3), built from its dimensions
-    const z = onShip ? 2.3 : 0;
-    const panels = Math.max(1, Math.round(w / (module ?? 1.3)));
-    const pw = w / panels;
-    const glassRow = (height: number, withHandrail: boolean): void => {
-      if (curved) {
-        // Faceted arc: each panel turned a few degrees, like the curved windscreens in the analyses
-        const step = Math.min(0.5, 1.6 / panels);
-        const R = pw / (2 * Math.sin(step / 2));
-        for (let i = 0; i < panels; i++) {
-          const t = (i - (panels - 1) / 2) * step;
-          const g = box(pw - 0.03, height - 0.12, 0.024, glass, R * Math.sin(t), height / 2 + 0.06, z - R * (1 - Math.cos(t)));
-          g.rotation.y = -t;
-          const post = box(0.05, height, 0.05, steel, R * Math.sin(t - step / 2), height / 2, z - R * (1 - Math.cos(t - step / 2)));
-          post.rotation.y = -t;
-        }
-        return;
-      }
-      const row: THREE.Object3D[] = [];
-      for (let i = 0; i < panels; i++) row.push(box(pw - 0.03, height - 0.12, 0.024, glass, -w / 2 + pw * (i + 0.5), height / 2 + 0.06, 0));
-      for (let i = 0; i <= panels; i++) row.push(box(0.05, height, 0.05, steel, -w / 2 + pw * i, height / 2, 0));
-      row.push(box(w, 0.05, 0.07, steel, 0, 0.04, 0));
-      const group = new THREE.Group();
-      row.forEach((o) => group.add(o));
-      if (withHandrail) {
-        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, w + 0.05, 20), steel);
-        rail.rotation.z = Math.PI / 2;
-        rail.position.set(0, height + 0.03, 0);
-        group.add(rail);
-      }
-      group.position.z = z;
-      group.rotation.x = (incline * Math.PI) / 180; // leans outboard
-      scene.add(group);
+      camera.position.copy(center).add(direction.multiplyScalar(distance * 1.16)); controls.target.copy(center); controls.update();
     };
-    if (k === 'windscreen') glassRow(h, false);
-    else if (k === 'balustrade') glassRow(Math.min(h, 1.3), true);
-    else if (k === 'handrail') {
-      for (let i = 0; i <= panels; i++) tube(h, 0.02, steel, -w / 2 + pw * i, h / 2, z);
-      tube(w, 0.025, steel, 0, h, z, true);
-      tube(w, 0.012, steel, 0, h * 0.5, z, true);
-    } else if (k === 'divider') {
-      const dz = onShip ? 0.4 : 0;
-      box(0.05, h, w, alu, 0, h / 2, dz - 0.02);
-      box(0.026, h - 0.1, w - 0.1, glass, 0.02, h / 2, dz - 0.02);
-      box(0.06, h, 0.06, steel, 0, h / 2, dz - w / 2);
-      box(0.06, h, 0.06, steel, 0, h / 2, dz + w / 2 - 0.04);
-    } else if (k === 'door') {
-      const dz = onShip ? -6.25 : 0;
-      box(w + 0.12, 0.08, 0.14, alu, 0, h + 0.04, dz);
-      box(w + 0.12, 0.04, 0.14, alu, 0, 0.02, dz);
-      box(0.06, h, 0.14, alu, -w / 2 - 0.03, h / 2, dz);
-      box(0.06, h, 0.14, alu, w / 2 + 0.03, h / 2, dz);
-      box(w / 2, h - 0.08, 0.03, glass, -w / 4, h / 2, dz + 0.03);
-      box(w / 2, h - 0.08, 0.03, glass, w / 4 - 0.15, h / 2, dz + 0.07);
-      box(0.03, h - 0.1, 0.05, alu, 0.0, h / 2, dz + 0.05);
-    } else if (k === 'balcony') {
-      const depth = Math.min(h, 3);
-      box(w, 0.18, depth, alu, 0, -0.09, z - depth / 2 + 0.2);
-      box(w - 0.04, 0.02, depth - 0.04, teak, 0, 0.01, z - depth / 2 + 0.2);
-      const saveZ = z;
-      for (let i = 0; i < panels; i++) box(pw - 0.03, 0.98, 0.024, glass, -w / 2 + pw * (i + 0.5), 0.56, saveZ + 0.2);
-      tube(w, 0.025, steel, 0, 1.1, saveZ + 0.2, true);
-      box(0.04, 1.1, depth, alu, -w / 2, 0.55, z - depth / 2 + 0.2);
-      box(0.04, 1.1, depth, alu, w / 2, 0.55, z - depth / 2 + 0.2);
-    } else if (k === 'deck') {
-      const depth = Math.min(h, 4);
-      for (let x = -w / 2; x < w / 2; x += 0.15) box(0.13, 0.04, depth, teak, x + 0.075, 0.03, z - depth / 2);
-      box(w, 0.02, depth, new THREE.MeshStandardMaterial({ color: '#3b2a1a' }), 0, 0.005, z - depth / 2);
-    } else {
-      box(w, h, 0.08, alu, 0, h / 2, z);
-    }
-
-    // Dimension line under the product for scale
-    const dim = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-w / 2, 0.02, z + 0.35), new THREE.Vector3(w / 2, 0.02, z + 0.35)]), new THREE.LineBasicMaterial({ color: '#00939b' }));
-    scene.add(dim);
-
-    let frame = 0;
-    const tick = (): void => {
-      controls.update();
-      renderer.render(scene, camera);
-      frame = requestAnimationFrame(tick);
+    viewControl.current = (next) => { setView(next); fit(next); };
+    const resize = (): void => {
+      const width = el.clientWidth; const height = el.clientHeight; if (!width || !height) return;
+      camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height);
+      if (!touched) fit(currentView);
     };
-    tick();
-    const onResize = (): void => {
-      camera.aspect = el.clientWidth / el.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(el.clientWidth, el.clientHeight);
-    };
-    window.addEventListener('resize', onResize);
-    const stop = (): void => {
-      controls.autoRotate = false;
-    };
+    const observer = new ResizeObserver(resize); observer.observe(el); resize();
+    const stop = (): void => { touched = true; controls.autoRotate = false; setRotating(false); setView('custom'); };
     renderer.domElement.addEventListener('pointerdown', stop);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('resize', onResize);
-      renderer.domElement.removeEventListener('pointerdown', stop);
-      controls.dispose();
-      scene.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          o.geometry.dispose();
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
-        }
-      });
-      renderer.dispose();
-      el.removeChild(renderer.domElement);
+    const keyboard = (event: KeyboardEvent): void => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      event.preventDefault(); stop();
+      const offset = camera.position.clone().sub(controls.target);
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), event.key === 'ArrowLeft' ? -.12 : .12);
+      else offset.multiplyScalar(event.key === 'ArrowUp' ? .9 : 1.1);
+      camera.position.copy(controls.target).add(offset); controls.update();
     };
-  }, [k, w, h, onShip]);
-
-  return (
-    <div className="p3d-backdrop" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
-      <section className="p3d" role="dialog" aria-modal="true" aria-label={`3D view of ${title}`}>
-        <header className="p3d-head">
-          <div>
-            <h2>{title}</h2>
-            <p>
-              {(w * 1000).toFixed(0)} × {(h * 1000).toFixed(0)} mm · drag to rotate, scroll to zoom
-            </p>
-          </div>
-          <div className="p3d-tools">
-            <div className="p3d-toggle" role="tablist" aria-label="Scene">
-              <button role="tab" aria-selected={onShip} className={onShip ? 'on' : ''} onClick={() => setOnShip(true)}>
-                On a cruise deck
-              </button>
-              <button role="tab" aria-selected={!onShip} className={!onShip ? 'on' : ''} onClick={() => setOnShip(false)}>
-                Product only
-              </button>
-            </div>
-            <button className="p3d-close" onClick={onClose} aria-label="Close 3D view" autoFocus>
-              ×
-            </button>
-          </div>
-        </header>
+    renderer.domElement.addEventListener('keydown', keyboard);
+    const contextLost = (event: Event): void => { event.preventDefault(); setError('The graphics session was interrupted. Close and reopen this view to reload the model.'); };
+    renderer.domElement.addEventListener('webglcontextlost', contextLost);
+    renderer.setAnimationLoop(() => {
+      if (onShip && controls.autoRotate) { const angle = controls.getAzimuthalAngle(); if (angle < -1.1) controls.autoRotateSpeed = -.65; if (angle > 1.1) controls.autoRotateSpeed = .65; }
+      controls.update(); renderer.render(scene, camera);
+    });
+    return () => {
+      renderer.setAnimationLoop(null); observer.disconnect(); controls.dispose(); orbit.current = null; dimensionControl.current = null;
+      renderer.domElement.removeEventListener('pointerdown', stop); renderer.domElement.removeEventListener('keydown', keyboard); renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+      disposeScene(scene); envMap.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
+    };
+  }, [spec, onShip]);
+  useEffect(() => { if (dimensionControl.current) dimensionControl.current.visible = dimensions; }, [dimensions, onShip, spec]);
+  const switchScene = (ship: boolean): void => { setOnShip(ship); setRotating(false); setView('perspective'); };
+  const rotate = (): void => { const next = !rotating; setRotating(next); if (orbit.current) orbit.current.autoRotate = next; if (next) setView('custom'); };
+  return <div className="p3d-backdrop" role="presentation" onClick={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="p3d" role="dialog" aria-modal="true" aria-label={`3D view of ${title}`} ref={dialog} onKeyDown={(event) => {
+      if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+      if (event.key === 'Tab') { const items = [...(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]') ?? [])]; const first = items[0]; const last = items.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } }
+    }}>
+      <header className="p3d-head"><div><span className="p3d-eyebrow">Product explorer <span>3D</span></span><h2>{title}</h2><p>{spec.horizontal ? 'Width × depth' : 'Width × height'} · {Math.round(spec.width * 1000).toLocaleString('en-GB')} × {Math.round(spec.dimension * 1000).toLocaleString('en-GB')} mm{spec.inferredSize ? ' · illustrative dimensions' : ''}</p></div><button className="p3d-close" onClick={onClose} aria-label="Close 3D view">×</button></header>
+      <div className="p3d-stage">
+        <div className="p3d-stage-top"><div className="p3d-toggle" role="group" aria-label="Scene"><button aria-pressed={onShip} onClick={() => switchScene(true)}>Cruise deck</button><button aria-pressed={!onShip} onClick={() => switchScene(false)}>Product only</button></div><span className="p3d-interaction-hint">Drag to orbit · Scroll to zoom</span></div>
         <div className="p3d-canvas" ref={mount} />
-        <p className="p3d-note">Illustrative model generated from the product's typology and dimensions, not a CAD drawing.</p>
-      </section>
-    </div>
-  );
+        {error && <div className="p3d-error" role="alert">{error}</div>}
+        <div className="p3d-toolbar"><div className="p3d-views" role="group" aria-label="Camera view">{([['perspective', '3/4 view'], ['front', 'Front'], ['top', 'Top'], ...(onShip ? [['ship', 'Ship overview'], ['detail', 'Installed detail']] as const : [])] as const).map(([value, label]) => <button key={value} aria-pressed={view === value} onClick={() => viewControl.current(value)}>{label}</button>)}</div><span className="p3d-tool-divider" /><button aria-pressed={dimensions} onClick={() => setDimensions(!dimensions)}>Dimensions</button><button aria-pressed={rotating} onClick={rotate}>{rotating ? 'Pause orbit' : 'Auto orbit'}</button><button className="p3d-reset" aria-label="Reset 3D view" title="Reset view" onClick={() => viewControl.current('perspective')}><Icon name="refresh" size={17} /></button></div>
+      </div>
+      <footer className="p3d-footer"><div className="p3d-materials">{!['deck', 'other', 'handrail'].includes(spec.kind) && <span><i className="p3d-swatch glass" />Glazing</span>}<span><i className="p3d-swatch metal" />Metal frame</span>{spec.horizontal && <span><i className="p3d-swatch teak" />Deck finish</span>}</div><p>Illustrative geometry and finishes.{spec.trapezoid ? ' Taper inferred from the product name.' : spec.curved ? ' Curvature inferred from the product name.' : ''}{spec.incline > 0 ? ` ${spec.incline}° incline${spec.inferredIncline ? ' assumed' : ' from catalog'}.` : ''} Confirm construction details in the technical drawings.</p></footer>
+    </section>
+  </div>;
 }
