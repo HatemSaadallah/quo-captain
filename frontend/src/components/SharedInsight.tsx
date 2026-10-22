@@ -24,7 +24,7 @@ export function SharedInsight({ id }: { id: string }) {
   return (
     <div className="si">
       <header className="si-top">
-        <img src="/somec-logo.svg" alt="Somec Group" className="si-logo" />
+        <span className="si-brand"><img src="/quo-captain.svg" alt="" />Quo-Captain<small>by Somec</small></span>
         <span>Insight report</span>
       </header>
       {error && <main className="si-card"><h1>Insight not available</h1><p className="muted">{error}</p></main>}
