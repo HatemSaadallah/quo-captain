@@ -11,13 +11,15 @@ interface Props {
   L: number | null;
   H: number | null;
   title: string;
+  /** Module width in mm from the analysis (e.g. the balcony "interasse"), when known. */
+  moduleMm?: number | null;
   onClose: () => void;
 }
 
 const DEFAULTS: Record<Kind, [number, number]> = { windscreen: [2560, 1450], balustrade: [2560, 1100], handrail: [3000, 1100], divider: [1850, 2000], door: [1800, 2100], balcony: [2560, 1600], deck: [3800, 1600], other: [2000, 1200] };
 
 /** Parametric 3D model of a product, built from its own dimensions, optionally on a cruise-ship deck. */
-export function Product3D({ kind, L, H, title, onClose }: Props) {
+export function Product3D({ kind, L, H, title, moduleMm, onClose }: Props) {
   const mount = useRef<HTMLDivElement>(null);
   const [onShip, setOnShip] = useState(true);
   const KINDS: readonly string[] = ['windscreen', 'balustrade', 'handrail', 'divider', 'door', 'balcony', 'deck'];
@@ -25,6 +27,10 @@ export function Product3D({ kind, L, H, title, onClose }: Props) {
   const [dl, dh] = DEFAULTS[k];
   const w = Math.min(Math.max((L ?? dl) / 1000, 0.6), 12);
   const h = Math.min(Math.max((H ?? dh) / 1000, 0.4), 4);
+  // Shape variants named in the product title
+  const incline = /inclin/i.test(title) ? Number(/(\d{2})\s*°/.exec(title)?.[1] ?? 20) : 0;
+  const curved = /curv|facet|shaped/i.test(title);
+  const module = moduleMm && moduleMm > 300 && moduleMm < 6000 ? moduleMm / 1000 : null;
 
   useEffect(() => {
     const el = mount.current;
@@ -41,9 +47,12 @@ export function Product3D({ kind, L, H, title, onClose }: Props) {
     scene.background = new THREE.Color(onShip ? '#9fd1ec' : '#eef3f4');
     if (onShip) scene.fog = new THREE.Fog('#bfe0f0', 30, 140);
     const camera = new THREE.PerspectiveCamera(42, el.clientWidth / el.clientHeight, 0.1, 400);
-    camera.position.set(w * 0.9 + 2.5, h + 1.6, w * 0.9 + 3.2);
+    // Aim at the product itself: deck-edge items sit at z = 2.3, doors in the superstructure, dividers mid-deck.
+    const focusZ = !onShip ? 0 : k === 'door' ? -6.25 : k === 'divider' ? 0.4 : k === 'balcony' || k === 'deck' ? 1.2 : 2.3;
+    const reach = Math.max(w, h) * 1.15 + 2.2;
+    camera.position.set(reach * 0.55, h * 0.7 + 1.4, focusZ - reach * (k === 'door' ? -0.9 : 0.85));
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, h / 2, 0);
+    controls.target.set(0, h / 2, focusZ);
     controls.enableDamping = true;
     controls.minDistance = 1.5;
     controls.maxDistance = 40;
@@ -107,13 +116,37 @@ export function Product3D({ kind, L, H, title, onClose }: Props) {
 
     // The product, at the deck edge (z = 2.3), built from its dimensions
     const z = onShip ? 2.3 : 0;
-    const panels = Math.max(1, Math.round(w / 1.3));
+    const panels = Math.max(1, Math.round(w / (module ?? 1.3)));
     const pw = w / panels;
     const glassRow = (height: number, withHandrail: boolean): void => {
-      for (let i = 0; i < panels; i++) box(pw - 0.03, height - 0.12, 0.024, glass, -w / 2 + pw * (i + 0.5), height / 2 + 0.06, z);
-      for (let i = 0; i <= panels; i++) box(0.05, height, 0.05, steel, -w / 2 + pw * i, height / 2, z);
-      box(w, 0.05, 0.07, steel, 0, 0.04, z);
-      if (withHandrail) tube(w + 0.05, 0.025, steel, 0, height + 0.03, z, true);
+      if (curved) {
+        // Faceted arc: each panel turned a few degrees, like the curved windscreens in the analyses
+        const step = Math.min(0.5, 1.6 / panels);
+        const R = pw / (2 * Math.sin(step / 2));
+        for (let i = 0; i < panels; i++) {
+          const t = (i - (panels - 1) / 2) * step;
+          const g = box(pw - 0.03, height - 0.12, 0.024, glass, R * Math.sin(t), height / 2 + 0.06, z - R * (1 - Math.cos(t)));
+          g.rotation.y = -t;
+          const post = box(0.05, height, 0.05, steel, R * Math.sin(t - step / 2), height / 2, z - R * (1 - Math.cos(t - step / 2)));
+          post.rotation.y = -t;
+        }
+        return;
+      }
+      const row: THREE.Object3D[] = [];
+      for (let i = 0; i < panels; i++) row.push(box(pw - 0.03, height - 0.12, 0.024, glass, -w / 2 + pw * (i + 0.5), height / 2 + 0.06, 0));
+      for (let i = 0; i <= panels; i++) row.push(box(0.05, height, 0.05, steel, -w / 2 + pw * i, height / 2, 0));
+      row.push(box(w, 0.05, 0.07, steel, 0, 0.04, 0));
+      const group = new THREE.Group();
+      row.forEach((o) => group.add(o));
+      if (withHandrail) {
+        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, w + 0.05, 20), steel);
+        rail.rotation.z = Math.PI / 2;
+        rail.position.set(0, height + 0.03, 0);
+        group.add(rail);
+      }
+      group.position.z = z;
+      group.rotation.x = (incline * Math.PI) / 180; // leans outboard
+      scene.add(group);
     };
     if (k === 'windscreen') glassRow(h, false);
     else if (k === 'balustrade') glassRow(Math.min(h, 1.3), true);

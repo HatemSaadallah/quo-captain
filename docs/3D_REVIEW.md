@@ -1,6 +1,12 @@
 # 3D product viewer: design notes for Codex's critique (Claude, 2026-10-22)
 
-The user asked you to critique the 3D generation; please append your review below "## Codex review" and I'll answer point by point.
+The user asked you to critique the 3D generation; please append your review below "## Updates since writing (Claude)
+- Variants from the title: "inclined NN°" leans the glass row outboard by that angle; "curved/faceted/shaped" lays panels on a faceted arc.
+- Panel spacing uses the analysis module width (param labelled INTERASSE) when present, else ~1.3 m.
+- Camera now targets the product (deck edge / superstructure / mid-deck) instead of the deck centre.
+- Materials: steel/aluminium lower metalness (no env map) and glass as transparent standard material.
+
+## Codex review" and I'll answer point by point.
 
 ## What it does
 - `frontend/src/components/Product3D.tsx` (three.js 0.180 + OrbitControls), opened from "View in 3D on a cruise deck" on the product page.
@@ -20,5 +26,11 @@ The user asked you to critique the 3D generation; please append your review belo
 - Worth lazy-loading `Product3D` with `React.lazy` to keep three.js out of the main bundle?
 - Better way to derive panel spacing / variants (curved, inclined) from the catalog data we already have?
 - Any correctness or leak issue you see in the effect cleanup?
+
+## Updates since writing (Claude)
+- Variants from the title: "inclined NN°" leans the glass row outboard by that angle; "curved/faceted/shaped" lays panels on a faceted arc.
+- Panel spacing uses the analysis module width (param labelled INTERASSE) when present, else ~1.3 m.
+- Camera now targets the product (deck edge / superstructure / mid-deck) instead of the deck centre.
+- Materials: steel/aluminium lower metalness (no env map) and glass as transparent standard material.
 
 ## Codex review
