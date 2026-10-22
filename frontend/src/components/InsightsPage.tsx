@@ -38,7 +38,7 @@ const load = (): Tab[] => {
 function inline(text: string): ReactNode {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => (part.startsWith('**') && part.endsWith('**') ? <strong key={i}>{part.slice(2, -2)}</strong> : <Fragment key={i}>{part}</Fragment>));
 }
-function Markdown({ text }: { text: string }) {
+export function Markdown({ text }: { text: string }) {
   const lines = text.split(/\r?\n/);
   const out: ReactNode[] = [];
   for (let i = 0; i < lines.length; i++) {
@@ -88,6 +88,19 @@ export function InsightsPage({ initial, onCreated }: { initial?: string; onCreat
   const [draft, setDraft] = useState('');
   const [busyTab, setBusyTab] = useState<number | null>(null);
   const [attached, setAttached] = useState<{ name: string; text: string } | null>(null);
+  const [shared, setShared] = useState<Record<string, string>>({});
+
+  /** Freeze an answer as a read-only snapshot and copy its link. */
+  const share = async (key: string, question: string, m: Message): Promise<void> => {
+    try {
+      const { id } = await api.shareInsight({ question, answer: m.content, queries: m.queries ?? [], chart: m.data ?? null });
+      const link = `${window.location.origin}${window.location.pathname}#/shared/insight/${id}`;
+      setShared((cur) => ({ ...cur, [key]: link }));
+      await navigator.clipboard?.writeText(link).catch(() => undefined);
+    } catch (e) {
+      setShared((cur) => ({ ...cur, [key]: `error:${e instanceof Error ? e.message : String(e)}` }));
+    }
+  };
   const fileInput = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const handled = useRef<string | null>(null);
@@ -229,6 +242,28 @@ export function InsightsPage({ initial, onCreated }: { initial?: string; onCreat
           <div key={i} className={`in-msg ${m.role} ${m.error ? 'error' : ''}`}>
             {m.role === 'assistant' ? <Markdown text={m.content} /> : <p>{m.file ? m.content.split('\n\n[Attached file:')[0] : m.content}</p>}
             {m.file && m.role === 'user' && <span className="in-file">📎 {m.file}</span>}
+            {m.role === 'assistant' && !m.error && (
+              <div className="in-share">
+                {shared[`${active?.id}-${i}`] && !shared[`${active?.id}-${i}`].startsWith('error:') ? (
+                  <>
+                    <span className="in-share-ok">✓ Link copied</span>
+                    <a href={shared[`${active?.id}-${i}`]} target="_blank" rel="noreferrer">
+                      Open shared report
+                    </a>
+                  </>
+                ) : (
+                  <button
+                    className="in-share-btn"
+                    onClick={() => {
+                      const q = [...(active?.messages.slice(0, i) ?? [])].reverse().find((x) => x.role === 'user');
+                      void share(`${active?.id}-${i}`, q ? q.content.split('\n\n[Attached file:')[0] : '', m);
+                    }}
+                  >
+                    Share or export
+                  </button>
+                )}
+              </div>
+            )}
             {m.actions && m.actions.length > 0 && (
               <div className="in-actions">
                 {m.actions.map((a) => (

@@ -88,6 +88,8 @@ export const api = {
 
   facets: (): Promise<CatalogFacets> => request('/api/catalog/facets'),
   outputs: (): Promise<Array<{ folder: string; file: string; size: number; modifiedAt: string }>> => request('/api/outputs'),
+  shareInsight: (snap: { question: string; answer: string; queries: string[]; chart: unknown }): Promise<{ id: string }> => request('/api/insights/share', { method: 'POST', ...json(snap) }),
+  sharedInsight: (id: string): Promise<SharedInsight> => request(`/api/insights/shared/${encodeURIComponent(id)}`),
   importHistory: (): Promise<Array<{ id: string; at: string; fileName: string; status: 'imported' | 'rejected'; reference: string; customer: string; name: string; lines: number; linkedToCatalog: number | null; totalEstimatedCost: number | null; quotationId: string | null }>> => request('/api/imports/history'),
   /** Stage 1: upload and review (nothing saved). */
   previewImport: async (file: File): Promise<ImportPreview> => {
@@ -197,6 +199,16 @@ export const api = {
     saveBlob(await res.blob(), relativeFile.split('/').pop() ?? 'download');
   },
 };
+
+export interface SharedInsight {
+  id: string;
+  createdAt: string;
+  author: string;
+  question: string;
+  answer: string;
+  queries: string[];
+  chart: { columns: string[]; rows: Array<Record<string, string | number | null>>; query: string; chart: 'bar' | 'line' | 'pie' | 'histogram' | null } | null;
+}
 
 export interface ImportResult { quotationId: string; projectId: string; reference: string; name: string; customer: string; lines: number; linkedToCatalog: number; totalEstimatedCost: number }
 

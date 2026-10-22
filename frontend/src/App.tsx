@@ -3,6 +3,7 @@ import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type 
 import { CartWorkspace } from './components/CartWorkspace';
 import { ContactsPage } from './components/ContactsPage';
 import { InsightsPage } from './components/InsightsPage';
+import { SharedInsight } from './components/SharedInsight';
 import { ImportPage } from './components/ImportPage';
 import { DashboardPage } from './components/DashboardPage';
 import { ProjectsPage } from './components/ProjectsPage';
@@ -129,6 +130,8 @@ export default function App() {
     setFacets(null);
   };
 
+  // Shared insight links are public, read-only reports: no sign-in needed.
+  if (route.page === 'shared') return <SharedInsight id={route.id} />;
   if (user === undefined) return <main className="login muted">Checking session…</main>;
   if (!user) return <Login onLogin={setUser} />;
 
