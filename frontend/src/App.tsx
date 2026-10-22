@@ -131,7 +131,7 @@ export default function App() {
 
   const current = route.page === 'quotation' || route.page === 'new' ? (quotations.find((p) => p.id === route.id) ?? null) : null;
   const navItem = (page: 'dashboard' | 'catalog' | 'quotations' | 'contacts' | 'projects' | 'customers' | 'materials' | 'import', label: string, icon: IconName, active: boolean): ReactElement => (
-    <button className={`nav-item ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => navigate(page === 'quotations' ? { page: 'quotations' } : { page })}>
+    <button className={`nav-item ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => navigate(page === 'quotations' ? { page: 'quotations', status: 'all' } : { page })}>
       <Icon name={icon} /> <span>{label}</span>
     </button>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api, fmtMoney, type CatalogFacets, type CatalogRecord, type Quotation } from '../api';
-import { cleanTitle, dims, imageOf, isProduct, materialsOf, MATERIALS, sourceOf, typologyOf, TYPOLOGIES } from '../product';
+import { cleanTitle, dims, imageOf, isProduct, materialsOf, MATERIALS, productCost, sourceOf, typologyOf, TYPOLOGIES } from '../product';
 import { navigate } from '../route';
 import { SearchSuggest } from './SearchSuggest';
 import { AddProductButton } from './AddProductButton';
@@ -66,7 +66,7 @@ export function ProductCard({ r, badge, quotations, facets, estimator, onError, 
           ))}
         </div>
         <div className="pprice">
-          <b>{fmtMoney(r.unitCost)}</b>
+          <b>{fmtMoney(productCost(r))}</b>
           <span className="muted"> / {r.unit ?? 'unit'}</span>
           <AddProductButton record={r} quotations={quotations} facets={facets} estimator={estimator} onAdd={onAddToQuotation} onError={onError} />
         </div>

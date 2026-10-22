@@ -66,11 +66,11 @@ describe('validateQuotation', () => {
     expect(other.issues.some((i) => /costs will differ/.test(i.message))).toBe(true);
   });
 
-  it('free rows need a reference tab for the export, overrides are warned, attach fills blanks only', () => {
+  it('free rows export as priced lines (warned when unpriced), overrides are warned, attach fills blanks only', () => {
     const row = { id: 'r1', ...blankRow({ description: 'Balcony glass railing 2560 long', quantity: 12, unit: 'm', L: 2560, H: null }) };
     const v = validateQuotation(quotation([row]), template);
-    expect(v.ok).toBe(false);
-    expect(v.issues.some((i) => /no reference analysis attached/.test(i.message))).toBe(true);
+    const free = v.issues.find((i) => /no reference analysis and no price/.test(i.message));
+    expect(free?.level).toBe('warning'); // does not block the Excel export any more
     const withOverride = validateQuotation(quotation([{ ...row, unitCostOverride: 250 }]), template);
     expect(withOverride.estimatedTotal).toBe(3000);
     expect(withOverride.issues.some((i) => /manual unit cost/.test(i.message))).toBe(true);

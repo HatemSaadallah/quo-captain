@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, fmtMoney, fmtMaterialQty, type CatalogFacets, type CatalogRecord, type Quotation, type ProductMaterial } from '../api';
-import { cleanTitle, imageOf, locationOf, rankSimilar, sourceOf, typologyOf, type SimilarProduct } from '../product';
+import { cleanTitle, imageOf, LABOUR_CATEGORY, locationOf, productCost, rankSimilar, separateShare, sourceOf, TRANSPORT_CATEGORY, typologyOf, type SimilarProduct } from '../product';
 import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
 import { EditableSpecs, defaultSpec, specChanged, useSpecPreview, type CustomSpec } from './SpecCustomizer';
@@ -47,14 +47,20 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
   const { unitCost: customCost, busy: costing } = useSpecPreview(r, spec, base);
   if (!r || !base) return <div className="muted">Loading product…</div>;
   const customized = !!spec && specChanged(spec, base);
-  const delta = customized && customCost != null && r.unitCost ? (customCost - r.unitCost) / r.unitCost : null;
+  // Labour and transport are quoted as separate lines, so the product price leaves them out.
+  const share = separateShare(r);
+  const baseCost = productCost(r);
+  const shownCustom = customCost != null ? customCost * share.keep : null;
+  const delta = customized && shownCustom != null && baseCost ? (shownCustom - baseCost) / baseCost : null;
   // Specs the cost engine does not use travel to the quotation line as a note.
   const notes = !spec
     ? ''
     : [spec.weightKg !== base.weightKg ? `Unit weight ${spec.weightKg ?? '—'} kg` : '', spec.location !== base.location ? `Location ${spec.location || '—'}` : ''].filter(Boolean).join(' · ');
   const ty = typologyOf(r);
   const mats = [...new Set(materials.map((link) => link.material.name))];
-  const breakdown = r.costBreakdown.map((c) => ({ ...c, unitCost: c.unitCost ?? 0 })).filter((c) => c.unitCost > 0).sort((a, b) => b.unitCost - a.unitCost);
+  const allParts = r.costBreakdown.map((c) => ({ ...c, unitCost: c.unitCost ?? 0 })).filter((c) => c.unitCost > 0).sort((a, b) => b.unitCost - a.unitCost);
+  const isSeparate = (c: { category: string }): boolean => LABOUR_CATEGORY.test(c.category) || TRANSPORT_CATEGORY.test(c.category);
+  const breakdown = allParts.filter((c) => !isSeparate(c));
   const total = breakdown.reduce((s, c) => s + c.unitCost, 0) || 1;
   return (
     <div className="stack">
@@ -79,18 +85,18 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
             {mats.length === 0 && <span className="muted small">material not specified</span>}
           </div>
           <div className="pdprice">
-            {customized && customCost != null ? fmtMoney(customCost) : fmtMoney(r.unitCost)} <span>/ {r.unit ?? 'unit'}</span>
+            {customized && shownCustom != null ? fmtMoney(shownCustom) : fmtMoney(baseCost)} <span>/ {r.unit ?? 'unit'}</span>
             {customized && (costing ? <span className="pd-recalc">recalculating…</span> : delta !== null && Math.abs(delta) >= 0.0005 ? <span className={`spec-delta ${delta > 0 ? 'up' : 'down'}`}>{`${delta > 0 ? '+' : ''}${(delta * 100).toFixed(1)}%`}</span> : null)}
           </div>
           {customized && (
             <div className="pd-custom">
-              Customized specs · original {fmtMoney(r.unitCost)}
+              Customized specs · original {fmtMoney(baseCost)}
               <button className="q-link" onClick={() => setSpec(base)}>
                 Reset
               </button>
             </div>
           )}
-          <div className="small muted">{r.custom ? 'Custom catalog product; no historical cost is recorded.' : 'Estimated unit cost from the original analysis (not a selling price).'}</div>
+          <div className="small muted">{r.custom ? 'Custom catalog product; no historical cost is recorded.' : 'Estimated product cost from the original analysis, excluding labour and transport (not a selling price).'}</div>
           {spec ? (
             <EditableSpecs
               record={r}

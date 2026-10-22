@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { api, fmtMoney, type CatalogRecord, type Project } from '../api';
-import { cleanTitle, isProduct } from '../product';
+import { cleanTitle, isProduct, productCost } from '../product';
 import { navigate } from '../route';
 import { Icon } from './Icon';
 import '../projects.css';
@@ -41,7 +41,7 @@ export function ProjectFinder({ projects, onQuery, onMatches }: { projects?: Pro
     {!onMatches && (matches || products.length > 0) && <div className="finder-results">
       <button className="finder-ask-row" onClick={() => { const q = query.trim(); reset(''); navigate({ page: 'insights', q }); }}><span><strong>✦ Ask Insights</strong><small>Analyse “{query.trim()}” across quotations, customers and costs</small></span><span aria-hidden="true">→</span></button>
       {products.length > 0 && <div className="finder-group">Products</div>}
-      {products.map((r) => <button key={r.id} onClick={() => { reset(''); navigate({ page: 'product', id: r.id }); }}><span><strong>{cleanTitle(r)}</strong><small>{r.categoryName ?? 'Product'} · {fmtMoney(r.unitCost)} / {r.unit ?? 'unit'}</small></span><span aria-hidden="true">→</span></button>)}
+      {products.map((r) => <button key={r.id} onClick={() => { reset(''); navigate({ page: 'product', id: r.id }); }}><span><strong>{cleanTitle(r)}</strong><small>{r.categoryName ?? 'Product'} · {fmtMoney(productCost(r))} / {r.unit ?? 'unit'}</small></span><span aria-hidden="true">→</span></button>)}
       {matches && matches.length > 0 && <div className="finder-group">Projects</div>}
     </div>}
     {!onMatches && matches && <div className="finder-results finder-results-projects">{matches.map((project) => <button key={project.id} onClick={() => { reset(''); navigate({ page: 'projects', id: project.id }); }}><span><strong>{project.name}</strong><small>{project.customer} · {project.quotations.length} quotations</small></span><span aria-hidden="true">→</span></button>)}</div>}

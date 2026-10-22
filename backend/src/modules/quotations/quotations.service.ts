@@ -122,6 +122,12 @@ function itemData(it: NewItem): Prisma.QuotationItemUncheckedCreateWithoutQuotat
 }
 
 /** Every method is scoped to the authenticated user: a quotation is only visible to its owner. */
+/** Cost-breakdown categories that are labour or transport, and line descriptions that quote them separately. */
+const LABOUR = /INSTALLAZIONE DI CANTIERE|GESTIONE DI CANTIERE|VIAGGI E TRASFERTE/i;
+const TRANSPORT = /TRASPORT/i;
+const LABOUR_LINE = /^\s*(labou?r|installation|manodopera|installazione|posa in opera|montaggio|site management)/i;
+const TRANSPORT_LINE = /^\s*(transport|trasport|freight|shipping|delivery|logistic)/i;
+
 @Injectable()
 export class QuotationsService {
   constructor(
@@ -343,12 +349,42 @@ export class QuotationsService {
   async elencoCosti(id: string, userId: string): Promise<ElencoCosti> {
     const p = await this.get(id, userId);
     const computed = new Map<string, ComputedUnitCost | null>();
+    // Labour (site installation, site management, travel) and transport are quoted as their own lines,
+    // so each product line drops that share of its analysis' cost breakdown. Manual prices are left as typed.
+    let labour = 0;
+    let transport = 0;
+    const items = [];
     for (const it of p.items) {
-      if (!it.catalogId || it.unitCostOverride !== null) continue;
-      const c = await this.costing.compute(it);
-      computed.set(it.id, c ? { unitCost: c.unitCost, fidelity: c.fidelity, errors: c.errors, unsupported: c.unsupported } : null);
+      const rec = it.catalogId && this.catalog.has(it.catalogId) ? this.catalog.get(it.catalogId) : null;
+      const parts = rec?.costBreakdown ?? [];
+      const all = parts.reduce((acc, b) => acc + (b.unitCost ?? 0), 0);
+      const share = (re: RegExp): number => (all > 0 ? parts.filter((b) => re.test(b.category)).reduce((acc, b) => acc + (b.unitCost ?? 0), 0) / all : 0);
+      const labourShare = share(LABOUR);
+      const transportShare = share(TRANSPORT);
+      const keep = 1 - labourShare - transportShare;
+      let unit: number | null = it.historicalUnitCost;
+      if (it.catalogId && it.unitCostOverride === null) {
+        const c = await this.costing.compute(it);
+        const cu = c && c.unitCost !== null && c.unsupported === 0 ? c.unitCost : null;
+        unit = cu ?? it.historicalUnitCost;
+        computed.set(it.id, c ? { unitCost: c.unitCost === null ? null : c.unitCost * keep, fidelity: c.fidelity, errors: c.errors, unsupported: c.unsupported } : null);
+      }
+      if (it.unitCostOverride === null && unit !== null) {
+        labour += unit * labourShare * it.quantity;
+        transport += unit * transportShare * it.quantity;
+      }
+      items.push(it.unitCostOverride === null && it.historicalUnitCost !== null ? { ...it, historicalUnitCost: it.historicalUnitCost * keep } : it);
     }
-    return computeElencoCosti(p, computed);
+    const ec = computeElencoCosti({ ...p, items }, computed);
+    // Only the line title counts: product specs often say "supply and installation of…".
+    const text = (it: (typeof p.items)[number]): string => (it.catalogId ? '' : it.description.split(/\r?\n/)[0]);
+    ec.separate = {
+      labour: Math.round(labour * 100) / 100,
+      transport: Math.round(transport * 100) / 100,
+      hasLabourLine: p.items.some((it) => LABOUR_LINE.test(text(it))),
+      hasTransportLine: p.items.some((it) => TRANSPORT_LINE.test(text(it))),
+    };
+    return ec;
   }
 
   /** The generated quotation as a clickable web workbook: ELENCO COSTI + one evaluated analysis sheet per row. */

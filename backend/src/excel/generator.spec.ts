@@ -165,11 +165,15 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
     expect((await out.sheet('6')).cells.get('R1')?.f).toContain('CELL("FILENAME"');
   });
 
-  it('refuses an item without an analysis sheet', async () => {
-    const bad: Quotation = { ...quotation, items: [{ id: 'x', ...itemFromCatalog(rec('TM1641-03#178'), 1) }], templateWorkbook: 'TM1641-03 Analisi.xlsx' };
-    await expect(generateWorkbook({ quotation: bad, templatePath: path.join(INPUT_DIR, 'TM1641-03 Analisi.xlsx'), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no source analysis sheet/);
-    const free: Quotation = { ...quotation, items: [{ id: 'f', ...itemFromCatalog(rec('TM1643-06#10'), 1), catalogId: null, sourceWorkbook: null, sourceSheet: null }] };
-    await expect(generateWorkbook({ quotation: free, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: outDir, sourcePathOf: (w) => path.join(INPUT_DIR, w) })).rejects.toThrow(/no reference analysis attached/);
+  it('exports a line without an analysis sheet as a priced ELENCO COSTI row', async () => {
+    const free: Quotation = { ...quotation, items: [{ id: 'f', ...itemFromCatalog(rec('TM1643-06#10'), 1), description: 'Transport', catalogId: null, sourceWorkbook: null, sourceSheet: null, unitCostOverride: 500 }] };
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'somec-free-'));
+    const o = await generateWorkbook({ quotation: free, templatePath: path.join(INPUT_DIR, TEMPLATE), outputDir: dir, sourcePathOf: (w) => path.join(INPUT_DIR, w) });
+    const wb = await XlsxWorkbook.open(o.outputFile);
+    const row = o.items[0].row;
+    expect((await wb.sheet('ELENCO COSTI')).cells.get(`J${row}`)?.v).toBe(500);
+    expect(wb.hasSheet(String(row))).toBe(false); // no analysis sheet copied
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it('flags sheets that depend on other analysis sheets', async () => {
