@@ -42,14 +42,14 @@ describe('validateQuotation', () => {
     expect(v.estimatedTotal).toBe(54535);
   });
 
-  it('rejects missing quantity, bad reference, empty cart and missing sheet', () => {
+  it('rejects missing quantity, bad reference and empty cart; a missing sheet only warns (priced line)', () => {
     const bad = { id: 'i1', ...itemFromCatalog(balcony, 0), sourceSheet: null };
     const v = validateQuotation(quotation([bad], { reference: 'TM/2099' }), template);
     expect(v.ok).toBe(false);
     const msgs = v.issues.filter((i) => i.level === 'error').map((i) => i.message);
     expect(msgs.some((m) => /quantity must be a positive number/.test(m))).toBe(true);
     expect(msgs.some((m) => /Reference may only contain/.test(m))).toBe(true);
-    expect(msgs.some((m) => /no analysis sheet/.test(m))).toBe(true);
+    expect(v.issues.some((i) => i.level === 'warning' && /no analysis sheet; exported as a priced line/.test(i.message))).toBe(true);
     expect(validateQuotation(quotation([]), template).issues.some((i) => /cart is empty/.test(i.message))).toBe(true);
   });
 

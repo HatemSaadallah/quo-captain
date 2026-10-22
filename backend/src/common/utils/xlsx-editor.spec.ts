@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clearRange, renumberVml, unshareFormulas, upsertCell, vmlBlocks, withDefaultContentType } from './xlsx-editor';
+import { clearRange, renumberVml, unshareFormulas, upsertCell, upsertCells, vmlBlocks, withDefaultContentType } from './xlsx-editor';
 import { parseSheetXml } from './xlsx-reader';
 
 const wrap = (rows: string): string => `<?xml version="1.0"?><worksheet><dimension ref="A1:D3"/><sheetData>${rows}</sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>`;
@@ -99,3 +99,17 @@ describe('withDefaultContentType', () => {
     expect(withDefaultContentType('<Types><Override PartName="/a"/></Types>', 'vml', VML)).toContain(`<Default Extension="vml" ContentType="${VML}"/><Override`);
   });
 });
+
+describe('upsertCells', () => {
+  it('matches upsertCell one by one: replaces, inserts in column order, adds missing rows in order', () => {
+    const base = wrap('<row r="1" spans="1:3"><c r="A1" s="5"><v>1</v></c><c r="C1" t="s"><v>0</v></c></row><row r="3"><c r="A3"><f>A1*2</f><v>2</v></c></row>');
+    const writes: Array<[string, { v: number | string } | { f: string }]> = [['A1', { v: 42 }], ['B1', { v: 'x' }], ['D2', { f: '=SUM(A1:C1)' }], ['A4', { v: 7 }], ['B3', { v: 3 }]];
+    const batched = upsertCells(base, new Map(writes));
+    const sequential = writes.reduce((xml, [addr, input]) => upsertCell(xml, addr, input), base);
+    const seen = (xml: string): Record<string, unknown> => Object.fromEntries([...cells(xml)].map(([a, c]) => [a, { v: c.v, f: c.f, s: c.s }]));
+    expect(seen(batched)).toEqual(seen(sequential));
+    expect([...batched.matchAll(/<row r="(\d+)"/g)].map((m) => m[1])).toEqual(['1', '2', '3', '4']);
+    expect(batched).toContain('<c r="A1" s="5"><v>42</v></c>');
+  });
+});
+

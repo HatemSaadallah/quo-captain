@@ -137,32 +137,16 @@ function cellXml(addr: string, style: string | undefined, input: CellInput): str
 /** Insert or replace one cell in a worksheet XML string, keeping its style. */
 export function upsertCell(xml: string, addr: string, input: CellInput): string {
   const { col, row } = splitAddr(addr);
-  const cellRe = new RegExp(`<c r="${addr}"([^>]*?)(?:/>|>([\\s\\S]*?)</c>)`);
-  const existing = cellRe.exec(xml);
-  if (existing) {
-    const style = xmlAttr(' ' + existing[1], 's');
-    return xml.slice(0, existing.index) + cellXml(addr, style, input) + xml.slice(existing.index + existing[0].length);
-  }
-  const newCell = cellXml(addr, undefined, input);
-  const rowRe = new RegExp(`<row r="${row}"([^>]*?)(?:/>|>([\\s\\S]*?)</row>)`);
-  const rowM = rowRe.exec(xml);
-  const myCol = colToNum(col);
-  if (rowM) {
-    const rowAttrs = rowM[1];
-    const inner = rowM[2] ?? '';
-    const cells = [...inner.matchAll(/<c r="([A-Z]+)\d+"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)];
-    let insertAt = inner.length;
-    for (const c of cells) {
-      if (colToNum(c[1]) > myCol) {
-        insertAt = c.index!;
-        break;
-      }
-    }
-    const newInner = inner.slice(0, insertAt) + newCell + inner.slice(insertAt);
-    const spans = replaceAttr(`<row r="${row}"${rowAttrs}>`, 'spans', `1:${Math.max(myCol, ...cells.map((c) => colToNum(c[1])), 1)}`);
-    return xml.slice(0, rowM.index) + spans + newInner + '</row>' + xml.slice(rowM.index + rowM[0].length);
+  // Work inside the cell's row only: scanning the whole sheet per cell made large exports quadratic.
+  const start = xml.indexOf(`<row r="${row}"`);
+  if (start >= 0) {
+    const gt = xml.indexOf('>', start);
+    const end = xml[gt - 1] === '/' ? gt + 1 : xml.indexOf('</row>', gt) + '</row>'.length;
+    return xml.slice(0, start) + upsertInRow(xml.slice(start, end), addr, input) + xml.slice(end);
   }
   // row missing: insert in order inside sheetData
+  const myCol = colToNum(col);
+  const newCell = cellXml(addr, undefined, input);
   const sd = /<sheetData(?:\s[^>]*)?>([\s\S]*?)<\/sheetData>|<sheetData\s*\/>/.exec(xml);
   if (!sd) throw new Error('sheetData not found');
   const newRow = `<row r="${row}" spans="${myCol}:${myCol}">${newCell}</row>`;
@@ -175,9 +159,65 @@ export function upsertCell(xml: string, addr: string, input: CellInput): string 
       break;
     }
   }
-  const start = sd.index + sd[0].indexOf('>') + 1;
-  const abs = start + insertAt;
+  const start2 = sd.index + sd[0].indexOf('>') + 1;
+  const abs = start2 + insertAt;
   return xml.slice(0, abs) + newRow + xml.slice(abs);
+}
+
+/** Many cell writes in one pass over the sheet; same result as calling upsertCell for each (new rows get spans 1:last). */
+export function upsertCells(xml: string, cells: Map<string, CellInput>): string {
+  if (!cells.size) return xml;
+  const byRow = new Map<number, Array<[string, CellInput]>>();
+  for (const [addr, input] of cells) {
+    const r = splitAddr(addr).row;
+    byRow.set(r, [...(byRow.get(r) ?? []), [addr, input]]);
+  }
+  const sd = /<sheetData(?:\s[^>]*)?>([\s\S]*?)<\/sheetData>|<sheetData\s*\/>/.exec(xml);
+  if (!sd) throw new Error('sheetData not found');
+  const inner = sd[1] ?? '';
+  const fresh = (r: number): string => byRow.get(r)!.reduce((rowXml, [addr, input]) => upsertInRow(rowXml, addr, input), `<row r="${r}"></row>`);
+  const missing = [...byRow.keys()].sort((a, b) => a - b);
+  let next = 0;
+  const out: string[] = [];
+  let last = 0;
+  for (const m of inner.matchAll(/<row r="(\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g)) {
+    const r = Number(m[1]);
+    out.push(inner.slice(last, m.index));
+    while (next < missing.length && missing[next] < r) out.push(fresh(missing[next++]));
+    if (missing[next] === r) next++;
+    const updates = byRow.get(r);
+    out.push(updates ? updates.reduce((rowXml, [addr, input]) => upsertInRow(rowXml, addr, input), m[0]) : m[0]);
+    last = m.index! + m[0].length;
+  }
+  out.push(inner.slice(last));
+  while (next < missing.length) out.push(fresh(missing[next++]));
+  return xml.slice(0, sd.index) + `<sheetData>${out.join('')}</sheetData>` + xml.slice(sd.index + sd[0].length);
+}
+
+/** Replaces or inserts one cell inside a single `<row …>…</row>` (or self-closing row) fragment. */
+function upsertInRow(rowXml: string, addr: string, input: CellInput): string {
+  const { col, row } = splitAddr(addr);
+  const existing = new RegExp(`<c r="${addr}"([^>]*?)(?:/>|>([\\s\\S]*?)</c>)`).exec(rowXml);
+  if (existing) {
+    const style = xmlAttr(' ' + existing[1], 's');
+    return rowXml.slice(0, existing.index) + cellXml(addr, style, input) + rowXml.slice(existing.index + existing[0].length);
+  }
+  const newCell = cellXml(addr, undefined, input);
+  const rowM = new RegExp(`^<row r="${row}"([^>]*?)(?:/>|>([\\s\\S]*)</row>)$`).exec(rowXml)!;
+  const myCol = colToNum(col);
+  const rowAttrs = rowM[1];
+  const inner = rowM[2] ?? '';
+  const cells = [...inner.matchAll(/<c r="([A-Z]+)\d+"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)];
+  let insertAt = inner.length;
+  for (const c of cells) {
+    if (colToNum(c[1]) > myCol) {
+      insertAt = c.index!;
+      break;
+    }
+  }
+  const newInner = inner.slice(0, insertAt) + newCell + inner.slice(insertAt);
+  const spans = replaceAttr(`<row r="${row}"${rowAttrs}>`, 'spans', `1:${Math.max(myCol, ...cells.map((c) => colToNum(c[1])), 1)}`);
+  return spans + newInner + '</row>';
 }
 
 /** Remove value and formula of a cell (keeps style). Cells that do not exist are left alone. */
@@ -215,6 +255,7 @@ export function clearRows(xml: string, fromRow: number, toRow: number): string {
 }
 
 export class XlsxEditor {
+  private readonly pendingCells = new Map<string, Map<string, CellInput>>();
   private readonly parts = new Map<string, string>();
   private sheetMap = new Map<string, string>();
   private readonly log: string[] = [];
@@ -240,11 +281,17 @@ export class XlsxEditor {
   }
 
   private async text(part: string): Promise<string> {
-    const cached = this.parts.get(part);
-    if (cached !== undefined) return cached;
-    const f = this.zip.file(part);
-    if (!f) throw new Error(`Part not found: ${part}`);
-    const s = await f.async('string');
+    let s = this.parts.get(part);
+    if (s === undefined) {
+      const f = this.zip.file(part);
+      if (!f) throw new Error(`Part not found: ${part}`);
+      s = await f.async('string');
+    }
+    const pending = this.pendingCells.get(part);
+    if (pending) {
+      s = upsertCells(s, pending); // queued setCell writes, applied in one pass
+      this.pendingCells.delete(part);
+    }
     this.parts.set(part, s);
     return s;
   }
@@ -291,7 +338,10 @@ export class XlsxEditor {
   async setCell(sheet: string, addr: string, input: CellInput): Promise<void> {
     await this.prepareSheet(sheet);
     const part = this.sheetPart(sheet);
-    this.set(part, upsertCell(await this.text(part), addr, input));
+    // Queued, not applied: rewriting a multi-MB sheet per cell made large exports take a minute. text() applies the queue.
+    let pending = this.pendingCells.get(part);
+    if (!pending) this.pendingCells.set(part, (pending = new Map()));
+    pending.set(addr, input);
     this.log.push(`${sheet}!${addr} = ${'f' in input ? '=' + input.f : JSON.stringify(input.v)}`);
   }
 
@@ -606,6 +656,7 @@ export class XlsxEditor {
   }
 
   async save(outPath: string): Promise<void> {
+    for (const part of [...this.pendingCells.keys()]) await this.text(part);
     for (const [part, content] of this.parts) {
       if (part.startsWith('unshared:')) continue;
       this.zip.file(part, content);
