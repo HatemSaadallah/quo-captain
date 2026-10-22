@@ -3,6 +3,7 @@ import { api, fmtMoney, fmtNum, fmtMaterialQty, type CatalogFacets, type Catalog
 import { cleanTitle, dims, imageOf, locationOf, rankSimilar, sourceOf, typologyOf, type SimilarProduct } from '../product';
 import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
+import { SpecCustomizer, defaultSpec, type CustomSpec } from './SpecCustomizer';
 import '../product.css';
 import { AddProductButton } from './AddProductButton';
 
@@ -11,14 +12,14 @@ interface Props {
   quotations: Quotation[];
   facets: CatalogFacets | null;
   estimator: string;
-  onAddToQuotation: (record: CatalogRecord, quotationId: string, quantity: number) => Promise<boolean>;
+  onAddToQuotation: (record: CatalogRecord, quotationId: string, quantity: number, custom?: CustomSpec) => Promise<boolean>;
   onError: (msg: string) => void;
 }
 
 export function ProductPage({ id, quotations, facets, estimator, onAddToQuotation, onError }: Props) {
   const [r, setR] = useState<CatalogRecord | null>(null);
   const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
-  const [qty, setQty] = useState('1');
+  const [spec, setSpec] = useState<CustomSpec | null>(null);
   const [materials, setMaterials] = useState<ProductMaterial[]>([]);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
         if (!live) return;
         setR(rec);
         setMaterials(billOfMaterials);
-        setQty(String(rec.quantity ?? 1));
+        setSpec(defaultSpec(rec));
         const hits = await api.similar(id, 50);
         if (live) setSimilar(rankSimilar(rec, hits).slice(0, 12));
       })
@@ -98,21 +99,22 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
             </dd>
           </dl>
           <div className="addbox">
-            <label className="small muted" style={{ whiteSpace: 'nowrap' }}>
-              Qty ({r.unit ?? 'unit'})
-            </label>
-            <input type="number" min={0.001} step="any" value={qty} onChange={(e) => setQty(e.target.value)} style={{ width: 100 }} aria-label="quantity" />
+            <span className="small muted">
+              {spec ? `${spec.quantity} ${r.unit ?? 'units'}${JSON.stringify(spec) !== JSON.stringify(defaultSpec(r)) ? ' · customized specs' : ''}` : ''}
+            </span>
             <AddProductButton
               record={r}
               quotations={quotations}
               facets={facets}
               estimator={estimator}
               onError={onError}
-              onAdd={(record, quotationId) => onAddToQuotation(record, quotationId, Number(qty) || 1)}
+              onAdd={(record, quotationId) => onAddToQuotation(record, quotationId, spec?.quantity || 1, spec ?? undefined)}
             />
           </div>
         </div>
       </section>
+
+      {spec && <SpecCustomizer record={r} spec={spec} onChange={setSpec} />}
 
       <section className="panel">
         <div className="bom-head">
