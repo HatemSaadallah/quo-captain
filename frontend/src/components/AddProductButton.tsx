@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type SyntheticEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type { CatalogFacets, CatalogRecord, Quotation } from '../api';
 import { QuotationForm } from './QuotationForm';
 
@@ -15,22 +16,20 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [added, setAdded] = useState(false);
   const [query, setQuery] = useState('');
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const matches = (q: Quotation): boolean => !words.length || words.every((w) => `${q.reference} ${q.name} ${q.customer} ${q.projectName ?? ''}`.toLowerCase().includes(w));
   const drafts = quotations.filter((q) => q.status === 'draft' && matches(q));
   const finished = quotations.filter((q) => q.status === 'active' && matches(q));
 
+  // Dialogs render on <body> so a hovered card's transform can't clip them; stop keeps their clicks and keys from opening the card.
+  const stop = (e: SyntheticEvent): void => e.stopPropagation();
+
   const add = async (quotationId: string): Promise<void> => {
     setBusy(true);
     const ok = await onAdd(record, quotationId);
     setBusy(false);
-    if (ok) {
-      setAdded(true);
-      setOpen(false);
-      window.setTimeout(() => setAdded(false), 1600);
-    }
+    if (ok) setOpen(false); // the parent then opens the quotation
   };
 
   return (
@@ -38,16 +37,15 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
       <button
         type="button"
         className="add-product-button"
-        data-added={added || undefined}
         aria-label={`Add ${record.title ?? record.itemCode ?? 'product'} to quotation`}
         disabled={busy}
         onClick={(event) => {
           event.stopPropagation(); // the card around it opens the product page
           setOpen(true);
         }}
-      >{busy ? 'Adding…' : added ? 'Added' : 'Add'}</button>
-      {open && !creating && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
+      >{busy ? 'Adding…' : 'Add'}</button>
+      {open && !creating && createPortal(
+        <div className="modal-backdrop" role="presentation" onClick={stop} onKeyDown={stop} onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
           <section className="panel add-quotation-modal" role="dialog" aria-modal="true" aria-labelledby="add-product-title">
             <h2 id="add-product-title">Add to a quotation</h2>
             <p className="small muted">Choose where to add <strong>{record.title ?? record.itemCode ?? 'this product'}</strong>.</p>
@@ -60,10 +58,11 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
             </div>
             <div className="row modal-actions"><button type="button" onClick={() => setOpen(false)}>Cancel</button></div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
-      {creating && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setCreating(false)}>
+      {creating && createPortal(
+        <div className="modal-backdrop" role="presentation" onClick={stop} onKeyDown={stop} onMouseDown={(e) => e.target === e.currentTarget && setCreating(false)}>
           <section className="panel add-quotation-modal" role="dialog" aria-modal="true" aria-labelledby="new-draft-title">
             <h2 id="new-draft-title">New draft quotation</h2>
             <p className="small muted">Enter the quotation details. This product will be added after the draft is created.</p>
@@ -74,18 +73,15 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
               onSaved={async (quotation) => {
                 setCreating(false);
                 setBusy(true);
-                const ok = await onAdd(record, quotation.id); // the product goes straight into the new draft
+                await onAdd(record, quotation.id); // the product goes straight into the new draft
                 setBusy(false);
-                if (ok) {
-                  setAdded(true);
-                  window.setTimeout(() => setAdded(false), 1600);
-                }
               }}
               submitLabel="Create draft & add product"
             />
             <button type="button" onClick={() => setCreating(false)}>Cancel</button>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

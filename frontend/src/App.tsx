@@ -112,6 +112,16 @@ export default function App() {
     }
   };
 
+  /** Adding from the catalog or a product page opens the quotation it went into. */
+  const addAndOpen: typeof addTo = async (quotationId, ...rest) => {
+    const ok = await addTo(quotationId, ...rest);
+    if (ok) {
+      setCartId(quotationId);
+      navigate({ page: 'quotation', id: quotationId, tab: 'elenco' });
+    }
+    return ok;
+  };
+
   /** The selected draft quotation is the current working quotation. */
   const drafts = quotations.filter((q) => q.status === 'draft').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const cart = drafts.find((q) => q.id === cartId) ?? drafts[0] ?? null;
@@ -186,8 +196,8 @@ export default function App() {
           </div>
         )}
         {route.page === 'dashboard' && <DashboardPage initialCustomerId={route.customerId} />}
-        {route.page === 'catalog' && <ProductHome facets={facets} quotations={quotations} estimator={user.name} initialQuery={route.q} initialCreate={route.create} onError={setError} onAddToQuotation={(r, id) => addTo(id, r, 1, [])} />}
-        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity, custom) => addTo(id, r, quantity, custom?.params ?? [], custom)} onError={setError} />}
+        {route.page === 'catalog' && <ProductHome facets={facets} quotations={quotations} estimator={user.name} initialQuery={route.q} initialCreate={route.create} onError={setError} onAddToQuotation={(r, id) => addAndOpen(id, r, 1, [])} />}
+        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity, custom) => addAndOpen(id, r, quantity, custom?.params ?? [], custom)} onError={setError} />}
         {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
         {route.page === 'insights' && <InsightsPage initial={route.q} onCreated={() => void loadQuotations()} />}
         {route.page === 'import' && <ImportPage onImported={async (quotationId) => { await loadQuotations(); setCartId(quotationId); navigate({ page: 'quotations' }); }} />}
