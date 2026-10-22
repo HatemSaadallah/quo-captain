@@ -5,6 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from './projects.service';
 import { previewChat, previewSearch } from './project-preview';
 import { chatCompletion, llmProvider } from '../../common/utils/llm';
+import { CatalogService } from '../catalog/catalog.service';
+
+export interface RequirementsResult {
+  summary: string;
+  mode: 'llm' | 'preview';
+  needs: Array<{ description: string; quantity: number | null; unit: string | null; products: Array<{ id: string; title: string; category: string | null; unit: string | null; unitCost: number | null; score: number; source: string }> }>;
+}
 
 const stringField = (value: unknown): string => {
   if (typeof value !== 'string' || !value.trim() || value.length > 6000) throw new BadRequestException('Enter a message between 1 and 6,000 characters');
@@ -20,7 +27,7 @@ const summary = (project: Project) => ({ id: project.id, name: project.name, cus
 export class ProjectIntelligenceService {
   private providerRetryAt = 0;
   private readonly log = new Logger(ProjectIntelligenceService.name);
-  constructor(private readonly prisma: PrismaService, private readonly projects: ProjectsService) {}
+  constructor(private readonly prisma: PrismaService, private readonly projects: ProjectsService, private readonly catalog: CatalogService) {}
 
   private async complete(system: string, context: unknown, schema: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (Date.now() < this.providerRetryAt) throw new ServiceUnavailableException('Project assistant provider is temporarily unavailable');
@@ -82,6 +89,47 @@ export class ProjectIntelligenceService {
       const hits = summaries.filter((c) => words.some((w) => JSON.stringify(c).toLowerCase().includes(w))).map((c) => c.name);
       return { reply: hits.length ? `Found ${hits.length} customer(s) by keyword.` : 'No customer matches.', customers: hits, mode: 'preview' };
     }
+  }
+
+  /** Client requirements file -> list of needs -> matching catalog products for each need. */
+  async requirements(id: string, input: { text?: unknown; fileName?: unknown }, ownerId: string): Promise<RequirementsResult> {
+    const project = await this.projects.getOwned(id, ownerId);
+    const raw = typeof input.text === 'string' ? input.text.trim() : '';
+    if (!raw) throw new BadRequestException('Upload or paste the client requirements first.');
+    const text = raw.slice(0, 7000); // keep the request inside the provider's token budget
+    let summary = '';
+    let needs: Array<{ description: string; quantity: number | null; unit: string | null }> = [];
+    let mode: 'llm' | 'preview' = 'llm';
+    try {
+      const r = await this.complete('Read the client requirements for a cruise-ship outfitting quotation (glazing, windscreens, balustrades, handrails, balcony dividers, sliding doors, prefabricated balconies, flooring). Return a one-sentence summary and the list of distinct product needs: a short product description in English with key specs (type, height/size, glass, material, location), the quantity and unit if stated (null otherwise). Max 12 needs. Ignore services such as transport or labour.', { project: project.name, customer: project.customer, requirements: text }, { type: 'object', properties: { summary: { type: 'string' }, needs: { type: 'array', items: { type: 'object', properties: { description: { type: 'string' }, quantity: { type: ['number', 'null'] }, unit: { type: ['string', 'null'] } }, required: ['description', 'quantity', 'unit'], additionalProperties: false } } }, required: ['summary', 'needs'], additionalProperties: false });
+      summary = typeof r.summary === 'string' ? r.summary : '';
+      needs = (Array.isArray(r.needs) ? r.needs : []).slice(0, 12) as typeof needs;
+    } catch {
+      // Fallback: each non-empty line that names a product family is treated as one need.
+      mode = 'preview';
+      needs = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => /windscreen|balustrade|railing|handrail|divider|partition|door|balcon|floor|teak|glass/i.test(l)).slice(0, 12).map((l) => {
+        const q = /(\d+(?:[.,]\d+)?)\s*(m2|m²|sqm|m|pcs|nr|units?)\b/i.exec(l);
+        return { description: l.slice(0, 160), quantity: q ? Number(q[1].replace(',', '.')) : null, unit: q ? q[2] : null };
+      });
+      summary = needs.length ? `Found ${needs.length} product needs by keyword.` : 'No product needs recognised.';
+    }
+    const results = [];
+    for (const n of needs) {
+      // Semantic search ignores numbers, so products whose title carries the requested size (e.g. 2000) go first.
+      const sizes = (n.description.match(/\b\d{3,4}\b/g) ?? []).filter((x) => Number(x) >= 300);
+      const hits = (await this.catalog.search({ q: n.description, limit: 20 })).hits
+        .filter((h) => h.record.sheet && h.record.unitCost && !/deduct|extra|option|addition|install|transport|cleaning|piping/i.test(h.record.title ?? ''))
+        .map((h, i) => ({ h, rank: i - (sizes.some((x) => (h.record.title ?? '').includes(x)) ? 100 : 0) }))
+        .sort((a, b) => a.rank - b.rank)
+        .map((x) => x.h)
+        .slice(0, 3);
+      results.push({ ...n, products: hits.map((h) => ({ id: h.record.id, title: h.record.title ?? '', category: h.record.categoryName, unit: h.record.unit, unitCost: h.record.unitCost, score: Math.round(h.score * 100) / 100, source: `${h.record.offerNo ?? h.record.workbook} sheet ${h.record.sheet}` })) });
+    }
+    // Keep the requirements as project context for the conversation.
+    if (typeof input.fileName === 'string' && input.fileName && !(project.brief ?? '').includes(`[Requirements: ${input.fileName}]`)) {
+      await this.prisma.project.update({ where: { id }, data: { brief: `${project.brief ? `${project.brief}\n\n` : ''}[Requirements: ${input.fileName}]\n${text}`.slice(0, 30000) } });
+    }
+    return { summary, mode, needs: results };
   }
 
   async transcript(id: string, ownerId: string): Promise<ProjectMessage[]> {

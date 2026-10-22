@@ -12,6 +12,9 @@ export class ProjectsController {
   @Post('search')
   search(@Body() body: { query?: string }, @CurrentUser() user: AuthUser) { return this.intelligence.search(body.query, user.id); }
 
+  @Post(':id/requirements')
+  requirements(@Param('id') id: string, @Body() body: { text?: string; fileName?: string }, @CurrentUser() user: AuthUser) { return this.intelligence.requirements(id, body ?? {}, user.id); }
+
   @Get(':id/messages')
   transcript(@Param('id') id: string, @CurrentUser() user: AuthUser) { return this.intelligence.transcript(id, user.id); }
 
