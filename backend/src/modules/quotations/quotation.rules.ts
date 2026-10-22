@@ -106,7 +106,7 @@ export function validateQuotation(p: Quotation, template: WorkbookSummary | null
   let itemsWithoutCost = 0;
   for (const it of p.items) {
     const tag = `${it.position || '?'} / ${it.itemCode || '?'}`;
-    if (!it.catalogId) push('error', `${tag}: no reference analysis attached (attach one by similarity); the Excel export needs a sheet to copy`, it.id);
+    if (!it.catalogId) push('warning', it.unitCostOverride === null ? `${tag}: no reference analysis and no price; it is exported with unit cost 0 (set a price or attach an analysis)` : `${tag}: exported as a priced line without analysis sheet`, it.id);
     else if (!it.sourceSheet) push('error', `${tag}: the historical row has no analysis sheet, nothing can be copied`, it.id);
     if (!(it.quantity > 0) || !Number.isFinite(it.quantity)) push('error', `${tag}: quantity must be a positive number`, it.id);
     if (!it.itemCode.trim()) push('error', `${tag}: item code is required`, it.id);

@@ -116,3 +116,16 @@ export function rankSimilar(target: CatalogRecord, hits: SearchHit[]): SimilarPr
 }
 
 export const sourceOf = (r: CatalogRecord): string => r.offerNo ?? r.workbook.replace(/\s*Analisi\.xlsx$/i, '');
+
+/** Labour (site installation, site management, travel) and transport are quoted as separate lines. */
+export const LABOUR_CATEGORY = /INSTALLAZIONE DI CANTIERE|GESTIONE DI CANTIERE|VIAGGI E TRASFERTE/i;
+export const TRANSPORT_CATEGORY = /TRASPORT/i;
+export function separateShare(r: Pick<CatalogRecord, 'costBreakdown'>): { labour: number; transport: number; keep: number } {
+  const all = r.costBreakdown.reduce((a, b) => a + (b.unitCost ?? 0), 0);
+  const part = (re: RegExp): number => (all > 0 ? r.costBreakdown.filter((b) => re.test(b.category)).reduce((a, b) => a + (b.unitCost ?? 0), 0) / all : 0);
+  const labour = part(LABOUR_CATEGORY);
+  const transport = part(TRANSPORT_CATEGORY);
+  return { labour, transport, keep: 1 - labour - transport };
+}
+/** Product cost without labour and transport. */
+export const productCost = (r: CatalogRecord): number | null => (r.unitCost === null ? null : r.unitCost * separateShare(r).keep);

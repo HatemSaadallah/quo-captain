@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, fmtMoney, type CatalogRecord } from '../api';
-import { cleanTitle, dims, imageOf, isProduct, sourceOf, typologyOf, TYPOLOGIES, type Typology } from '../product';
+import { cleanTitle, dims, imageOf, isProduct, productCost, sourceOf, typologyOf, TYPOLOGIES, type Typology } from '../product';
 import { navigate } from '../route';
 
 interface Props {
@@ -145,7 +145,7 @@ export function SearchSuggest({ q, setQ, busy, onSubmit, onTypology }: Props) {
                   </span>
                 </span>
                 <span className="sg-price">
-                  {fmtMoney(r.unitCost)}
+                  {fmtMoney(productCost(r))}
                   <small>/{r.unit ?? 'unit'}</small>
                 </span>
               </>,

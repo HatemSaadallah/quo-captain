@@ -87,6 +87,12 @@ export async function validateGenerated(quotation: Quotation, outcome: Generatio
     const where = `'${sheet}'`;
     const warnings = [...p.warnings];
     const base: GeneratedItemReport = { itemId: item.id, position: item.position, itemCode: item.itemCode, sourceWorkbook: item.sourceWorkbook ?? quotation.templateWorkbook, sourceSheet: item.sourceSheet ?? '', row, sheet, boqRow, quantity: item.quantity, historicalUnitCost: item.historicalUnitCost, unitCost: null, sheetUnitCost: null, totalCost: null, missingCodes: [], errorCells: 0, paramsWritten: p.paramsWritten, warnings };
+    if (!item.catalogId || !item.sourceSheet) {
+      // priced line without analysis sheet (labour, transport…): J holds the manual unit cost
+      const unitCost = item.unitCostOverride ?? 0;
+      items.push({ ...base, unitCost, totalCost: unitCost * item.quantity });
+      continue;
+    }
     if (!wb.hasSheet(sheet)) {
       err('sheet', `Analysis sheet '${sheet}' missing`, where);
       items.push({ ...base, warnings: ['sheet missing'] });

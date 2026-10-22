@@ -78,7 +78,7 @@ export function QuotationForm({ facets, quotation, onSaved, onError, submitLabel
       {projects.length === 0 && <div className="small muted">Create a project and attach it to a customer in the Projects tab before creating a quotation.</div>}
       {tpl && (
         <div className="small muted">
-          {tpl.offerNo}: client {tpl.client}, {tpl.itemCount} historical items, {tpl.analysisSheetCount} analysis sheets, price list and budget of this workbook are used for computed costs and for the optional Excel export.
+          {tpl.offerNo ?? tpl.workbook.replace(/\s*Analisi\.xlsx$/i, '')}: client {tpl.client}, {tpl.itemCount} historical items, {tpl.analysisSheetCount} analysis sheets, price list and budget of this workbook are used for computed costs and for the optional Excel export.
         </div>
       )}
       <div className="row">
