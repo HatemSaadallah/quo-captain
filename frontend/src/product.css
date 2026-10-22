@@ -32,3 +32,28 @@
 .simwrap .pbadge { background: rgba(0, 147, 155, 0.92); }
 .simwrap .reasons { padding: 0 2px; }
 .simwrap .ptitle { height: 2.7em; min-height: 0; }
+
+/* Customize specs */
+.spec { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; }
+.spec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.spec-head h2 { margin: 0; }
+.spec-head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); max-width: 64ch; }
+.spec-reset { background: transparent; border-color: transparent; color: var(--accent); font-weight: 600; }
+.spec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 16px; }
+.spec-field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
+.spec-field > span { display: flex; justify-content: space-between; gap: 6px; font-weight: 550; }
+.spec-field > span i { font-style: normal; color: #8a5f12; font-weight: 500; }
+.spec-input { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: #fff; overflow: hidden; }
+.spec-input:focus-within { border-color: #74a6ab; box-shadow: 0 0 0 2px #b8d9db; }
+.spec-input input { border: none; padding: 9px 10px; font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 0; }
+.spec-input input:focus { outline: none; }
+.spec-input em { font-style: normal; font-size: 12px; color: var(--muted); padding: 0 10px; background: #f5f8f8; align-self: stretch; display: flex; align-items: center; border-left: 1px solid var(--line); }
+.spec-field.moved .spec-input { border-color: #d9b46a; background: #fffcf4; }
+.spec-desc textarea { font-size: 13px; line-height: 1.5; color: var(--ink); }
+.spec-result { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 14px 16px; border-radius: 12px; background: #f5f8f8; font-size: 13px; }
+.spec-result.on { background: #eef7f6; border: 1px solid #cfe5e3; }
+.spec-result b { font-size: 24px; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.spec-delta { font-weight: 700; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.spec-delta.up { background: #fbe9e3; color: #a3401f; }
+.spec-delta.down { background: #e2f1ea; color: #23684d; }
+.spec-total { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
