@@ -139,12 +139,9 @@ export default function App() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="logo">S</div>
-          <div>
-            <div className="title">Somec</div>
-            <div className="sub">Project workspace</div>
-          </div>
+        <div className="brand brand-somec">
+          <img src="/somec-logo.svg" alt="Somec Group" className="brand-logo" />
+          <div className="sub">Project workspace</div>
         </div>
         <div className="nav-caption">Workspace</div>
         <nav aria-label="Main navigation">
