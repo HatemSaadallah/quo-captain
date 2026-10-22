@@ -1020,7 +1020,9 @@ table.grid td.cell input {
 .section-head { display: flex; align-items: baseline; gap: 12px; justify-content: space-between; }
 .section-head h2 { margin: 6px 0 0; font-size: 18px; }
 
-.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.pgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; } /* at most 3 cards per row keeps catalog pages calm */
+@media (max-width: 1100px) { .pgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .pgrid { grid-template-columns: minmax(0, 1fr); } }
 .pcard { display: flex; flex-direction: column; text-align: left; padding: 0; border-radius: 12px; overflow: hidden; background: #fff; border: 1px solid var(--line); transition: transform 0.15s, box-shadow 0.15s; width: 100%; }
 .pcard:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(16, 38, 64, 0.12); }
 .pimg { position: relative; aspect-ratio: 16 / 10; background: #dfe6ee center / cover no-repeat; }
