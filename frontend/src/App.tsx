@@ -3,6 +3,7 @@ import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type 
 import { CartWorkspace } from './components/CartWorkspace';
 import { ContactsPage } from './components/ContactsPage';
 import { InsightsPage } from './components/InsightsPage';
+import { ImportPage } from './components/ImportPage';
 import { DashboardPage } from './components/DashboardPage';
 import { ProjectsPage } from './components/ProjectsPage';
 import { ProjectFinder } from './components/ProjectFinder';
@@ -120,7 +121,7 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const current = route.page === 'quotation' || route.page === 'new' ? (quotations.find((p) => p.id === route.id) ?? null) : null;
-  const navItem = (page: 'dashboard' | 'catalog' | 'quotations' | 'contacts' | 'projects' | 'customers' | 'materials', label: string, icon: IconName, active: boolean): ReactElement => (
+  const navItem = (page: 'dashboard' | 'catalog' | 'quotations' | 'contacts' | 'projects' | 'customers' | 'materials' | 'import', label: string, icon: IconName, active: boolean): ReactElement => (
     <button className={`nav-item ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => navigate(page === 'quotations' ? { page: 'quotations' } : { page })}>
       <Icon name={icon} /> <span>{label}</span>
     </button>
@@ -145,6 +146,7 @@ export default function App() {
           {navItem('materials', 'Materials', 'materials', route.page === 'materials')}
           {navItem('quotations', 'Quotations', 'quotations', route.page === 'quotations' || route.page === 'quotation' || route.page === 'new')}
           {navItem('contacts', 'Contacts', 'contacts', route.page === 'contacts')}
+          {navItem('import', 'Import', 'upload', route.page === 'import')}
         </nav>
         <div className="sidebar-foot">
           <div className="sidebar-account"><span className="sidebar-user-avatar">{user.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span className="sidebar-user-copy"><strong>{user.name}</strong><small>{user.role}</small></span></div>
@@ -166,11 +168,12 @@ export default function App() {
         {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity) => addTo(id, r, quantity, [])} onError={setError} />}
         {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
         {route.page === 'insights' && <InsightsPage initial={route.q} />}
-        {route.page === 'projects' && <ProjectsPage projectId={route.id} onError={setError} onUpdated={() => void loadQuotations()} />}
+        {route.page === 'import' && <ImportPage onImported={async (quotationId) => { await loadQuotations(); setCartId(quotationId); navigate({ page: 'quotations' }); }} />}
+        {route.page === 'projects' && <ProjectsPage projectId={route.id} estimator={user.name} onError={setError} onUpdated={() => void loadQuotations()} onQuotationCreated={(q) => { onQuotation(q); setCartId(q.id); navigate({ page: 'quotations' }); }} />}
         {route.page === 'customers' && <CustomersPage customerId={route.id} onError={setError} />}
         {route.page === 'materials' && <MaterialsPage materialId={route.id} onError={setError} />}
         {route.page === 'quotations' && !route.status && (
-          <CartWorkspace drafts={drafts} current={cart} facets={facets} estimator={user.name} onError={setError} onSelect={setCartId} onCreated={(q) => { onQuotation(q); setCartId(q.id); }}>
+          <CartWorkspace drafts={drafts} current={cart} facets={facets} estimator={user.name} onError={setError} onSelect={setCartId} onDelete={(q) => void deleteQuotation(q)} onCreated={(q) => { onQuotation(q); setCartId(q.id); }}>
             {cart && (
               <QuotationPage
                 quotation={cart}

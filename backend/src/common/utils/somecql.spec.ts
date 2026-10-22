@@ -27,6 +27,11 @@ describe('SomecQL', () => {
     expect(r.rows).toEqual([{ customer: 'APEXA' }, { customer: 'OMNIX' }]);
   });
 
+  it('builds histograms with bucket()', () => {
+    const r = runQuery('lines | group bucket(total, 100) | agg count()', data);
+    expect(r.rows).toEqual([{ total_range: '0–100', count: 2 }, { total_range: '100–200', count: 1 }, { total_range: '300–400', count: 1 }]);
+  });
+
   it('explains mistakes so the model can correct the query', () => {
     expect(() => runQuery('lines | where colour = red', data)).toThrow(/Unknown field "colour"/);
     expect(() => runQuery('orders', data)).toThrow(/Unknown dataset/);

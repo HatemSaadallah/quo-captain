@@ -1,0 +1,35 @@
+/* Import page */
+.imp { max-width: 860px; display: flex; flex-direction: column; gap: 18px; }
+.imp-head h1 { margin: 0; font-size: 28px; }
+.imp-head p { margin: 6px 0 0; color: var(--muted); max-width: 64ch; }
+.imp-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 46px 24px; border: 2px dashed #b9cfd1; border-radius: 16px; background: #fbfdfd; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.imp-drop:hover, .imp-drop.over { border-color: #00939b; background: #f1f9f9; }
+.imp-drop:focus-visible { outline: 3px solid #64aab0; outline-offset: 3px; }
+.imp-drop strong { font-size: 16px; color: var(--ink); }
+.imp-drop.has-file { border-style: solid; border-color: #00939b; }
+.imp-sheet { position: relative; width: 58px; height: 70px; border-radius: 8px; background: #fff; border: 1px solid #cfe0e1; box-shadow: 0 6px 16px #17303a12; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; padding: 14px 10px 0; }
+.imp-sheet span { height: 4px; border-radius: 2px; background: #d7e6e7; }
+.imp-sheet span:nth-child(2) { width: 70%; }
+.imp-sheet b { position: absolute; bottom: -8px; right: -10px; background: #1d7044; color: #fff; font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 6px; letter-spacing: 0.04em; }
+.imp-actions { display: flex; gap: 10px; }
+.imp-error { padding: 12px 14px; border-radius: 10px; background: #fbeee9; color: #8a3b1f; font-size: 13px; }
+.imp-steps { list-style: none; margin: 0; padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 10px; }
+.imp-steps li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #9aa9ae; }
+.imp-steps li.now { color: var(--ink); font-weight: 600; }
+.imp-steps li.done { color: var(--muted); }
+.imp-step-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #c8d6d8; flex: none; }
+.imp-steps li.now .imp-step-dot { border-color: #00939b; background: #00939b; animation: imp-pulse 1s ease-in-out infinite; }
+.imp-steps li.done .imp-step-dot { border-color: #00939b; background: #00939b; }
+.imp-result { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+.imp-result-head { display: flex; gap: 14px; align-items: center; }
+.imp-result-head h2 { margin: 0; font-size: 20px; }
+.imp-result-head p { margin: 2px 0 0; color: var(--muted); }
+.imp-ok { width: 38px; height: 38px; border-radius: 50%; background: #e2f1ea; color: #23684d; display: grid; place-items: center; font-weight: 800; font-size: 18px; flex: none; }
+.imp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0; }
+.imp-stats div { padding: 14px 16px; border-radius: 12px; background: #f5f8f8; }
+.imp-stats dt { font-size: 12px; color: var(--muted); }
+.imp-stats dd { margin: 4px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.imp-stats small { font-size: 13px; font-weight: 500; color: var(--muted); }
+@keyframes imp-pulse { 50% { opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .imp-steps li.now .imp-step-dot { animation: none; } }
+@media (max-width: 700px) { .imp-stats { grid-template-columns: 1fr; } }

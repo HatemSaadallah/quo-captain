@@ -2,9 +2,10 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { navigate } from '../route';
 import { CONTACTS } from './ContactsPage';
+import { InsightChart, type ChartData } from './InsightChart';
 import '../insights.css';
 
-type Message = { role: 'user' | 'assistant'; content: string; error?: boolean; queries?: string[] };
+type Message = { role: 'user' | 'assistant'; content: string; error?: boolean; queries?: string[]; data?: ChartData | null; cached?: boolean };
 type Tab = { id: number; title: string; messages: Message[] };
 
 const STORE = 'somec.insights.tabs';
@@ -15,6 +16,8 @@ const PROMPTS: Array<{ topic: string; text: string }> = [
   { topic: 'Pricing', text: 'What is the cheapest windscreen per m² we have costed, and where does it come from?' },
   { topic: 'Comparison', text: 'Compare the typical historical unit cost of balustrades, dividers and sliding doors.' },
   { topic: 'Pipeline', text: 'Which draft quotations are the largest, and what is in them?' },
+  { topic: 'Distribution', text: 'Show a histogram of windscreen unit costs per m².' },
+  { topic: 'Share', text: 'Pie chart of estimated cost by product type for confirmed quotations.' },
   { topic: 'People', text: 'Which installers specialise in flooring?' },
 ];
 /** Only the recent turns go to the model; older ones are kept on screen but cost nothing. */
@@ -129,8 +132,8 @@ export function InsightsPage({ initial }: { initial?: string }) {
     setBusyTab(tabId);
     try {
       const send = thread.filter((m) => !m.error).slice(-HISTORY).map(({ role, content }) => ({ role, content }));
-      const { reply, queries } = await api.assistantChat(send, CONTACTS);
-      setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: [...thread, { role: 'assistant', content: reply, queries }] } : t)));
+      const { reply, queries, data, cached } = await api.assistantChat(send, CONTACTS);
+      setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: [...thread, { role: 'assistant', content: reply, queries, data, cached }] } : t)));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setTabs((cur) => cur.map((t) => (t.id === tabId ? { ...t, messages: [...thread, { role: 'assistant', content: `${msg} Try again in a minute, or ask a narrower question.`, error: true }] } : t)));
@@ -194,10 +197,12 @@ export function InsightsPage({ initial }: { initial?: string }) {
         {active?.messages.map((m, i) => (
           <div key={i} className={`in-msg ${m.role} ${m.error ? 'error' : ''}`}>
             {m.role === 'assistant' ? <Markdown text={m.content} /> : <p>{m.content}</p>}
+            {m.data && <InsightChart data={m.data} />}
             {m.queries && m.queries.length > 0 && (
               <details className="in-queries">
                 <summary>
                   Based on {m.queries.length} {m.queries.length === 1 ? 'query' : 'queries'}
+                  {m.cached ? ' · instant (cached)' : ''}
                 </summary>
                 {m.queries.map((q, k) => (
                   <code key={k}>{q}</code>
