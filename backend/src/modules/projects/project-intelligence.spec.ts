@@ -34,14 +34,14 @@ describe('project intelligence boundaries', () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-only');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Found the balcony project.', projectIds: ['other-owner-project', 'p1', 'p1'] }) } }] }) }));
     const projects = { list: vi.fn().mockResolvedValue([project()]) };
-    const service = new ProjectIntelligenceService({} as PrismaService, projects as unknown as ProjectsService);
+    const service = new ProjectIntelligenceService({} as PrismaService, projects as unknown as ProjectsService, {} as never);
     expect(await service.search('balconies', 'u1')).toEqual({ reply: 'Found the balcony project.', projectIds: ['p1'], mode: 'llm' });
     expect(projects.list).toHaveBeenCalledWith('u1');
   });
   it('labels provider-limit responses as preview and avoids repeatedly calling a failing provider', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-only');
     const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 429 }); vi.stubGlobal('fetch', fetcher);
-    const service = new ProjectIntelligenceService({} as PrismaService, { list: async () => [project()] } as unknown as ProjectsService);
+    const service = new ProjectIntelligenceService({} as PrismaService, { list: async () => [project()] } as unknown as ProjectsService, {} as never);
     expect((await service.search('OMNIX balcony', 'u1')).mode).toBe('preview');
     expect((await service.search('OMNIX balcony', 'u1')).mode).toBe('preview');
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -49,7 +49,7 @@ describe('project intelligence boundaries', () => {
   it('checks project ownership before reading or writing transcript data', async () => {
     const prisma = { projectMessage: { findMany: vi.fn(), create: vi.fn() } };
     const projects = { getOwned: vi.fn().mockRejectedValue(new NotFoundException('Project not found')) };
-    const service = new ProjectIntelligenceService(prisma as unknown as PrismaService, projects as unknown as ProjectsService);
+    const service = new ProjectIntelligenceService(prisma as unknown as PrismaService, projects as unknown as ProjectsService, {} as never);
     await expect(service.transcript('someone-elses-project', 'u1')).rejects.toThrow('Project not found');
     await expect(service.chat('someone-elses-project', 'without jacuzzi', user)).rejects.toThrow('Project not found');
     expect(prisma.projectMessage.findMany).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe('project intelligence boundaries', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify({ reply: 'Exclude it.', sourceQuotationId: 'q1', title: 'Revision', excludeItemIds: ['invented'] }) } }] }) }));
     const prisma = { projectMessage: { findMany: vi.fn().mockResolvedValue([]) }, $transaction: vi.fn() };
     const projects = { getOwned: async () => ({ customerId: 'c1' }), list: async () => [project()] };
-    const service = new ProjectIntelligenceService(prisma as unknown as PrismaService, projects as unknown as ProjectsService);
+    const service = new ProjectIntelligenceService(prisma as unknown as PrismaService, projects as unknown as ProjectsService, {} as never);
     await expect(service.chat('p1', 'same without jacuzzi', user)).rejects.toThrow('did not match');
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -67,7 +67,7 @@ describe('project intelligence boundaries', () => {
     const tx = { projectMessage: { findFirst: async () => ({ proposal: { sourceQuotationId: 'q1', sourceUpdatedAt: 'old', excludeItemIds: ['jacuzzi'] } }) }, quotation: { findFirst: async () => ({ updatedAt: new Date(), items: [] }), create: vi.fn() } };
     const prisma = { $transaction: (run: (db: unknown) => unknown) => run(tx) };
     const projects = { getOwned: async () => ({ customerId: 'c1', customer: { name: 'OMNIX' } }) };
-    await expect(new ProjectIntelligenceService(prisma as unknown as PrismaService, projects as unknown as ProjectsService).createDraft('p1', 'm1', { name: 'New draft', reference: 'TM1' }, user)).rejects.toThrow('source quotation changed');
+    await expect(new ProjectIntelligenceService(prisma as unknown as PrismaService, projects as unknown as ProjectsService, {} as never).createDraft('p1', 'm1', { name: 'New draft', reference: 'TM1' }, user)).rejects.toThrow('source quotation changed');
     expect(tx.quotation.create).not.toHaveBeenCalled();
   });
 });
