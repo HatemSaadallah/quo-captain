@@ -36,7 +36,7 @@ function deckTexture(): THREE.CanvasTexture {
 
 export function createProductScene(spec: ProductSpec, onShip: boolean) {
   // The studio follows the page theme when the viewer opens; the ship keeps its daylight sky.
-  const studio = document.documentElement.dataset.theme === 'dark' ? { sky: '#1b2225', floor: '#232c2f' } : { sky: '#edf0f0', floor: '#e7edeb' };
+  const studio = document.documentElement.dataset.theme === 'dark' ? { sky: '#2b2f32', floor: '#34393c' } : { sky: '#edf0f0', floor: '#e7edeb' };
   const scene = new THREE.Scene(); scene.background = new THREE.Color(onShip ? '#dce8ed' : studio.sky);
   if (onShip) scene.fog = new THREE.Fog('#dce8ed', 100, 1100);
   const product = new THREE.Group(); product.name = 'product'; scene.add(product);

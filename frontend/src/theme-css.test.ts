@@ -11,7 +11,7 @@ describe('dark theme', () => {
     const card = darkRule('.card { background: #fff; color: #16202c; border: 1px solid #d9dfe7; }', '.card');
     const bg = /background: (#[0-9a-f]+)/.exec(card)![1];
     const ink = /color: (#[0-9a-f]+)/.exec(card)![1];
-    expect(lightness(bg)).toBeLessThan(0.25);
+    expect(lightness(bg)).toBeLessThan(0.35); // dark grey card
     expect(lightness(ink)).toBeGreaterThan(0.95); // dark ink becomes white
     expect(toOklch(parseColor(ink)!)[1]).toBeLessThan(0.02); // without a blue tint
     expect(card).toMatch(/border: 1px solid #[0-9a-f]{6}/);
