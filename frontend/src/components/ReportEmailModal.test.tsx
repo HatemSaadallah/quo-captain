@@ -30,7 +30,7 @@ describe('Report emails', () => {
     const download = vi.spyOn(api, 'downloadPdf').mockResolvedValue(undefined);
     const q = quotation();
     render(<QuotationPage quotation={q} isCart={false} onMakeCart={vi.fn()} onConfirmed={vi.fn()} facets={null} tab="elenco" onQuotation={vi.fn()} onError={vi.fn()} />);
-    await userEvent.click(screen.getByRole('button', { name: '⬇ PDF' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(download).toHaveBeenCalledWith(q.id, q.reference);
     expect(screen.getByText(`${q.reference} ELENCO COSTI.pdf`)).toBeInTheDocument();

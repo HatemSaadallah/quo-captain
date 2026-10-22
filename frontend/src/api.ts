@@ -88,7 +88,7 @@ export const api = {
 
   facets: (): Promise<CatalogFacets> => request('/api/catalog/facets'),
   outputs: (): Promise<Array<{ folder: string; file: string; size: number; modifiedAt: string }>> => request('/api/outputs'),
-  assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
+  assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string; queries?: string[] }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
   customProducts: (): Promise<CatalogRecord[]> => request('/api/catalog/custom'),
   createCatalogProduct: (dto: CreateCatalogProductDto): Promise<CatalogRecord> => request('/api/catalog', { method: 'POST', ...json(dto) }),
   search: (q: string, opts: { workbook?: string; category?: string; limit?: number } = {}): Promise<SearchResult> => {

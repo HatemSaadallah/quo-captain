@@ -11,3 +11,4 @@
 - 2026-10-21: Removed estimated EUR/unit view from material charts; charts now show published market indexes only.
 - 2026-10-21: Dashboard is now the first/default tab: customer/date/status filters, quotation/cost charts and unit-aware product/BOM demand. Polished Customers with stats/charts; removed material mock-price panels. Live dashboard totals reconciled against all 26 quotations.
 - 2026-10-21: Added post-download contact email drafts with three editable templates; sending and report attachment happen in the user's mail app. Frontend 23/23 and backend 94/94 tests pass; builds and live dashboard checks pass.
+- 2026-10-21: Rebuilt both apps; all 117 tests pass. Restarted backend/frontend; verified production assets and authenticated APIs on localhost and IPv4.

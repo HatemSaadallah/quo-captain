@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { api, getToken, onUnauthorized, type AuthUser, type CatalogFacets, type CatalogRecord, type Quotation } from './api';
 import { CartWorkspace } from './components/CartWorkspace';
 import { ContactsPage } from './components/ContactsPage';
+import { InsightsPage } from './components/InsightsPage';
 import { DashboardPage } from './components/DashboardPage';
 import { ProjectsPage } from './components/ProjectsPage';
 import { ProjectFinder } from './components/ProjectFinder';
@@ -14,6 +15,7 @@ import { NewQuotation } from './components/NewQuotation';
 import { QuotationList } from './components/QuotationList';
 import { QuotationPage } from './components/QuotationPage';
 import { WorkspaceAssistant } from './components/WorkspaceAssistant';
+import { Icon, type IconName } from './components/Icon';
 import { navigate, useRoute } from './route';
 
 export default function App() {
@@ -118,9 +120,9 @@ export default function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const current = route.page === 'quotation' || route.page === 'new' ? (quotations.find((p) => p.id === route.id) ?? null) : null;
-  const navItem = (page: 'dashboard' | 'catalog' | 'quotations' | 'contacts' | 'projects' | 'customers' | 'materials', label: string, icon: string, active: boolean): ReactElement => (
-    <button className={`nav-item ${active ? 'active' : ''}`} onClick={() => navigate(page === 'quotations' ? { page: 'quotations' } : { page })}>
-      <span className="icon">{icon}</span> {label}
+  const navItem = (page: 'dashboard' | 'catalog' | 'quotations' | 'contacts' | 'projects' | 'customers' | 'materials', label: string, icon: IconName, active: boolean): ReactElement => (
+    <button className={`nav-item ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => navigate(page === 'quotations' ? { page: 'quotations' } : { page })}>
+      <Icon name={icon} /> <span>{label}</span>
     </button>
   );
 
@@ -131,21 +133,22 @@ export default function App() {
           <div className="logo">S</div>
           <div>
             <div className="title">Somec</div>
-            <div className="sub">Quotation cost analysis</div>
+            <div className="sub">Project workspace</div>
           </div>
         </div>
-        <nav>
-          {navItem('dashboard', 'Dashboard', '◴', route.page === 'dashboard')}
-          {navItem('projects', 'Projects', '⌂', route.page === 'projects')}
-          {navItem('customers', 'Customers', '♙', route.page === 'customers')}
-          {navItem('catalog', 'Catalog', '▦', route.page === 'catalog' || route.page === 'product')}
-          {navItem('materials', 'Materials', '◈', route.page === 'materials')}
-          {navItem('quotations', 'Quotations', '≣', route.page === 'quotations' || route.page === 'quotation' || route.page === 'new')}
-          {navItem('contacts', 'Contacts', '☎', route.page === 'contacts')}
+        <div className="nav-caption">Workspace</div>
+        <nav aria-label="Main navigation">
+          {navItem('dashboard', 'Dashboard', 'dashboard', route.page === 'dashboard')}
+          {navItem('projects', 'Projects', 'projects', route.page === 'projects')}
+          {navItem('customers', 'Customers', 'customers', route.page === 'customers')}
+          {navItem('catalog', 'Catalog', 'catalog', route.page === 'catalog' || route.page === 'product')}
+          {navItem('materials', 'Materials', 'materials', route.page === 'materials')}
+          {navItem('quotations', 'Quotations', 'quotations', route.page === 'quotations' || route.page === 'quotation' || route.page === 'new')}
+          {navItem('contacts', 'Contacts', 'contacts', route.page === 'contacts')}
         </nav>
         <div className="sidebar-foot">
           <div className="sidebar-account"><span className="sidebar-user-avatar">{user.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span className="sidebar-user-copy"><strong>{user.name}</strong><small>{user.role}</small></span></div>
-          <button className="sidebar-signout" onClick={logout}><span aria-hidden="true">↪</span> Sign out</button>
+          <button className="sidebar-signout" onClick={logout}><Icon name="signout" size={17} /> Sign out</button>
         </div>
       </aside>
       <main className="content">
@@ -162,6 +165,7 @@ export default function App() {
         {route.page === 'catalog' && <ProductHome facets={facets} quotations={quotations} estimator={user.name} initialQuery={route.q} initialCreate={route.create} onError={setError} onAddToQuotation={(r, id) => addTo(id, r, 1, [])} />}
         {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity) => addTo(id, r, quantity, [])} onError={setError} />}
         {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
+        {route.page === 'insights' && <InsightsPage initial={route.q} />}
         {route.page === 'projects' && <ProjectsPage projectId={route.id} onError={setError} onUpdated={() => void loadQuotations()} />}
         {route.page === 'customers' && <CustomersPage customerId={route.id} onError={setError} />}
         {route.page === 'materials' && <MaterialsPage materialId={route.id} onError={setError} />}
