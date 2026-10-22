@@ -88,3 +88,29 @@
 .in-attached { display: inline-flex; align-items: center; gap: 4px; align-self: center; font-size: 12px; background: #eef5f4; color: #1f6b70; padding: 3px 4px 3px 10px; border-radius: 999px; white-space: nowrap; }
 .in-attached button { border: none; background: transparent; padding: 0 6px; font-size: 14px; color: #1f6b70; }
 .finder-results .finder-create-row { background: #1f6b70; } .finder-results .finder-create-row strong { color: #fff; } .finder-results .finder-create-row small, .finder-results .finder-create-row span[aria-hidden] { color: #d4ecea; } .finder-results .finder-create-row:hover { background: #185559 !important; }
+
+/* Share / export an answer */
+.in-share { margin-top: 8px; display: flex; gap: 10px; align-items: center; font-size: 12px; }
+.in-share-btn { font-size: 12px; padding: 4px 12px; border-radius: 999px; border-color: #cfe0e2; color: #1f6b70; font-weight: 600; background: #fff; }
+.in-share-btn:hover:not(:disabled) { border-color: #1f6b70; }
+.in-share-ok { color: #23684d; font-weight: 600; }
+.in-share a { color: #1f6b70; font-weight: 600; }
+
+/* Shared insight report */
+.si { min-height: 100vh; background: #f4f6f6; padding: 24px 16px 48px; }
+.si-top { max-width: 860px; margin: 0 auto 16px; display: flex; align-items: center; gap: 14px; color: #64767e; font-size: 13px; }
+.si-logo { height: 34px; width: auto; }
+.si-card { max-width: 860px; margin: 0 auto; background: #fff; border: 1px solid #dde6e7; border-radius: 16px; padding: 28px 32px; }
+.si-meta { margin: 0 0 6px; font-size: 12px; color: #64767e; }
+.si-card h1 { margin: 0 0 16px; font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; color: #17303a; }
+.si-answer { line-height: 1.6; color: #17303a; }
+.si-answer p { margin: 0 0 8px; }
+.si-answer ul { padding-left: 20px; }
+.si-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; padding-top: 16px; border-top: 1px solid #dde6e7; }
+.si-foot { margin: 14px 0 0; font-size: 11px; color: #64767e; }
+@media print {
+  .si { background: #fff; padding: 0; }
+  .si-actions, .in-queries summary { display: none; }
+  .si-card { border: none; padding: 0; }
+  .ic { break-inside: avoid; }
+}
