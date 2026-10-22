@@ -2,7 +2,8 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { ExcelStatus, GenerationResult, ValidationReport } from '../../common/interfaces/generation.interface';
+import type { WorkbookSummary } from '../../common/interfaces/catalog.interface';
+import type { CheckResult, ExcelStatus, GenerationResult, ValidationReport } from '../../common/interfaces/generation.interface';
 import { INPUT_DIR, OUTPUT_DIR } from '../../common/utils/paths';
 import { detectExcel, recalculateWithExcel } from '../../excel/excel-automation';
 import { generateWorkbook, safeFileStem } from '../../excel/generator';
@@ -35,13 +36,18 @@ export class GenerationService {
   }
 
   async generate(quotationId: string, userId: string): Promise<GenerationResult> {
-    const quotation = await this.quotations.get(quotationId, userId);
-    const validation = this.quotations.validateQuotation(quotation);
-    if (!validation.ok) throw new BadRequestException({ message: 'Quotation is not ready for generation', issues: validation.issues });
-    const templatePath = path.join(INPUT_DIR, quotation.templateWorkbook);
-    if (!existsSync(templatePath) || !this.catalog.workbooks.some((w) => w.workbook === quotation.templateWorkbook)) {
-      throw new BadRequestException(`Template workbook ${quotation.templateWorkbook} not found in data/input`);
-    }
+    const stored = await this.quotations.get(quotationId, userId);
+    // Drafts export too: only a template that cannot hold the lines blocks. Open points become report warnings.
+    const fits = (w: WorkbookSummary): boolean => w.requiredSheetsPresent && w.freeItemRows >= stored.items.length && existsSync(path.join(INPUT_DIR, w.workbook));
+    const chosen = this.catalog.workbooks.find((w) => w.workbook === stored.templateWorkbook);
+    const template = chosen && fits(chosen) ? chosen : this.catalog.workbooks.filter(fits).sort((a, b) => b.freeItemRows - a.freeItemRows)[0];
+    if (!template) throw new BadRequestException(`No template workbook has room for ${stored.items.length} lines`);
+    const quotation = { ...stored, templateWorkbook: template.workbook, reference: stored.reference.trim() || stored.name.trim() || 'Draft' };
+    const notes: CheckResult[] = [
+      ...(template.workbook !== stored.templateWorkbook ? [{ level: 'warning' as const, check: 'template', detail: `${stored.templateWorkbook || 'No template'} has no room for ${stored.items.length} lines; exported on ${template.workbook}` }] : []),
+      ...this.quotations.validateQuotation(quotation).issues.map((i) => ({ level: 'warning' as const, check: 'quotation', detail: i.message })),
+    ];
+    const templatePath = path.join(INPUT_DIR, template.workbook);
     const outputDir = this.allocateOutputDir(quotation.reference);
     const t0 = Date.now();
     const outcome = await generateWorkbook({
@@ -68,6 +74,10 @@ export class GenerationService {
     }
     const report = await validateGenerated(quotation, outcome, recalc, engine);
     report.sourceHashes = outcome.sourceHashes;
+    if (notes.length) {
+      report.checks.unshift(...notes);
+      if (report.status === 'validated') report.status = 'requires_review';
+    }
     const reportFile = path.join(outputDir, 'validation_report.json');
     writeFileSync(reportFile, JSON.stringify({ ...report, changes: outcome.changes }, null, 2));
     await this.quotations.recordGeneration(quotationId, { file: path.relative(OUTPUT_DIR, outcome.outputFile), reportFile: path.relative(OUTPUT_DIR, reportFile), status: report.status, engine });
