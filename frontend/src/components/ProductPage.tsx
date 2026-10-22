@@ -39,7 +39,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
         setMaterials(billOfMaterials);
         setSpec(defaultSpec(rec, locationOf(rec)));
         const hits = await api.similar(id, 50);
-        if (live) setSimilar(rankSimilar(rec, hits).slice(0, 12));
+        if (live) setSimilar(rankSimilar(rec, hits).slice(0, 6)); // two rows of three
       })
       .catch((e: unknown) => onError(String(e)));
     return () => {
