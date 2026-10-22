@@ -1,4 +1,4 @@
-# Somec Quotation Studio · 2-minute demo script
+# Quo-Captain · 2-minute demo script
 
 **Length:** about 2:00 (roughly 280 spoken words).
 **Setup before recording:**
@@ -13,7 +13,7 @@
 ## 0:00 – 0:15 · The problem
 **Screen:** Dashboard: KPIs, cost trend chart, recent quotations.
 
-> Every Somec quotation starts as an Excel "Analisi": hundreds of lines of glazing, balustrades and decking, costed by hand from old workbooks. It's slow, and all that pricing history is locked inside spreadsheets. We turned it into a single workspace.
+> Every Somec quotation starts as an Excel "Analisi": hundreds of lines of glazing, balustrades and decking, costed by hand from old workbooks. It's slow, and all that pricing history is locked inside spreadsheets. Quo-Captain turns it into a single workspace.
 
 ## 0:15 – 0:35 · Import existing work
 **Screen:** Sidebar → **Import**. Drag `TM1641-03 Analisi.xlsx` onto the drop zone. The review screen shows **Ready / Match needed / Needs review**. Click **Needs review**, then **Accept & import**.
@@ -42,7 +42,7 @@ Then click **Share** to copy the link.
 ## 1:45 – 2:00 · Close
 **Screen:** Project page → upload a client requirements file → suggested products → **Create draft quotation**. End on the Dashboard.
 
-> And when a new tender arrives, upload the client's requirements. We suggest matching products and draft the quotation for you. Somec's history, now working for every new quote.
+> And when a new tender arrives, upload the client's requirements. We suggest matching products and draft the quotation for you. Quo-Captain: Somec's history, now working for every new quote.
 
 ---
 
