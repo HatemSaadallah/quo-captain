@@ -8,7 +8,7 @@ export class AssistantController {
   constructor(private readonly assistant: AssistantService) {}
 
   @Post('chat')
-  chat(@Body() body: { messages?: AssistantMessage[]; contacts?: Array<Record<string, unknown>> }, @CurrentUser() user: AuthUser): Promise<{ reply: string }> {
+  chat(@Body() body: { messages?: AssistantMessage[]; contacts?: Array<Record<string, unknown>> }, @CurrentUser() user: AuthUser): Promise<{ reply: string; queries: string[] }> {
     return this.assistant.chat(body.messages ?? [], user, body.contacts ?? []);
   }
 }
