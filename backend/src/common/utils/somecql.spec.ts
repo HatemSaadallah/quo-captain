@@ -27,6 +27,11 @@ describe('SomecQL', () => {
     expect(r.rows).toEqual([{ customer: 'APEXA' }, { customer: 'OMNIX' }]);
   });
 
+  it('sorts histogram ranges by number even when the query asks for an explicit sort', () => {
+    const r = runQuery('lines | group bucket(total, 20) | agg count() | sort total_range asc', data);
+    expect(r.rows.map((row) => row.total_range)).toEqual(['40–60', '60–80', '100–120', '300–320']);
+  });
+
   it('builds histograms with bucket()', () => {
     const r = runQuery('lines | group bucket(total, 100) | agg count()', data);
     expect(r.rows).toEqual([{ total_range: '0–100', count: 2 }, { total_range: '100–200', count: 1 }, { total_range: '300–400', count: 1 }]);

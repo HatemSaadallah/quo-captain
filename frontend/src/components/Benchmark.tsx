@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { costCategory } from '../product';
 import { api, fmtMoney, fmtNum, type Benchmark as BenchmarkData } from '../api';
 
 interface Props {
@@ -95,7 +96,7 @@ export function Benchmark({ quotationId, itemId, onError }: Props) {
               {data.categories.map((c) => (
                 <tr key={c.code}>
                   <td>
-                    {c.category} <span className="muted">({c.code})</span>
+                    <span title={c.category}>{costCategory(c.category)}</span> <span className="muted">({c.code})</span>
                   </td>
                   <td className="num">
                     <b>{fmtMoney(c.own)}</b>

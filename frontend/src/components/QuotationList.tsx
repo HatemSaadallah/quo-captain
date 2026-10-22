@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fmtMoney, type Quotation } from '../api';
+import { fmtMoney, type Quotation, quotationCost } from '../api';
 import { TYPOLOGIES, typologyOf } from '../product';
 import { navigate } from '../route';
 
@@ -13,7 +13,7 @@ interface Props {
 type SortKey = 'reference' | 'name' | 'customer' | 'date' | 'rows' | 'total' | 'updated';
 
 const itemTypology = (it: Quotation['items'][number]): string => typologyOf({ title: it.description.split('\n')[0], categoryName: null, description: it.description }).key;
-const totalOf = (q: Quotation): number => q.items.reduce((acc, it) => acc + (it.unitCostOverride ?? it.historicalUnitCost ?? 0) * it.quantity, 0);
+const totalOf = (q: Quotation): number => quotationCost(q);
 const typesOf = (q: Quotation): string[] => [...new Set(q.items.map(itemTypology))];
 
 const PAGE_SIZES = [10, 25, 50];
@@ -199,18 +199,21 @@ export function QuotationList({ quotations, cartId, status, onDelete }: Props) {
                 <td className="num">
                   <b>{fmtMoney(totalOf(q))}</b>
                 </td>
-                <td className="small muted">{new Date(q.updatedAt).toLocaleDateString()}</td>
+                <td className="small muted">{new Date(q.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                 <td>
-                  <button
-                    className="danger"
-                    title="Delete quotation"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(q);
-                    }}
-                  >
-                    ×
-                  </button>
+                  {q.status === 'draft' && (
+                    <button
+                      className="ql-delete"
+                      title="Delete draft"
+                      aria-label={`Delete draft ${q.reference || q.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(q);
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

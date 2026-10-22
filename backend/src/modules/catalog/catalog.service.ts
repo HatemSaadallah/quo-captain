@@ -144,6 +144,11 @@ export class CatalogService implements OnModuleInit {
     return this.byId.has(id);
   }
 
+  /** Cost breakdown of a catalog record; none for free lines and unknown ids. */
+  costParts(id: string | null | undefined): CatalogRecord['costBreakdown'] {
+    return id ? (this.byId.get(id)?.costBreakdown ?? []) : [];
+  }
+
   async createProduct(input: CreateCatalogProductDto, createdBy: string): Promise<CatalogRecord> {
     if (!this.prisma) throw new ServiceUnavailableException('Catalog database is unavailable');
     const title = input.title?.trim();

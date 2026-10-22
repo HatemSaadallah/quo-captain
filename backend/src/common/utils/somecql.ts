@@ -187,9 +187,10 @@ export function runQuery(query: string, data: Dataset): QueryResult {
   if (sort) {
     const s = sort;
     if (rows.length && !(s.col in rows[0])) throw new Error(`Cannot sort by "${s.col}". Columns: ${Object.keys(rows[0]).join(', ')}`);
+    const byRange = s.col in buckets; // "1000–1200" must follow "800–1000", not "1000" < "200" as text
     rows = [...rows].sort((a, b) => {
-      const x = a[s.col];
-      const y = b[s.col];
+      const x = byRange ? parseFloat(String(a[s.col])) : a[s.col];
+      const y = byRange ? parseFloat(String(b[s.col])) : b[s.col];
       if (x === null) return 1;
       if (y === null) return -1;
       return (x < y ? -1 : x > y ? 1 : 0) * s.dir;

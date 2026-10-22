@@ -60,7 +60,7 @@
 .finder-results-projects { margin-top: -1px; border-top-left-radius: 0; border-top-right-radius: 0; }
 
 /* Insight charts (palette validated: #00939b #eb6834 #2a78d6 #eda100 #e87ba4 #008300) */
-.ic { margin: 12px 0 6px; padding: 14px 16px 10px; border: 1px solid var(--in-line, #dde6e7); border-radius: 12px; background: #fff; max-width: 680px; }
+.ic { margin: 12px 0 6px; padding: 14px 16px 10px; border: 1px solid var(--in-line, #dde6e7); border-radius: 12px; background: #fff; width: 680px; max-width: 100%; box-sizing: border-box; }
 .ic figcaption { font-size: 13px; font-weight: 600; color: var(--in-ink, #17303a); margin-bottom: 8px; }
 .ic-plot { width: 100%; height: auto; display: block; }
 .ic-grid { stroke: #e9eff0; stroke-width: 1; }

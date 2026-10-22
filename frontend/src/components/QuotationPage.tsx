@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { api, fmtMoney, fmtNum, type CatalogFacets, type ElencoCosti as ElencoCostiData, type Quotation } from '../api';
+import { api, fmtMoney, fmtNum, type CatalogFacets, type ElencoCosti as ElencoCostiData, type Quotation, quotationCost } from '../api';
 import { typologyOf } from '../product';
 import '../quotation.css';
 import { navigate } from '../route';
@@ -34,7 +34,7 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
   const [reportName, setReportName] = useState<string | undefined>();
   const [sheet, setSheet] = useState<ElencoCostiData | null>(null);
   const onData = useCallback((d: ElencoCostiData) => setSheet(d.quotationId === quotation.id ? d : null), [quotation.id]);
-  const fallbackTotal = quotation.items.reduce((acc, it) => acc + (it.unitCostOverride ?? it.historicalUnitCost ?? 0) * it.quantity, 0);
+  const fallbackTotal = quotationCost(quotation);
   const current = sheet?.quotationId === quotation.id ? sheet : null;
   const total = current ? current.totals.totalCost : fallbackTotal;
   const parts = (current?.summary ?? [])

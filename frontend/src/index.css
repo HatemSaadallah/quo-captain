@@ -1,3 +1,8 @@
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-text="large"] { --text-boost: 1; }
+:root[data-theme="dark"] .login-logo { filter: brightness(0) invert(1); }
+:root[data-theme="dark"] .login { background: radial-gradient(ellipse at 15% 20%, #18393e, transparent 60%), #111618; }
+
 :root {
   --bg: #f3f5f8;
   --panel: #ffffff;
@@ -1026,7 +1031,14 @@ table.grid td.cell input {
 .pmeta { color: var(--muted); font-size: 12px; }
 .pmats { display: flex; gap: 4px; flex-wrap: wrap; min-height: 20px; }
 .mat { font-size: 11px; background: var(--chip); color: #0d4a73; padding: 2px 7px; border-radius: 4px; }
-.pprice { display: flex; align-items: baseline; gap: 2px; margin-top: auto; font-size: 15px; }
+.pprice { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; font-size: 15px; }
+.pprice-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px; min-width: 0; }
+.add-product-button { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; padding: 7px 15px 7px 8px; border: 0; border-radius: 999px; background: linear-gradient(135deg, #24868a, #176a6e); color: #fff; font-size: 13px; font-weight: 650; letter-spacing: .01em; box-shadow: 0 1px 2px #0f3d4429, 0 6px 14px -6px #176a6e99; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease; }
+.add-product-button::before { content: '+'; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #ffffff30; font-size: 16px; font-weight: 700; line-height: 1; }
+.add-product-button[data-added]::before { content: '✓'; font-size: 12px; }
+.add-product-button:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 2px 4px #0f3d4433, 0 10px 20px -8px #176a6ecc; border: 0; color: #fff; }
+.add-product-button:active:not(:disabled) { transform: translateY(0); }
+.add-product-button:focus-visible { outline: 2px solid #24868a; outline-offset: 2px; }
 
 .crumbs { font-size: 13px; color: var(--muted); }
 .crumbs a { color: var(--accent); text-decoration: none; }

@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CatalogService } from '../catalog/catalog.service';
+import { productUnitCost } from '../../common/utils/separate-costs';
 import type { CreateProjectDto, Project, ProjectContact } from '../../common/interfaces/project.interface';
 import type { Quotation } from '../../common/interfaces/quotation.interface';
 
@@ -10,7 +12,10 @@ const text = (value: unknown, field: string): string => {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalog: CatalogService,
+  ) {}
 
   async list(ownerId: string): Promise<Project[]> {
     const rows = await this.prisma.project.findMany({
@@ -35,6 +40,7 @@ export class ProjectsService {
           sourceOfferNo: i.sourceOfferNo, position: i.position, itemCode: i.itemCode, description: i.description, unit: i.unit,
           quantity: i.quantity, L: i.L, H: i.H, lotto: i.lotto, params: JSON.parse(i.params), historicalUnitCost: i.historicalUnitCost,
           historicalQuantity: i.historicalQuantity, unitCostOverride: i.unitCostOverride, dependsOnSheets: JSON.parse(i.dependsOnSheets), notes: i.notes,
+          productUnitCost: productUnitCost(i, this.catalog.costParts(i.catalogId)),
         })),
         createdAt: q.createdAt.toISOString(), updatedAt: q.updatedAt.toISOString(),
         generations: q.generations.map((g) => ({ at: g.createdAt.toISOString(), file: g.file, reportFile: g.reportFile, status: g.status, engine: g.engine })),
