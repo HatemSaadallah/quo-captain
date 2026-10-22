@@ -69,7 +69,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
     <div className="stack">
       {show3d && (
         <Suspense fallback={<div className="p3d-backdrop"><div className="p3d-loading">Loading 3D view…</div></div>}>
-          <Product3D kind={ty.key} L={spec?.L ?? r.L} H={spec?.H ?? r.H} title={cleanTitle(r)} onClose={() => setShow3d(false)} />
+          <Product3D kind={ty.key} L={spec?.L ?? r.L} H={spec?.H ?? r.H} title={r.title ?? cleanTitle(r)} moduleMm={Number(r.params.find((p) => /interasse/i.test(p.label))?.value) || null} onClose={() => setShow3d(false)} />
         </Suspense>
       )}
       <div className="crumbs">
