@@ -12,7 +12,8 @@ describe('dark theme', () => {
     const bg = /background: (#[0-9a-f]+)/.exec(card)![1];
     const ink = /color: (#[0-9a-f]+)/.exec(card)![1];
     expect(lightness(bg)).toBeLessThan(0.25);
-    expect(lightness(ink)).toBeGreaterThan(0.8);
+    expect(lightness(ink)).toBeGreaterThan(0.95); // dark ink becomes white
+    expect(toOklch(parseColor(ink)!)[1]).toBeLessThan(0.02); // without a blue tint
     expect(card).toMatch(/border: 1px solid #[0-9a-f]{6}/);
     const page = /\[data-theme="dark"\] \{ --bg: (#[0-9a-f]+)/.exec(run(':root { --bg: #f3f5f8; --line: #d9dfe7; }'))![1];
     expect(lightness(page)).toBeLessThan(lightness(bg));
