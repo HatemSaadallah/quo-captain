@@ -58,3 +58,26 @@
 .finder-results .finder-ask-row strong { color: #1f6b70; }
 .finder-group { font-size: 11px; font-weight: 650; color: #64767e; padding: 10px 18px 4px; background: #fff; border-bottom: 1px solid #edf2f6; }
 .finder-results-projects { margin-top: -1px; border-top-left-radius: 0; border-top-right-radius: 0; }
+
+/* Insight charts (palette validated: #00939b #eb6834 #2a78d6 #eda100 #e87ba4 #008300) */
+.ic { margin: 12px 0 6px; padding: 14px 16px 10px; border: 1px solid var(--in-line, #dde6e7); border-radius: 12px; background: #fff; max-width: 680px; }
+.ic figcaption { font-size: 13px; font-weight: 600; color: var(--in-ink, #17303a); margin-bottom: 8px; }
+.ic-plot { width: 100%; height: auto; display: block; }
+.ic-grid { stroke: #e9eff0; stroke-width: 1; }
+.ic-axis { font-size: 11px; fill: #64767e; font-variant-numeric: tabular-nums; }
+.ic-tip { fill: #17303a; }
+.ic-tip-label { font-size: 11px; fill: #c9d8dc; }
+.ic-tip-value { font-size: 13px; font-weight: 700; fill: #fff; font-variant-numeric: tabular-nums; }
+.ic-pie { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.ic-pie svg { width: 190px; height: 190px; flex: none; }
+.ic-pie path { transition: opacity 0.15s; cursor: default; }
+.ic-donut-value { font-size: 17px; font-weight: 700; fill: #17303a; font-variant-numeric: tabular-nums; }
+.ic-donut-label { font-size: 10px; fill: #64767e; }
+.ic-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 220px; flex: 1; }
+.ic-legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 38px; gap: 8px; align-items: center; font-size: 13px; color: var(--in-ink, #17303a); }
+.ic-legend i { width: 12px; height: 12px; border-radius: 3px; }
+.ic-legend span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ic-legend b { font-variant-numeric: tabular-nums; }
+.ic-legend small { color: #64767e; text-align: right; }
+.ic-note { font-size: 11px; color: #64767e; margin: 4px 0 0; }
+@media (prefers-reduced-motion: reduce) { .ic-pie path { transition: none; } }

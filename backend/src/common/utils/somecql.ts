@@ -8,7 +8,7 @@
  * Stages (in any order after the dataset, each at most once except where):
  *   <dataset>                 lines | quotations | products
  *   where <cond> [and|or <cond>] field op value (and binds tighter than or); ops = != > >= < <= ~ (contains, case-insensitive) in (a, b)
- *   group <field>[, field]    group rows; combine with agg
+ *   group <field>[, field]    group rows; combine with agg. bucket(field, size) groups numbers into ranges (histograms)
  *   agg fn(field)[, ...]      sum avg min max count; output columns are fn_field (count() -> count)
  *   select f1, f2             columns to return (without group)
  *   sort <column> [asc|desc]
@@ -99,6 +99,7 @@ export function runQuery(query: string, data: Dataset): QueryResult {
 
   const anyOf: Cond[][] = [];
   let group: string[] = [];
+  const buckets: Record<string, number> = {};
   let aggs: Array<{ fn: string; field: string; name: string }> = [];
   let select: string[] = [];
   let sort: { col: string; dir: 1 | -1 } | null = null;
@@ -116,8 +117,15 @@ export function runQuery(query: string, data: Dataset): QueryResult {
         }
         break;
       case 'group':
-        group = body.replace(/^by\s+/i, '').split(',').map((f) => f.trim().toLowerCase());
-        for (const f of group) if (!fields.has(f)) throw new Error(`Unknown group field "${f}". Fields: ${[...fields].join(', ')}`);
+        group = splitTop(body.replace(/^by\s+/i, ''), ',').map((f) => {
+          const b = /^bucket\(\s*([a-z_]+)\s*,\s*([\d.]+)\s*\)$/i.exec(f.trim());
+          if (!b) return f.trim().toLowerCase();
+          const field = b[1].toLowerCase();
+          if (!fields.has(field)) throw new Error(`Unknown field "${field}" in bucket()`);
+          buckets[`${field}_range`] = Number(b[2]) || 1;
+          return `${field}_range`;
+        });
+        for (const f of group) if (!fields.has(f) && !(f in buckets)) throw new Error(`Unknown group field "${f}". Fields: ${[...fields].join(', ')}`);
         break;
       case 'agg':
         aggs = splitTop(body, ',').map((a) => {
@@ -149,12 +157,19 @@ export function runQuery(query: string, data: Dataset): QueryResult {
   let rows = anyOf.length ? source.filter((r) => anyOf.some((all) => all.every((c) => test(r, c)))) : source;
   if (group.length || aggs.length) {
     if (!aggs.length) aggs = [{ fn: 'count', field: '', name: 'count' }];
-    const buckets = new Map<string, Row[]>();
+    const bucketOf = (g: string, r: Row): string | null => {
+      const v = r[g.replace(/_range$/, '')];
+      if (typeof v !== 'number') return null;
+      const size = buckets[g];
+      const lo = Math.floor(v / size) * size;
+      return `${lo}–${lo + size}`;
+    };
+    const grouped = new Map<string, Row[]>();
     for (const r of rows) {
-      const key = JSON.stringify(group.map((g) => r[g]));
-      buckets.set(key, [...(buckets.get(key) ?? []), r]);
+      const key = JSON.stringify(group.map((g) => (g in buckets ? bucketOf(g, r) : r[g])));
+      grouped.set(key, [...(grouped.get(key) ?? []), r]);
     }
-    rows = [...buckets.entries()].map(([key, members]) => {
+    rows = [...grouped.entries()].map(([key, members]) => {
       const out: Row = {};
       (JSON.parse(key) as Array<string | number | null>).forEach((v, i) => (out[group[i]] = v));
       for (const a of aggs) {
@@ -167,6 +182,8 @@ export function runQuery(query: string, data: Dataset): QueryResult {
   } else if (select.length) {
     rows = rows.map((r) => Object.fromEntries(select.map((f) => [f, r[f]])));
   }
+  const bucketCol = group.find((g) => g in buckets);
+  if (!sort && bucketCol) rows = [...rows].sort((a, b) => parseFloat(String(a[bucketCol])) - parseFloat(String(b[bucketCol])));
   if (sort) {
     const s = sort;
     if (rows.length && !(s.col in rows[0])) throw new Error(`Cannot sort by "${s.col}". Columns: ${Object.keys(rows[0]).join(', ')}`);

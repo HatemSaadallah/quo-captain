@@ -88,7 +88,18 @@ export const api = {
 
   facets: (): Promise<CatalogFacets> => request('/api/catalog/facets'),
   outputs: (): Promise<Array<{ folder: string; file: string; size: number; modifiedAt: string }>> => request('/api/outputs'),
-  assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string; queries?: string[] }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
+  /** Upload an Analisi workbook; the backend creates the project and a draft quotation. */
+  importWorkbook: async (file: File): Promise<{ quotationId: string; projectId: string; reference: string; name: string; customer: string; lines: number; linkedToCatalog: number; totalEstimatedCost: number }> => {
+    const form = new FormData();
+    form.append('file', file);
+    const token = getToken();
+    const res = await fetch('/api/imports', { method: 'POST', body: form, headers: token ? { authorization: `Bearer ${token}` } : {} });
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    if (!res.ok) throw new Error(body.message ?? `Import failed (${res.status})`);
+    return body as Awaited<ReturnType<typeof api.importWorkbook>>;
+  },
+  sendEmail: (dto: { quotationId: string; to: string[]; subject: string; body: string; attachPdf: boolean }): Promise<{ id: string; to: string[] }> => request('/api/emails', { method: 'POST', ...json(dto) }),
+  assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string; queries?: string[]; cached?: boolean; data?: { columns: string[]; rows: Array<Record<string, string | number | null>>; query: string; chart: 'bar' | 'line' | 'pie' | 'histogram' | null } | null }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
   customProducts: (): Promise<CatalogRecord[]> => request('/api/catalog/custom'),
   createCatalogProduct: (dto: CreateCatalogProductDto): Promise<CatalogRecord> => request('/api/catalog', { method: 'POST', ...json(dto) }),
   search: (q: string, opts: { workbook?: string; category?: string; limit?: number } = {}): Promise<SearchResult> => {
