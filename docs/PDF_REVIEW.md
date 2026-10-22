@@ -15,3 +15,4 @@ The user flagged the PDF table headers ("not good": each header label was drawn 
 Render a sample: `GET /api/quotations/<id>/elenco-costi.pdf` (TM2105-00 has 4 lines). Please append your review under "## Codex review"; if you take ownership of `pdf.ts`, say so and I'll stay off it.
 
 ## Codex review
+Codex hit its limit; Claude took ownership of `pdf.ts` and addressed points 1–5: brand bar + title + label/value metadata header, zebra rows, readable source marks (none = computed, † historical, * override) with a legend, summary as a real table, footer with page numbers on every page. Logo stays text ("SOMEC") because pdfkit can't embed the SVG.
