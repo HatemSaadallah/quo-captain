@@ -3,6 +3,7 @@ import { api, fmtMoney, fmtMaterialQty, type CatalogFacets, type CatalogRecord, 
 import { cleanTitle, imageOf, LABOUR_CATEGORY, locationOf, productCost, rankSimilar, separateShare, sourceOf, TRANSPORT_CATEGORY, typologyOf, type SimilarProduct } from '../product';
 import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
+import { Product3D } from './Product3D';
 import { EditableSpecs, defaultSpec, specChanged, useSpecPreview, type CustomSpec } from './SpecCustomizer';
 import '../product.css';
 import { AddProductButton } from './AddProductButton';
@@ -20,6 +21,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
   const [r, setR] = useState<CatalogRecord | null>(null);
   const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
   const [spec, setSpec] = useState<CustomSpec | null>(null);
+  const [show3d, setShow3d] = useState(false);
   const [materials, setMaterials] = useState<ProductMaterial[]>([]);
 
   useEffect(() => {
@@ -64,12 +66,16 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
   const total = breakdown.reduce((s, c) => s + c.unitCost, 0) || 1;
   return (
     <div className="stack">
+      {show3d && <Product3D kind={ty.key} L={spec?.L ?? r.L} H={spec?.H ?? r.H} title={cleanTitle(r)} onClose={() => setShow3d(false)} />}
       <div className="crumbs">
         <a href="#/catalog">Catalog</a> › <span>{ty.label}</span> › <b>{cleanTitle(r)}</b>
       </div>
       <section className="pdetail">
         <div className="pdimg" style={{ backgroundImage: `url(${imageOf(r)})` }}>
           <span className="ptype">{ty.label}</span>
+          <button className="pd-3d" onClick={() => setShow3d(true)}>
+            ⟳ View in 3D on a cruise deck
+          </button>
         </div>
         <div className="pdinfo">
           <h1>{cleanTitle(r)}</h1>

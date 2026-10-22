@@ -46,7 +46,10 @@ export class ProjectsController {
 
 @Controller('customers')
 export class CustomersController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(private readonly projects: ProjectsService, private readonly intelligence: ProjectIntelligenceService) {}
+
+  @Post('search')
+  search(@Body() body: { query?: string }, @CurrentUser() user: AuthUser) { return this.intelligence.searchCustomers(body.query, user.id); }
 
   @Get()
   list(@CurrentUser() user: AuthUser) { return this.projects.listCustomers(user.id); }

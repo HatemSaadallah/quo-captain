@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, fmtMoney, fmtNum, type ElencoCosti as ElencoCostiData, type Quotation, type SearchHit } from '../api';
+import { api, fmtMaterialQty, fmtMoney, fmtNum, type ElencoCosti as ElencoCostiData, type ProductMaterial, type Quotation, type SearchHit } from '../api';
 import { imageOf, typologyOf } from '../product';
 import '../quotation.css';
 
@@ -29,6 +29,20 @@ export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) 
   const [draft, setDraft] = useState({ position: '', itemCode: '', description: '', unit: 'Pcs', quantity: '1', L: '', H: '' });
   const [suggestFor, setSuggestFor] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SearchHit[] | null>(null);
+  const [openLine, setOpenLine] = useState<string | null>(null);
+  const [materials, setMaterials] = useState<Record<string, ProductMaterial[] | 'loading' | 'none'>>({});
+
+  /** Click a line to see the raw materials behind it (per unit and for the line's quantity). */
+  const toggleMaterials = (itemId: string, tabId: string | null): void => {
+    if (openLine === itemId) return setOpenLine(null);
+    setOpenLine(itemId);
+    if (!tabId || materials[tabId]) return;
+    setMaterials((m) => ({ ...m, [tabId]: 'loading' }));
+    api
+      .productMaterials(tabId)
+      .then((list) => setMaterials((m) => ({ ...m, [tabId]: list.length ? list : 'none' })))
+      .catch(() => setMaterials((m) => ({ ...m, [tabId]: 'none' })));
+  };
 
   useEffect(() => {
     let live = true;
@@ -137,9 +151,10 @@ export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) 
               <div className="q-product">
                 <span className="q-thumb" style={{ backgroundImage: `url(${imageOf(product(r))})` }} aria-hidden="true" />
                 <div className="q-product-text">
-                  <div className="q-title" title={r.description}>
+                  <button className="q-title q-title-btn" title="Show the material breakdown" aria-expanded={openLine === r.itemId} onClick={() => toggleMaterials(r.itemId, r.tab?.id ?? null)}>
                     {firstLine(r.description)}
-                  </div>
+                    <span className="q-caret" aria-hidden="true">{openLine === r.itemId ? '▴' : '▾'}</span>
+                  </button>
                   <div className="q-meta">
                     <span>{typologyOf(product(r)).label}</span>
                     {r.itemCode && <span>Item {r.itemCode}</span>}
@@ -215,6 +230,57 @@ export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) 
                 </svg>
               </button>
             </div>
+
+            {openLine === r.itemId && (
+              <div className="q-bom">
+                {(() => {
+                  const list = r.tab ? materials[r.tab.id] : 'none';
+                  if (list === 'loading' || list === undefined) return <span className="muted small">Loading materials…</span>;
+                  if (list === 'none') return <span className="muted small">{r.tab ? 'No material breakdown is recorded for this product.' : 'This line has no product analysis, so there is no material breakdown.'}</span>;
+                  const rows = list.map((l) => ({ l, cost: l.quantity * l.material.unitCost })).sort((a, b) => b.cost - a.cost);
+                  const perUnit = rows.reduce((acc, x) => acc + x.cost, 0);
+                  return (
+                    <>
+                      <div className="q-bom-head">
+                        <span>Material breakdown · {fmtNum(r.quantity, 2)} {r.unit}</span>
+                        <span>
+                          {fmtMoney(perUnit)} per {r.unit} · <b>{fmtMoney(perUnit * r.quantity)}</b> for this line
+                        </span>
+                      </div>
+                      <table className="q-bom-table">
+                        <thead>
+                          <tr>
+                            <th>Material</th>
+                            <th className="num">Per {r.unit}</th>
+                            <th className="num">For {fmtNum(r.quantity, 2)} {r.unit}</th>
+                            <th className="num">Unit price</th>
+                            <th className="num">Cost</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(({ l, cost }) => (
+                            <tr key={l.id}>
+                              <td>{l.material.name}</td>
+                              <td className="num">
+                                {fmtMaterialQty(l.quantity)} {l.material.unit}
+                              </td>
+                              <td className="num">
+                                {fmtMaterialQty(l.quantity * r.quantity)} {l.material.unit}
+                              </td>
+                              <td className="num">
+                                {fmtMoney(l.material.unitCost)}/{l.material.unit}
+                              </td>
+                              <td className="num">{fmtMoney(cost * r.quantity)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="small muted">Raw-material prices are indicative.</p>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
             {suggestFor === r.itemId && (
               <div className="q-suggest">
