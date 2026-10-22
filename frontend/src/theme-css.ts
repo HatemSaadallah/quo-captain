@@ -65,7 +65,8 @@ export function darkColor(role: Role, rgba: Rgba): Rgba {
       return rgba;
     case 'text':
       if (L >= 0.7) return rgba; // already light: it sits on a dark or coloured fill
-      return C < 0.04 ? to(1 - L * 0.55, C) : to(clamp(1.04 - L * 0.6, 0.64, 0.88), Math.min(C, 0.15));
+      // Ink turns white (headings ~97% lightness), secondary text a light neutral grey; only real accents keep their hue.
+      return C < 0.08 ? to(Math.min(0.985, 1.12 - L * 0.5), Math.min(C, 0.005)) : to(clamp(1.04 - L * 0.6, 0.64, 0.88), Math.min(C, 0.15));
     case 'accent':
       return L < 0.62 ? to(Math.min(0.72, L + 0.12), C) : rgba;
   }
