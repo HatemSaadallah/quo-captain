@@ -20,6 +20,7 @@ export function Product3D({ kind, L, H, title, moduleMm, onClose }: Props) {
   const [rotating, setRotating] = useState(false);
   const [dimensions, setDimensions] = useState(true);
   const [error, setError] = useState('');
+  const [highlighted, setHighlighted] = useState(false);
   const spec = useMemo(() => productSpec(kind, L, H, title, moduleMm), [kind, L, H, title, moduleMm]);
 
   useEffect(() => {
@@ -39,7 +40,26 @@ export function Product3D({ kind, L, H, title, moduleMm, onClose }: Props) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .95; renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.tabIndex = 0; renderer.domElement.setAttribute('aria-label', 'Interactive 3D product. Drag to orbit, scroll to zoom, or use arrow keys to rotate.');
     el.appendChild(renderer.domElement);
-    const { scene, bounds, dimensions: guides, radius, shipBounds, installation } = createProductScene(spec, onShip);
+    const { scene, product, bounds, dimensions: guides, radius, shipBounds, installation } = createProductScene(spec, onShip);
+    // Own material copies so the hover tint never bleeds into the ship, which shares the base materials.
+    const tinted: THREE.MeshStandardMaterial[] = [];
+    product.traverse((object) => {
+      if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshStandardMaterial)) return;
+      object.material = object.material.clone(); tinted.push(object.material);
+    });
+    const outline = new THREE.Box3Helper(bounds.clone().expandByScalar(.04), '#00939b'); outline.visible = false; scene.add(outline);
+    const raycaster = new THREE.Raycaster(); const pointer = new THREE.Vector2(); let hovered = false;
+    const hover = (event: PointerEvent): void => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObject(product, true).length > 0;
+      if (hit === hovered) return;
+      hovered = hit; setHighlighted(hit); renderer.domElement.style.cursor = hit ? 'pointer' : '';
+      outline.visible = hit;
+      for (const m of tinted) { m.emissive.set(hit ? '#00939b' : '#000000'); m.emissiveIntensity = hit ? .8 : 1; }
+    };
+    const leave = (): void => { if (hovered) { hovered = false; setHighlighted(false); renderer.domElement.style.cursor = ''; outline.visible = false; for (const m of tinted) m.emissive.set('#000000'); } };
     const detailBounds = (installation ? new THREE.Box3().setFromObject(installation) : bounds.clone()).union(bounds).expandByScalar(Math.max(1.5, radius * .8));
     dimensionControl.current = guides;
     const environment = new RoomEnvironment(); const pmrem = new THREE.PMREMGenerator(renderer); const envMap = pmrem.fromScene(environment, .04);
@@ -76,7 +96,7 @@ export function Product3D({ kind, L, H, title, moduleMm, onClose }: Props) {
     };
     const observer = new ResizeObserver(resize); observer.observe(el); resize();
     const stop = (): void => { touched = true; controls.autoRotate = false; setRotating(false); setView('custom'); };
-    renderer.domElement.addEventListener('pointerdown', stop);
+    renderer.domElement.addEventListener('pointerdown', stop); renderer.domElement.addEventListener('pointermove', hover); renderer.domElement.addEventListener('pointerleave', leave);
     const keyboard = (event: KeyboardEvent): void => {
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault(); stop();
@@ -94,7 +114,7 @@ export function Product3D({ kind, L, H, title, moduleMm, onClose }: Props) {
     });
     return () => {
       renderer.setAnimationLoop(null); observer.disconnect(); controls.dispose(); orbit.current = null; dimensionControl.current = null;
-      renderer.domElement.removeEventListener('pointerdown', stop); renderer.domElement.removeEventListener('keydown', keyboard); renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+      renderer.domElement.removeEventListener('pointerdown', stop); renderer.domElement.removeEventListener('pointermove', hover); renderer.domElement.removeEventListener('pointerleave', leave); renderer.domElement.removeEventListener('keydown', keyboard); renderer.domElement.removeEventListener('webglcontextlost', contextLost);
       disposeScene(scene); envMap.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
     };
   }, [spec, onShip]);
@@ -110,6 +130,7 @@ export function Product3D({ kind, L, H, title, moduleMm, onClose }: Props) {
       <div className="p3d-stage">
         <div className="p3d-stage-top"><div className="p3d-toggle" role="group" aria-label="Scene"><button aria-pressed={onShip} onClick={() => switchScene(true)}>Cruise deck</button><button aria-pressed={!onShip} onClick={() => switchScene(false)}>Product only</button></div><span className="p3d-interaction-hint">Drag to orbit · Scroll to zoom</span></div>
         <div className="p3d-canvas" ref={mount} />
+        {highlighted && <div className="p3d-hover-label" aria-hidden="true">{title}</div>}
         {error && <div className="p3d-error" role="alert">{error}</div>}
         <div className="p3d-toolbar"><div className="p3d-views" role="group" aria-label="Camera view">{([['perspective', '3/4 view'], ['front', 'Front'], ['top', 'Top'], ...(onShip ? [['ship', 'Ship overview'], ['detail', 'Installed detail']] as const : [])] as const).map(([value, label]) => <button key={value} aria-pressed={view === value} onClick={() => viewControl.current(value)}>{label}</button>)}</div><span className="p3d-tool-divider" /><button aria-pressed={dimensions} onClick={() => setDimensions(!dimensions)}>Dimensions</button><button aria-pressed={rotating} onClick={rotate}>{rotating ? 'Pause orbit' : 'Auto orbit'}</button><button className="p3d-reset" aria-label="Reset 3D view" title="Reset view" onClick={() => viewControl.current('perspective')}><Icon name="refresh" size={17} /></button></div>
       </div>

@@ -47,7 +47,8 @@ export class InsightsShareController {
   @Get('shared/:id')
   shared(@Param('id') id: string): InsightSnapshot {
     const snap = /^[A-Za-z0-9_-]{16,40}$/.test(id) ? read().find((s) => s.id === id) : undefined;
-    if (!snap) throw new NotFoundException('This shared insight does not exist or was removed.');
+    // ponytail: fixed 30-day expiry, no revoke UI; add a DELETE route if links must be withdrawn early.
+    if (!snap || Date.now() - Date.parse(snap.createdAt) > 30 * 864e5) throw new NotFoundException('This shared insight has expired or does not exist.');
     return snap;
   }
 }
