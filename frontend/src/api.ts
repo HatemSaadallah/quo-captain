@@ -88,6 +88,7 @@ export const api = {
 
   facets: (): Promise<CatalogFacets> => request('/api/catalog/facets'),
   outputs: (): Promise<Array<{ folder: string; file: string; size: number; modifiedAt: string }>> => request('/api/outputs'),
+  importHistory: (): Promise<Array<{ id: string; at: string; fileName: string; status: 'imported' | 'rejected'; reference: string; customer: string; name: string; lines: number; linkedToCatalog: number | null; totalEstimatedCost: number | null; quotationId: string | null }>> => request('/api/imports/history'),
   /** Stage 1: upload and review (nothing saved). */
   previewImport: async (file: File): Promise<ImportPreview> => {
     const form = new FormData();
@@ -114,6 +115,11 @@ export const api = {
   previewProduct: (id: string, spec: { quantity: number; L: number | null; H: number | null; description: string; params: Array<{ cell: string; value: number | string | null }> }): Promise<{ unitCost: number | null; historicalUnitCost: number | null; totalCost: number | null; computed: boolean; m2Unit: number | null }> =>
     request(`/api/catalog/${encodeURIComponent(id)}/preview`, { method: 'POST', ...json(spec) }),
   assistantChat: (messages: Array<{ role: 'user' | 'assistant'; content: string }>, contacts: unknown[]): Promise<{ reply: string; queries?: string[]; cached?: boolean; actions?: Array<{ type: 'project' | 'quotation'; id: string; label: string }>; data?: { columns: string[]; rows: Array<Record<string, string | number | null>>; query: string; chart: 'bar' | 'line' | 'pie' | 'histogram' | null } | null }> => request('/api/assistant/chat', { method: 'POST', ...json({ messages, contacts }) }),
+  downloadWorkbookXlsx: async (id: string, reference: string): Promise<void> => {
+    const res = await fetch(`/api/quotations/${encodeURIComponent(id)}/workbook.xlsx`, { headers: headers() });
+    if (!res.ok) throw new ApiError(res.status, `Download failed (${res.status})`, null);
+    saveBlob(await res.blob(), `${reference || 'quotation'} cost breakdown.xlsx`);
+  },
   customProducts: (): Promise<CatalogRecord[]> => request('/api/catalog/custom'),
   createCatalogProduct: (dto: CreateCatalogProductDto): Promise<CatalogRecord> => request('/api/catalog', { method: 'POST', ...json(dto) }),
   search: (q: string, opts: { workbook?: string; category?: string; limit?: number } = {}): Promise<SearchResult> => {

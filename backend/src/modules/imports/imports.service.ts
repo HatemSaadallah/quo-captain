@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { DATA_DIR } from '../../common/utils/paths';
 import path from 'node:path';
 import { extractWorkbook } from '../../excel/catalog-extractor';
 import type { AuthUser } from '../../common/interfaces/auth.interface';
@@ -21,6 +23,29 @@ export interface ImportPreview {
 }
 export interface ImportHeader { reference?: string; name?: string; customer?: string; date?: string; estimator?: string }
 
+export interface ImportHistoryEntry {
+  id: string;
+  at: string;
+  userId: string;
+  fileName: string;
+  status: 'imported' | 'rejected';
+  reference: string;
+  customer: string;
+  name: string;
+  lines: number;
+  linkedToCatalog: number | null;
+  totalEstimatedCost: number | null;
+  quotationId: string | null;
+}
+
+/** MVP history: a JSON file under data/imports (one list for all users, filtered on read). */
+const HISTORY = path.join(DATA_DIR, 'imports', 'history.json');
+const readHistory = (): ImportHistoryEntry[] => (existsSync(HISTORY) ? (JSON.parse(readFileSync(HISTORY, 'utf8')) as ImportHistoryEntry[]) : []);
+const addHistory = (e: ImportHistoryEntry): void => {
+  mkdirSync(path.dirname(HISTORY), { recursive: true });
+  writeFileSync(HISTORY, JSON.stringify([e, ...readHistory()].slice(0, 500), null, 1));
+};
+
 export interface ImportResult {
   quotationId: string;
   projectId: string;
@@ -37,7 +62,7 @@ export interface ImportResult {
 export class ImportsService {
   private readonly log = new Logger(ImportsService.name);
   /** Uploaded files waiting for review (MVP: in memory, 30 minutes). */
-  private readonly pending = new Map<string, { at: number; file: { originalname: string; buffer: Buffer }; userId: string }>();
+  private readonly pending = new Map<string, { at: number; file: { originalname: string; buffer: Buffer }; userId: string; header?: ImportPreview['header']; lines?: number }>();
   constructor(
     private readonly prisma: PrismaService,
     private readonly quotations: QuotationsService,
@@ -67,6 +92,8 @@ export class ImportsService {
     });
     const counts = { ready: 0, match: 0, review: 0 } as Record<LineStatus, number>;
     for (const l of lines) counts[l.status]++;
+    const pend = this.pending.get(token);
+    if (pend) pend.lines = lines.length;
     return {
       token,
       fileName: file.originalname,
@@ -94,8 +121,15 @@ export class ImportsService {
   /** Discard a reviewed file without importing. */
   reject(token: string, user: AuthUser): { ok: true } {
     const p = this.pending.get(token);
-    if (p && p.userId === user.id) this.pending.delete(token);
+    if (p && p.userId === user.id) {
+      this.pending.delete(token);
+      addHistory({ id: randomUUID(), at: new Date().toISOString(), userId: user.id, fileName: p.file.originalname, status: 'rejected', reference: path.parse(p.file.originalname).name.split(' ')[0], customer: '', name: '', lines: p.lines ?? 0, linkedToCatalog: null, totalEstimatedCost: null, quotationId: null });
+    }
     return { ok: true };
+  }
+
+  history(user: AuthUser): ImportHistoryEntry[] {
+    return readHistory().filter((e) => e.userId === user.id).slice(0, 50);
   }
 
   private async extract(file: { originalname: string; buffer: Buffer }): Promise<Awaited<ReturnType<typeof extractWorkbook>>> {
@@ -156,6 +190,7 @@ export class ImportsService {
         total += (r.unitCost ?? 0) * quantity;
       }
       this.log.log(`Imported ${file.originalname}: ${rows.length} lines (${linked} linked to the catalog) into ${quotation.reference}`);
+      addHistory({ id: randomUUID(), at: new Date().toISOString(), userId: user.id, fileName: file.originalname, status: 'imported', reference: quotation.reference, customer: customerName, name: projectName, lines: rows.length, linkedToCatalog: linked, totalEstimatedCost: Math.round(total * 100) / 100, quotationId: quotation.id });
       return { quotationId: quotation.id, projectId: project.id, reference: quotation.reference, name: projectName, customer: customerName, lines: rows.length, linkedToCatalog: linked, totalEstimatedCost: Math.round(total * 100) / 100 };
     } finally {
       await rm(dir, { recursive: true, force: true });

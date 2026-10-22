@@ -69,3 +69,4 @@
 .imp-actions.sticky { position: sticky; bottom: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; box-shadow: 0 10px 28px #17303a12; }
 .imp-reject { margin-left: auto; color: #a3401f; }
 @media (max-width: 760px) { .imp-buckets { grid-template-columns: 1fr 1fr; } }
+.imp-history { padding: 0; } .imp-history .imp-card-head { padding: 16px 20px 4px; } .imp-history table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; } .imp-history th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 14px; border-bottom: 1px solid var(--line); background: #f5f8f8; } .imp-history td { padding: 10px 14px; border-bottom: 1px solid #eef3f3; vertical-align: top; } .imp-history .num { text-align: right; }
