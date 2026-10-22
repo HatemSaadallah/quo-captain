@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clearRange, renumberVml, unshareFormulas, upsertCell, vmlBlocks } from './xlsx-editor';
+import { clearRange, renumberVml, unshareFormulas, upsertCell, vmlBlocks, withDefaultContentType } from './xlsx-editor';
 import { parseSheetXml } from './xlsx-reader';
 
 const wrap = (rows: string): string => `<?xml version="1.0"?><worksheet><dimension ref="A1:D3"/><sheetData>${rows}</sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>`;
@@ -86,5 +86,16 @@ describe('renumberVml', () => {
     expect(out).toContain('o:spid="_x0000_s63489"');
     expect(out).toContain('_x0000_s63490');
     expect(out).not.toContain('_x0000_s13313');
+  });
+});
+
+describe('withDefaultContentType', () => {
+  const VML = 'application/vnd.openxmlformats-officedocument.vmlDrawing';
+  it('does not duplicate a Default declared with ContentType first (TM1641-03 template)', () => {
+    const ct = `<Types><Default ContentType="${VML}" Extension="vml"/><Override PartName="/a"/></Types>`;
+    expect(withDefaultContentType(ct, 'vml', VML)).toBe(ct);
+  });
+  it('adds the Default when missing', () => {
+    expect(withDefaultContentType('<Types><Override PartName="/a"/></Types>', 'vml', VML)).toContain(`<Default Extension="vml" ContentType="${VML}"/><Override`);
   });
 });

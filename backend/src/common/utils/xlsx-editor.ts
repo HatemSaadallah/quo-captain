@@ -526,9 +526,7 @@ export class XlsxEditor {
   }
 
   private async ensureDefaultContentType(ext: string, contentType: string): Promise<void> {
-    const ct = await this.text('[Content_Types].xml');
-    if (new RegExp(`<Default Extension="${ext}"`).test(ct)) return;
-    this.set('[Content_Types].xml', ct.replace('<Override', `<Default Extension="${ext}" ContentType="${contentType}"/><Override`));
+    this.set('[Content_Types].xml', withDefaultContentType(await this.text('[Content_Types].xml'), ext, contentType));
   }
 
   /** Append the styles a foreign sheet uses to this workbook's styles.xml and rewrite its s="n" / dxfId="n" indices. */
@@ -615,4 +613,10 @@ export class XlsxEditor {
     const buf = await this.zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
     await writeFile(outPath, buf);
   }
+}
+
+/** Adds a Default content type unless one exists. Attribute order varies by producer (Somec templates put ContentType first); a duplicate Default makes Excel "repair" the file. */
+export function withDefaultContentType(ct: string, ext: string, contentType: string): string {
+  if (new RegExp(`<Default\\b[^>]*\\bExtension="${ext}"`, 'i').test(ct)) return ct;
+  return ct.replace('<Override', `<Default Extension="${ext}" ContentType="${contentType}"/><Override`);
 }
