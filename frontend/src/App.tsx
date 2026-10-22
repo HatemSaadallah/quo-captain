@@ -81,12 +81,19 @@ export default function App() {
     [loadQuotations],
   );
 
-  const addTo = async (quotationId: string, record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>): Promise<boolean> => {
+  const addTo = async (quotationId: string, record: CatalogRecord, quantity: number, params: Array<{ cell: string; value: number | string | null }>, custom?: { L: number | null; H: number | null; description: string }): Promise<boolean> => {
     try {
       let p = await api.addItem(quotationId, { catalogId: record.id, quantity });
       const added = p.items[p.items.length - 1];
       const changed = params.filter((x) => added.params.find((ap) => ap.cell === x.cell)?.value !== x.value);
-      if (changed.length) p = await api.updateItem(p.id, added.id, { params: changed });
+      // Customized specs from the product page travel with the line.
+      const patch = {
+        ...(changed.length ? { params: changed } : {}),
+        ...(custom && custom.L !== added.L ? { L: custom.L } : {}),
+        ...(custom && custom.H !== added.H ? { H: custom.H } : {}),
+        ...(custom && custom.description.trim() && custom.description !== added.description ? { description: custom.description } : {}),
+      };
+      if (Object.keys(patch).length) p = await api.updateItem(p.id, added.id, patch);
       onQuotation(p);
       return true;
     } catch (e) {
@@ -165,7 +172,7 @@ export default function App() {
         )}
         {route.page === 'dashboard' && <DashboardPage initialCustomerId={route.customerId} />}
         {route.page === 'catalog' && <ProductHome facets={facets} quotations={quotations} estimator={user.name} initialQuery={route.q} initialCreate={route.create} onError={setError} onAddToQuotation={(r, id) => addTo(id, r, 1, [])} />}
-        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity) => addTo(id, r, quantity, [])} onError={setError} />}
+        {route.page === 'product' && <ProductPage id={route.id} quotations={quotations} facets={facets} estimator={user.name} onAddToQuotation={(r, id, quantity, custom) => addTo(id, r, quantity, custom?.params ?? [], custom)} onError={setError} />}
         {route.page === 'contacts' && <ContactsPage quotations={quotations} />}
         {route.page === 'insights' && <InsightsPage initial={route.q} />}
         {route.page === 'import' && <ImportPage onImported={async (quotationId) => { await loadQuotations(); setCartId(quotationId); navigate({ page: 'quotations' }); }} />}
