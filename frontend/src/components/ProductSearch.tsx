@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { costCategory } from '../product';
 import { api, fmtMoney, fmtNum, type CatalogFacets, type CatalogRecord, type SearchHit, type SearchResult } from '../api';
 
 interface Props {
@@ -180,7 +181,7 @@ export function ProductSearch({ facets, canAdd, onAdd, onError, addLabel = 'Add 
                 <tbody>
                   {selected.costBreakdown.slice(0, 8).map((c) => (
                     <tr key={c.code}>
-                      <td>{c.category}</td>
+                      <td title={c.category}>{costCategory(c.category)}</td>
                       <td className="num">{fmtMoney(c.unitCost)}</td>
                     </tr>
                   ))}

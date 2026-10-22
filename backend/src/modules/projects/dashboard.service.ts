@@ -41,7 +41,7 @@ export function buildDashboard(projects: Project[], customers: DashboardData['cu
       const client = clients.get(project.customerId) ?? { id: project.customerId, name: project.customer, projects: 0, quotations: 0, estimatedCost: 0, trend: months.map(() => 0), projectIds: new Set<string>() };
       client.quotations++; client.projectIds.add(project.id); client.trend[monthIndex]++; clients.set(client.id, client);
       for (const item of quotation.items) {
-        const rate = item.unitCostOverride ?? item.historicalUnitCost;
+        const rate = item.productUnitCost !== undefined ? item.productUnitCost : (item.unitCostOverride ?? item.historicalUnitCost); // labour and transport are quoted separately
         const cost = rate == null ? 0 : rate * item.quantity;
         if (rate == null) uncostedItems++;
         month.estimatedCost += cost; client.estimatedCost += cost;

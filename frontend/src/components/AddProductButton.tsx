@@ -38,10 +38,14 @@ export function AddProductButton({ record, quotations, facets, estimator, onAdd,
       <button
         type="button"
         className="add-product-button"
+        data-added={added || undefined}
         aria-label={`Add ${record.title ?? record.itemCode ?? 'product'} to quotation`}
         disabled={busy}
-        onClick={() => setOpen(true)}
-      >{busy ? 'Adding…' : added ? 'Added ✓' : 'Add'}</button>
+        onClick={(event) => {
+          event.stopPropagation(); // the card around it opens the product page
+          setOpen(true);
+        }}
+      >{busy ? 'Adding…' : added ? 'Added' : 'Add'}</button>
       {open && !creating && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
           <section className="panel add-quotation-modal" role="dialog" aria-modal="true" aria-labelledby="add-product-title">

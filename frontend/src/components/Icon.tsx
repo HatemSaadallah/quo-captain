@@ -17,6 +17,9 @@ const paths = {
   draft: 'M12 3H4v18h16v-8 M10 14l1-4 8-8 3 3-8 8-4 1z',
   check: 'm5 12 4 4L19 6',
   upload: 'M12 16V4 M7 9l5-5 5 5 M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3',
+  moon: 'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z',
+  sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4',
+  text: 'M3 19 8 5l5 14 M5 14h6 M17 9v6 M14 12h6',
 } as const;
 
 export type IconName = keyof typeof paths;

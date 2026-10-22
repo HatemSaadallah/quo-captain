@@ -77,7 +77,7 @@ export async function seedMaterials(prisma: PrismaClient): Promise<void> {
       if (historicalCodes.has(code) || linkedCategories.has(material.category)) continue;
       const area = productUnit === 'm²' ? 1 : product.L && product.H ? product.L * product.H / 1_000_000 : 1;
       const quantity = round(material.unit === 'kg' ? area * 6 : material.unit === 'm²' ? area * 1.08 : material.unit === 'm' ? Math.sqrt(area) * 4 : 4);
-      const data = { quantity, batchQuantity: null, productUnit, quantitySource: 'mock', sourceIndexId: imported!.sourceId, sourceNote: `Mock BOM quantity seeded for material declared in ${fixture.sourceFile}; no component quantity is supplied in that index.` };
+      const data = { quantity, batchQuantity: null, productUnit, quantitySource: 'mock', sourceIndexId: imported!.sourceId, sourceNote: `Estimated quantity for a material declared in ${fixture.sourceFile}; that index gives no component quantity.` };
       await prisma.productMaterial.upsert({ where: { referenceTabId_materialId: { referenceTabId: product.id, materialId: code } }, create: { referenceTabId: product.id, materialId: code, ...data }, update: data });
       linkedCategories.add(material.category); links++;
     }

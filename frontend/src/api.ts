@@ -233,5 +233,8 @@ export function saveBlob(blob: Blob, fileName: string): void {
 }
 
 export const fmtMoney = (v: number | null | undefined): string => (v === null || v === undefined ? '—' : v.toLocaleString('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }));
+/** A line's cost as quoted: its product cost (labour and transport are separate lines), else own or historical price. */
+export const lineCost = (it: QuotationItem): number => (it.productUnitCost !== undefined ? (it.productUnitCost ?? 0) : (it.unitCostOverride ?? it.historicalUnitCost ?? 0)) * it.quantity;
+export const quotationCost = (q: { items: QuotationItem[] }): number => q.items.reduce((sum, it) => sum + lineCost(it), 0);
 export const fmtNum = (v: number | null | undefined, digits = 0): string => (v === null || v === undefined ? '—' : v.toLocaleString('it-IT', { maximumFractionDigits: digits }));
-export const fmtMaterialQty = (value: number): string => value !== 0 && Math.abs(value) < 0.0001 ? value.toExponential(3) : fmtNum(value, 4);
+export const fmtMaterialQty = (value: number): string => (value !== 0 && Math.abs(value) < 0.0001 ? value.toExponential(3) : fmtNum(value, Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 1 ? 2 : 4));

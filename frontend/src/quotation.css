@@ -216,3 +216,5 @@
 .q-bom-table td { padding: 6px 8px; border-bottom: 1px solid #edf2f2; }
 .q-bom-table .num { text-align: right; }
 @media (max-width: 760px) { .q-bom { margin: 0 16px 14px; } }
+.ql-delete { border: 0; background: none; box-shadow: none; color: #8a9aa1; font-size: 18px; line-height: 1; padding: 3px 9px; border-radius: 6px; }
+.ql-delete:hover:not(:disabled) { color: #b42318; background: #fdecea; border: 0; }

@@ -69,11 +69,11 @@ export function InsightChart({ data }: { data: ChartData }) {
         <div className="ic-pie">
           <svg viewBox="0 0 180 180" role="img" aria-label={title}>
             {arcs.map((a, i) => (
-              <path key={a.l} d={a.d} fill={a.color} stroke="#fff" strokeWidth={2} opacity={hover === null || hover === i ? 1 : 0.45} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <path key={a.l} d={a.d} fill={a.color} style={{ stroke: 'var(--panel)' }} strokeWidth={2} opacity={hover === null || hover === i ? 1 : 0.45} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
                 <title>{`${a.l}: ${fmt(a.v, money)} (${Math.round((a.v / total) * 100)}%)`}</title>
               </path>
             ))}
-            <circle cx="90" cy="90" r="44" fill="#fff" />
+            <circle cx="90" cy="90" r="44" style={{ fill: 'var(--panel)' }} />
             <text x="90" y="86" textAnchor="middle" className="ic-donut-value">
               {hover === null ? fmt(total, money) : `${Math.round((arcs[hover].v / total) * 100)}%`}
             </text>
@@ -96,10 +96,12 @@ export function InsightChart({ data }: { data: ChartData }) {
     );
   }
 
-  // Bar, histogram and line share one plot frame.
-  const n = Math.min(s.values.length, kind === 'line' ? 36 : 14);
-  const labels = s.labels.slice(0, n);
-  const values = s.values.slice(0, n);
+  // Bar, histogram and line share one plot frame; histogram bars always run from low to high.
+  const points = s.labels.map((l, i) => ({ l, v: s.values[i] }));
+  if (kind === 'histogram' && points.every((p) => !Number.isNaN(parseFloat(p.l)))) points.sort((a, b) => parseFloat(a.l) - parseFloat(b.l));
+  const n = Math.min(points.length, kind === 'line' ? 36 : 14);
+  const labels = points.slice(0, n).map((p) => p.l);
+  const values = points.slice(0, n).map((p) => p.v);
   const W = 640;
   const H = 230;
   const pad = { l: 56, r: 12, t: 16, b: 46 };
@@ -130,7 +132,7 @@ export function InsightChart({ data }: { data: ChartData }) {
             <path d={values.map((v, i) => `${i ? 'L' : 'M'}${x(i)} ${y(v)}`).join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
             <path d={`${values.map((v, i) => `${i ? 'L' : 'M'}${x(i)} ${y(v)}`).join(' ')} L${x(n - 1)} ${y(min)} L${x(0)} ${y(min)} Z`} fill={color} opacity={0.08} />
             {values.map((v, i) => (
-              <circle key={i} cx={x(i)} cy={y(v)} r={hover === i ? 5 : 3.5} fill="#fff" stroke={color} strokeWidth={2} />
+              <circle key={i} cx={x(i)} cy={y(v)} r={hover === i ? 5 : 3.5} style={{ fill: 'var(--panel)' }} stroke={color} strokeWidth={2} />
             ))}
           </>
         ) : (

@@ -21,3 +21,4 @@ backend/prisma/*.db-journal
 data/imports/
 data/product-images/
 data/insights/
+backups/
