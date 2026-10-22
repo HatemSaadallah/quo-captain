@@ -178,3 +178,12 @@
 @media (prefers-reduced-motion: reduce) {
   .q-mix-bar span { transition: none; }
 }
+
+/* Delete a draft from its tab */
+.q-draft-wrap { position: relative; display: flex; }
+.q-draft-wrap .q-draft { padding-right: 30px; }
+.q-draft-delete { position: absolute; top: 6px; right: 6px; z-index: 3; width: 22px; height: 22px; padding: 0; border: none; border-radius: 6px; background: transparent; color: #8a9aa1; font-size: 16px; line-height: 1; opacity: 0; transition: opacity 0.15s, background 0.15s; }
+.q-draft-wrap:hover .q-draft-delete, .q-draft-wrap.on .q-draft-delete, .q-draft-delete:focus-visible { opacity: 1; }
+.q-draft-wrap.on .q-draft-delete { top: 9px; }
+.q-draft-delete:hover:not(:disabled) { background: #fbeee9; color: #a3401f; }
+@media (hover: none) { .q-draft-delete { opacity: 1; } }
