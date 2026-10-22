@@ -62,6 +62,15 @@ describe('generateWorkbook (OOXML engine, TM1643-06 template)', () => {
     expect(out.zip.file('xl/calcChain.xml')).toBeNull();
   });
 
+  it('writes a package Excel opens without repair: unique content types, every declared part present', async () => {
+    const ct = await out.zip.file('[Content_Types].xml')!.async('string');
+    const exts = [...ct.matchAll(/<Default\b[^>]*\bExtension="([^"]+)"/g)].map((m) => m[1].toLowerCase());
+    expect(new Set(exts).size).toBe(exts.length);
+    const parts = [...ct.matchAll(/<Override\b[^>]*\bPartName="\/([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(parts).size).toBe(parts.length);
+    for (const p of parts) expect(out.zip.file(p), p).not.toBeNull();
+  });
+
   it('uses the first free rows and copies the analysis sheets under those names', async () => {
     expect(outcome.items.map((p) => p.row)).toEqual([6, 7]);
     expect(outcome.sheetsCopied).toEqual(['6', '7']);
