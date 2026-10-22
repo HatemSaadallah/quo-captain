@@ -84,6 +84,7 @@ export function WorkbookView({ quotation, onQuotation, onError }: Props) {
           Generated quotation <span className="muted small">{wb.reference} · web workbook, clickable like Excel</span>
         </h2>
         <span style={{ flex: 1 }} />
+        <button onClick={() => void api.downloadWorkbookXlsx(quotation.id, quotation.reference).catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)))}>Download Excel</button>
         <button onClick={() => window.print()}>Print</button>
       </div>
       <div className="formula-bar">

@@ -25,6 +25,35 @@ const CT_COMMENTS = 'application/vnd.openxmlformats-officedocument.spreadsheetml
 const REL_SHEET = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet';
 const REL_COMMENTS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 const REL_VML = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing';
+
+/** Shape-id blocks (o:idmap data="13,14") declared by a VML drawing. */
+export function vmlBlocks(xml: string): number[] {
+  const m = /<o:idmap\b[^>]*\bdata="([^"]*)"/.exec(xml);
+  return m ? m[1].split(/[\s,]+/).map(Number).filter((n) => Number.isFinite(n)) : [];
+}
+
+/**
+ * Give a copied VML drawing fresh shape-id blocks. Every VML part must own unique blocks (shape ids are
+ * block*1024 + n); a copied drawing keeps its source workbook's block, and a collision with the target
+ * makes Excel report the file as damaged and "repair" the comments.
+ */
+export function renumberVml(xml: string, used: Set<number>): string {
+  const old = vmlBlocks(xml);
+  if (!old.length) return xml;
+  let next = Math.max(0, ...used) + 1;
+  const map = new Map<number, number>();
+  for (const b of old) {
+    map.set(b, next);
+    used.add(next++);
+  }
+  return xml
+    .replace(/(<o:idmap\b[^>]*\bdata=")[^"]*(")/, (_, a: string, z: string) => `${a}${[...map.values()].join(',')}${z}`)
+    .replace(/_x0000_s(\d+)/g, (whole, n: string) => {
+      const id = Number(n);
+      const to = map.get(Math.floor(id / 1024));
+      return to === undefined ? whole : `_x0000_s${to * 1024 + (id % 1024)}`;
+    });
+}
 const REL_HYPERLINK = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
 
 interface StyleParts {
@@ -406,7 +435,9 @@ export class XlsxEditor {
         } else if (type === REL_VML && source.file(abs)) {
           const n = this.nextPartNumber('xl/drawings/vmlDrawing', '.vml');
           const dest = `xl/drawings/vmlDrawing${n}.vml`;
-          this.zip.file(dest, await source.file(abs)!.async('nodebuffer'));
+          const used = new Set<number>();
+          for (const f of Object.keys(this.zip.files).filter((x) => /^xl\/drawings\/vmlDrawing\d+\.vml$/.test(x))) for (const b of vmlBlocks(await this.zip.file(f)!.async('string'))) used.add(b);
+          this.zip.file(dest, renumberVml(await source.file(abs)!.async('string'), used));
           newRels.push(`<Relationship Id="${id}" Type="${REL_VML}" Target="../drawings/vmlDrawing${n}.vml"/>`);
           await this.ensureDefaultContentType('vml', 'application/vnd.openxmlformats-officedocument.vmlDrawing');
           keptIds.add(id);
