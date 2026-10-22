@@ -71,7 +71,16 @@ export function ProjectsPage({ projectId, onError, onUpdated, onQuotationCreated
     {!loading && !projectId && projects.length > 0 && !visible.length && <section className="panel muted">No matching projects. Try a customer name or ask Somec to describe the project you need.</section>}
     {loading && <div className="muted">Loading projects…</div>}
     {!loading && projects.length === 0 && <section className="panel"><h2>No projects yet</h2><p className="muted">Create a customer project before creating its quotations.</p><button className="primary" onClick={() => { setEditingProject(null); setName(''); setCustomer(''); setContactIds([]); setCreating(true); }}>Create project</button></section>}
-    <div className="project-grid">{visible.map((project) => <section className="panel project-card" key={project.id}>
+    <div className="project-grid">{visible.map((project) => <section
+      className="panel project-card clickable"
+      key={project.id}
+      role="link"
+      tabIndex={0}
+      aria-label={`Open project ${project.name}`}
+      // The whole card opens the project; its own buttons, links and tabs keep their actions.
+      onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, input, select, textarea, [role="tab"]')) navigate({ page: 'projects', id: project.id }); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) navigate({ page: 'projects', id: project.id }); }}
+    >
       <div className="project-card-head"><div><h2><button className="project-open-link" onClick={() => navigate({ page: 'projects', id: project.id })}>{project.name}<span aria-hidden="true"> ↗</span></button></h2><div className="muted">Customer · <button className="customer-link" onClick={() => navigate({ page: 'customers', id: project.customerId })}>{project.customer}</button></div></div><button onClick={() => { setEditingProject(project); setName(project.name); setCustomer(project.customer); setContactIds(project.contacts.map((contact) => contact.id)); setCreating(true); }}>Edit project</button></div>
       <div className="project-card-tabs" role="tablist" aria-label={`${project.name} details`}><button role="tab" aria-selected={(projectTabs[project.id] ?? 'quotations') === 'quotations'} className={(projectTabs[project.id] ?? 'quotations') === 'quotations' ? 'active' : ''} onClick={() => setProjectTabs({ ...projectTabs, [project.id]: 'quotations' })}>Quotations ({project.quotations.length})</button><button role="tab" aria-selected={projectTabs[project.id] === 'contacts'} className={projectTabs[project.id] === 'contacts' ? 'active' : ''} onClick={() => setProjectTabs({ ...projectTabs, [project.id]: 'contacts' })}>Contacts ({project.contacts.length})</button></div>
       {(projectTabs[project.id] ?? 'quotations') === 'contacts' ? <div>
