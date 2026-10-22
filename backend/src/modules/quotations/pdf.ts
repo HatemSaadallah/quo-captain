@@ -36,15 +36,20 @@ export function elencoCostiPdf(quotation: Quotation, ec: ElencoCosti): Promise<B
     ];
     const rowH = 12;
     const drawHeader = (): void => {
+      // One fixed baseline for every label: doc.text() advances doc.y, which made the headers step down diagonally.
+      const y = doc.y + 4;
+      const bandH = 16;
+      doc.save().rect(left, y - 4, width, bandH).fill('#eef3f4').restore();
+      doc.fillColor('#17303a').font('Helvetica-Bold').fontSize(7);
       let x = left;
-      doc.font('Helvetica-Bold').fontSize(7);
       for (const c of cols) {
-        doc.text(c.label, x + 2, doc.y, { width: c.w - 4, align: c.align ?? 'left', lineBreak: false });
+        doc.text(c.label, x + 3, y, { width: c.w - 6, align: c.align ?? 'left', lineBreak: false, height: bandH });
         x += c.w;
       }
-      doc.moveDown(0.2);
-      doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(0.5).stroke();
-      doc.moveDown(0.2);
+      doc.moveTo(left, y + bandH - 4).lineTo(left + width, y + bandH - 4).lineWidth(0.6).strokeColor('#9fb3b8').stroke();
+      doc.x = left;
+      doc.y = y + bandH;
+      doc.fillColor('black').strokeColor('black');
     };
     drawHeader();
     doc.font('Helvetica').fontSize(7);

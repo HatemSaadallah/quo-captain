@@ -5,6 +5,7 @@ import type { SearchHit } from '../../common/interfaces/catalog.interface';
 import type { AddItemDto, AddRowDto, AttachTabDto, CreateQuotationDto, ElencoCosti, Quotation, QuotationValidation, UpdateItemDto, UpdateQuotationDto } from '../../common/interfaces/quotation.interface';
 import type { Benchmark, WorkbookView } from '../../common/interfaces/workbook-view.interface';
 import { CurrentUser } from '../auth/auth.decorators';
+import { writeXlsx } from '../../common/utils/xlsx-writer';
 import { QuotationsService } from './quotations.service';
 
 @Controller('quotations')
@@ -58,6 +59,20 @@ export class QuotationsController {
   }
 
   /** The generated quotation as a clickable web workbook (ELENCO COSTI + evaluated analysis sheets). */
+  /** The web "Cost breakdown" workbook as a plain .xlsx (values, one sheet per line). */
+  @Get(':id/workbook.xlsx')
+  async workbookXlsx(@Param('id') id: string, @CurrentUser() user: AuthUser, @Res() res: Response): Promise<void> {
+    const view = await this.quotations.workbookView(id, user.id);
+    const buffer = await writeXlsx(view.sheets.map((sh) => ({
+      name: sh.name,
+      widths: sh.widths,
+      cells: sh.cells.map((c) => ({ addr: c.addr, v: c.err ?? c.v, bold: c.kind === 'header' || c.kind === 'total' || c.kind === 'label', money: typeof c.v === 'number' && /cost|total|€/i.test(`${c.source ?? ''} ${c.f ?? ''}`) })),
+    })));
+    res.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('content-disposition', `attachment; filename="${(view.reference || 'quotation').replace(/[^\w .-]/g, '_')} cost breakdown.xlsx"`);
+    res.send(buffer);
+  }
+
   @Get(':id/workbook')
   workbook(@Param('id') id: string, @CurrentUser() user: AuthUser): Promise<WorkbookView> {
     return this.quotations.workbookView(id, user.id);

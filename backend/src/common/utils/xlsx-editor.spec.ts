@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clearRange, unshareFormulas, upsertCell } from './xlsx-editor';
+import { clearRange, renumberVml, unshareFormulas, upsertCell, vmlBlocks } from './xlsx-editor';
 import { parseSheetXml } from './xlsx-reader';
 
 const wrap = (rows: string): string => `<?xml version="1.0"?><worksheet><dimension ref="A1:D3"/><sheetData>${rows}</sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>`;
@@ -74,5 +74,17 @@ describe('clearRange', () => {
     expect(cells(out).get('A6')?.v).toBeNull();
     expect(cells(out).get('G7')?.v).toBeNull();
     expect(cells(out).get('A6')?.s).toBe(1);
+  });
+});
+
+describe('renumberVml', () => {
+  it('moves a copied drawing to a free shape-id block so it cannot collide with the target', () => {
+    const vml = '<xml><o:shapelayout v:ext="edit"><o:idmap v:ext="edit" data="13"/></o:shapelayout><v:shape id="_x0000_s13313" o:spid="_x0000_s13313"/><v:shape id="_x0000_s13314"/></xml>';
+    const out = renumberVml(vml, new Set([7, 8, 13, 61]));
+    expect(vmlBlocks(out)).toEqual([62]);
+    expect(out).toContain('id="_x0000_s63489"'); // 62 * 1024 + 1
+    expect(out).toContain('o:spid="_x0000_s63489"');
+    expect(out).toContain('_x0000_s63490');
+    expect(out).not.toContain('_x0000_s13313');
   });
 });

@@ -18,3 +18,5 @@ backend/.cache/
 
 backend/prisma/*.db
 backend/prisma/*.db-journal
+data/imports/
+data/product-images/
