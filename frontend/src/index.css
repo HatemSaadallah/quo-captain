@@ -1,7 +1,7 @@
 :root[data-theme="dark"] { color-scheme: dark; }
 :root[data-text="large"] { --text-boost: 1; }
 :root[data-theme="dark"] .login-logo { filter: brightness(0) invert(1); }
-:root[data-theme="dark"] .login { background: radial-gradient(ellipse at 15% 20%, #18393e, transparent 60%), #111618; }
+:root[data-theme="dark"] .login { background: radial-gradient(ellipse at 15% 20%, #24474c, transparent 60%), #232628; }
 
 :root {
   --bg: #f3f5f8;
