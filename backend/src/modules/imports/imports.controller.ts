@@ -1,8 +1,8 @@
-import { BadRequestException, Body, Controller, Param, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { AuthUser } from '../../common/interfaces/auth.interface';
 import { CurrentUser } from '../auth/auth.decorators';
-import { ImportsService, type ImportHeader, type ImportPreview, type ImportResult } from './imports.service';
+import { ImportsService, type ImportHeader, type ImportHistoryEntry, type ImportPreview, type ImportResult } from './imports.service';
 
 @Controller('imports')
 export class ImportsController {
@@ -13,6 +13,11 @@ export class ImportsController {
   upload(@UploadedFile() file: { originalname: string; buffer: Buffer } | undefined, @CurrentUser() user: AuthUser): Promise<ImportResult> {
     if (!file) throw new BadRequestException('Choose a workbook to import.');
     return this.imports.importWorkbook(file, user);
+  }
+
+  @Get('history')
+  history(@CurrentUser() user: AuthUser): ImportHistoryEntry[] {
+    return this.imports.history(user);
   }
 
   @Post('preview')

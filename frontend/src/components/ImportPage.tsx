@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { api, fmtMoney, saveBlob, type ImportPreview, type ImportResult } from '../api';
 import '../import.css';
 
@@ -21,6 +21,9 @@ export function ImportPage({ onImported }: { onImported: (quotationId: string) =
   const [filter, setFilter] = useState<Filter>('all');
   const [result, setResult] = useState<ImportResult | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const [history, setHistory] = useState<Awaited<ReturnType<typeof api.importHistory>>>([]);
+  const loadHistory = (): void => void api.importHistory().then(setHistory).catch(() => undefined);
+  useEffect(loadHistory, [stage]);
 
   const upload = async (f: File | undefined): Promise<void> => {
     setError('');
@@ -132,6 +135,59 @@ export function ImportPage({ onImported }: { onImported: (quotationId: string) =
             </>
           )}
         </div>
+      )}
+
+      {stage === 'upload' && (
+        <section className="imp-card imp-history">
+          <div className="imp-card-head">
+            <h2>Import history</h2>
+            <span className="muted small">{history.length ? `${history.length} recent imports` : 'No imports yet'}</span>
+          </div>
+          {history.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>File</th>
+                  <th>Quotation</th>
+                  <th className="num">Lines</th>
+                  <th className="num">Estimated cost</th>
+                  <th>Status</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id}>
+                    <td className="small">{new Date(h.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="imp-line-title">{h.fileName}</td>
+                    <td>
+                      {h.status === 'imported' ? (
+                        <>
+                          <b>{h.reference}</b>
+                          <div className="small muted">
+                            {h.name} · {h.customer}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td className="num">
+                      {h.lines}
+                      {h.linkedToCatalog !== null && <div className="small muted">{h.linkedToCatalog} linked</div>}
+                    </td>
+                    <td className="num">{h.totalEstimatedCost !== null ? fmtMoney(h.totalEstimatedCost) : '—'}</td>
+                    <td>
+                      <span className={`imp-pill ${h.status === 'imported' ? 'p-ready' : 'p-review'}`}>{h.status === 'imported' ? 'Imported' : 'Rejected'}</span>
+                    </td>
+                    <td>{h.quotationId && <button onClick={() => void onImported(h.quotationId as string)}>Open</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
       )}
 
       {stage === 'review' && preview && header && (
