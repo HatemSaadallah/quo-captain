@@ -57,3 +57,22 @@
 .spec-delta.up { background: #fbe9e3; color: #a3401f; }
 .spec-delta.down { background: #e2f1ea; color: #23684d; }
 .spec-total { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Spec list with an edit button per value */
+.specs-edit dd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 28px; }
+.sv { display: inline-flex; align-items: center; gap: 4px; border-radius: 7px; }
+.sv-text { font-variant-numeric: tabular-nums; color: var(--ink); }
+.sv-edit { width: 24px; height: 24px; padding: 0; display: inline-grid; place-items: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #8fa2a8; }
+.sv-edit:hover:not(:disabled) { color: var(--accent); background: #edf5f4; border-color: transparent; }
+.sv.moved { background: #fff6e2; padding: 0 0 0 6px; }
+.sv.moved .sv-text { color: #7a5410; font-weight: 600; }
+.sv.editing { border: 1px solid #74a6ab; background: #fff; box-shadow: 0 0 0 2px #b8d9db; }
+.sv.editing input { border: none; background: transparent; padding: 4px 6px; font: inherit; font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sv.editing input:focus { outline: none; }
+.sv.editing em { font-style: normal; font-size: 12px; color: var(--muted); padding-right: 8px; }
+.sx { color: var(--muted); }
+.sa { font-size: 11px; color: var(--muted); }
+.pd-hint { font-size: 12px; color: var(--muted); margin: -6px 0 12px; }
+.pd-custom { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #8a5f12; margin-top: 2px; }
+.pd-recalc { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 8px; }
+.pdprice .spec-delta { font-size: 13px; margin-left: 8px; vertical-align: middle; }
