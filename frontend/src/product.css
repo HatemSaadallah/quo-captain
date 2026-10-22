@@ -1,0 +1,34 @@
+/* Product page polish: bill of materials and similar-product cards. */
+.bom-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 14px; }
+.bom-head h2 { margin: 0; }
+.bom-head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.bom-total { text-align: right; }
+.bom-total span { display: block; font-size: 12px; color: var(--muted); }
+.bom-total b { font-size: 22px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.bom { border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.bom-row { display: grid; grid-template-columns: minmax(180px, 1.6fr) 110px 110px minmax(100px, 1fr) 96px 44px; gap: 14px; align-items: center; padding: 11px 4px; border-bottom: 1px solid #eef3f3; font-size: 13px; }
+.bom-row:hover { background: #f8fbfb; }
+.bom-name { background: none; border: none; padding: 0; text-align: left; color: var(--accent); font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bom-name:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+.bom-flag { font-size: 10px; font-weight: 600; color: #8a5f12; background: #fbf0dc; padding: 1px 7px; border-radius: 999px; }
+.bom-qty, .bom-price { color: var(--muted); text-align: right; }
+.bom-bar { height: 8px; background: #eef3f3; border-radius: 4px; overflow: hidden; }
+.bom-bar i { display: block; height: 100%; background: #00939b; border-radius: 4px; }
+.bom-cost { text-align: right; font-weight: 650; color: var(--ink); }
+.bom-share { text-align: right; color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) {
+  .bom-row { grid-template-columns: 1fr auto; gap: 4px 12px; }
+  .bom-qty, .bom-price, .bom-bar, .bom-share { display: none; }
+}
+
+/* Similar products: even cards, tidy price row */
+.simwrap { display: flex; flex-direction: column; gap: 8px; }
+.simwrap .pcard { flex: 1; }
+.simwrap .pmeta { min-height: 36px; }
+.simwrap .pprice { display: flex; align-items: center; gap: 4px; padding-top: 10px; border-top: 1px solid #eef3f3; }
+.simwrap .pprice b { font-size: 16px; }
+.simwrap .pprice button { margin-left: auto; padding: 5px 14px; font-size: 13px; font-weight: 600; border-radius: 999px; border-color: var(--accent); color: var(--accent); background: #fff; }
+.simwrap .pprice button:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.simwrap .pbadge { background: rgba(0, 147, 155, 0.92); }
+.simwrap .reasons { padding: 0 2px; }
+.simwrap .ptitle { height: 2.7em; min-height: 0; }

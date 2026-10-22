@@ -16,6 +16,7 @@ const paths = {
   cost: 'M17 5a6 6 0 0 0-4-2C5 3 5 21 13 21a6 6 0 0 0 4-2 M4 9h11 M4 14h10',
   draft: 'M12 3H4v18h16v-8 M10 14l1-4 8-8 3 3-8 8-4 1z',
   check: 'm5 12 4 4L19 6',
+  upload: 'M12 16V4 M7 9l5-5 5 5 M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3',
 } as const;
 
 export type IconName = keyof typeof paths;

@@ -1,11 +1,27 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { api, type Project, type ProjectContact } from '../api';
+import { api, type Project, type ProjectContact, type Quotation } from '../api';
 import { navigate } from '../route';
 import { ProjectFinder } from './ProjectFinder';
 import { ProjectWorkspace } from './ProjectWorkspace';
 import '../projects.css';
 
-export function ProjectsPage({ projectId, onError, onUpdated }: { projectId?: string; onError: (message: string) => void; onUpdated?: () => void }) {
+export function ProjectsPage({ projectId, onError, onUpdated, onQuotationCreated, estimator = '' }: { projectId?: string; onError: (message: string) => void; onUpdated?: () => void; onQuotationCreated?: (q: Quotation) => void; estimator?: string }) {
+  const [creatingQuote, setCreatingQuote] = useState(false);
+  /** One click: a draft quotation for this project with the next offer number, opened as the active draft. */
+  const newQuotation = async (project: Project): Promise<void> => {
+    setCreatingQuote(true);
+    try {
+      const [all, facets] = await Promise.all([api.quotations(), api.facets()]);
+      const next = Math.max(2099, ...all.map((q) => Number(/TM(\d{4})/.exec(q.reference)?.[1] ?? 0))) + 1;
+      const template = project.quotations[0]?.templateWorkbook ?? facets.workbooks[0]?.workbook ?? '';
+      const created = await api.createQuotation({ name: `${project.name} - quotation`, projectId: project.id, reference: `TM${next}-00`, date: new Date().toISOString().slice(0, 10), estimator, templateWorkbook: template, status: 'draft' });
+      onQuotationCreated?.(created);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCreatingQuote(false);
+    }
+  };
   const [query, setQuery] = useState('');
   const [matchedIds, setMatchedIds] = useState<string[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -48,7 +64,7 @@ export function ProjectsPage({ projectId, onError, onUpdated }: { projectId?: st
   const selected = projects.find((project) => project.id === projectId);
   const visible = projectId ? projects.filter((project) => project.id === projectId) : matchedIds ? matchedIds.flatMap((id) => projects.filter((project) => project.id === id)) : projects.filter((project) => [project.name, project.customer, ...project.quotations.map((quotation) => `${quotation.reference} ${quotation.name}`)].join(' ').toLowerCase().includes(query.toLowerCase()));
   return <div className="stack">
-    <div className="section-head"><div><h1 style={{ margin: 0 }}>{selected?.name ?? 'Projects'}</h1><div className="muted small">{selected ? `${selected.customer} · ${selected.quotations.length} quotations · ${selected.contacts.length} contacts` : 'Find a project, open its workspace, and build on what you’ve done before.'}</div></div>{projectId && <button onClick={() => navigate({ page: 'projects' })}>← All projects</button>}<button className="primary" onClick={() => { setEditingProject(null); setName(''); setCustomer(''); setContactIds([]); setCreating(true); }}>＋ New project</button></div>
+    <div className="section-head"><div><h1 style={{ margin: 0 }}>{selected?.name ?? 'Projects'}</h1><div className="muted small">{selected ? `${selected.customer} · ${selected.quotations.length} quotations · ${selected.contacts.length} contacts` : 'Find a project, open its workspace, and build on what you’ve done before.'}</div></div>{projectId && <button onClick={() => navigate({ page: 'projects' })}>← All projects</button>}{selected && <button className="primary" disabled={creatingQuote} onClick={() => void newQuotation(selected)}>{creatingQuote ? 'Creating…' : '＋ New quotation'}</button>}<button className={selected ? '' : 'primary'} onClick={() => { setEditingProject(null); setName(''); setCustomer(''); setContactIds([]); setCreating(true); }}>＋ New project</button></div>
     {!projectId && <ProjectFinder projects={projects} onQuery={setQuery} onMatches={setMatchedIds} />}
     {selected && <ProjectWorkspace key={selected.id} project={selected} projects={projects} onUpdated={() => { refresh(); onUpdated?.(); }} />}
     {!loading && projectId && !selected && <section className="panel">Project not found. <button onClick={() => navigate({ page: 'projects' })}>All projects</button></section>}

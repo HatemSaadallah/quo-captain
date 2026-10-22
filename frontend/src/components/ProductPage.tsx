@@ -3,6 +3,7 @@ import { api, fmtMoney, fmtNum, fmtMaterialQty, type CatalogFacets, type Catalog
 import { cleanTitle, dims, imageOf, locationOf, rankSimilar, sourceOf, typologyOf, type SimilarProduct } from '../product';
 import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
+import '../product.css';
 import { AddProductButton } from './AddProductButton';
 
 interface Props {
@@ -95,8 +96,6 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
             <dd>
               {sourceOf(r)} · {r.projectDate ?? '—'} · {r.estimator ?? '—'}
             </dd>
-            <dt>Source</dt>
-            <dd className="small">{r.custom ? 'Custom catalog' : `${r.workbook} › sheet ${r.sheet} › row ${r.row}`}</dd>
           </dl>
           <div className="addbox">
             <label className="small muted" style={{ whiteSpace: 'nowrap' }}>
@@ -116,9 +115,48 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
       </section>
 
       <section className="panel">
-        <h2>Raw materials · bill of materials</h2>
-        <p className="small muted">Quantities are shown per costing unit. Mock quantities and raw-material prices are labelled separately.</p>
-        {materials.length ? <div className="table-scroll"><table><thead><tr><th>Material</th><th>Quantity per unit</th><th>Original analysis batch</th><th>Estimated unit price</th><th>Material cost per unit</th><th>Quantity source</th></tr></thead><tbody>{materials.map((link) => <tr key={link.id} title={link.sourceNote}><td><button className="customer-link" onClick={() => navigate({ page: 'materials', id: link.material.id })}>{link.material.name}</button></td><td>{fmtMaterialQty(link.quantity)} {link.material.unit} / 1 {link.productUnit}</td><td>{link.batchQuantity == null ? 'Not supplied' : `${fmtMaterialQty(link.batchQuantity)} ${link.material.unit}`}</td><td>{fmtMoney(link.material.unitCost)} / {link.material.unit}<div className="small muted">{link.material.priceSource === 'mock' ? 'Mock price' : 'Manual price'}</div></td><td>{fmtMoney(link.quantity * link.material.unitCost)} / {link.productUnit}</td><td>{link.quantitySource === 'mock' ? 'Mock quantity' : 'Historical analysis'}</td></tr>)}</tbody></table></div> : <p className="muted">No material quantities are recorded for this product.</p>}
+        <div className="bom-head">
+          <div>
+            <h2>Bill of materials</h2>
+            <p>Raw material for one {r.unit ?? 'unit'}, from the original cost analysis. Raw-material prices are indicative.</p>
+          </div>
+          {materials.length > 0 && (
+            <div className="bom-total">
+              <span>Materials per {r.unit ?? 'unit'}</span>
+              <b>{fmtMoney(materials.reduce((acc, l) => acc + l.quantity * l.material.unitCost, 0))}</b>
+            </div>
+          )}
+        </div>
+        {materials.length ? (
+          <div className="bom">
+            {(() => {
+              const rows = [...materials].map((l) => ({ l, cost: l.quantity * l.material.unitCost })).sort((a, b) => b.cost - a.cost);
+              const max = Math.max(...rows.map((x) => x.cost), 1);
+              const total = rows.reduce((acc, x) => acc + x.cost, 0) || 1;
+              return rows.map(({ l, cost }) => (
+                <div key={l.id} className="bom-row" title={l.sourceNote ?? undefined}>
+                  <button className="bom-name" onClick={() => navigate({ page: 'materials', id: l.material.id })}>
+                    {l.material.name}
+                    {l.quantitySource === 'mock' && <span className="bom-flag">estimated qty</span>}
+                  </button>
+                  <span className="bom-qty">
+                    {fmtMaterialQty(l.quantity)} {l.material.unit}
+                  </span>
+                  <span className="bom-price">
+                    {fmtMoney(l.material.unitCost)}/{l.material.unit}
+                  </span>
+                  <span className="bom-bar" aria-hidden="true">
+                    <i style={{ width: `${(cost / max) * 100}%` }} />
+                  </span>
+                  <span className="bom-cost">{fmtMoney(cost)}</span>
+                  <span className="bom-share">{Math.round((cost / total) * 100)}%</span>
+                </div>
+              ));
+            })()}
+          </div>
+        ) : (
+          <p className="muted">No material quantities are recorded for this product.</p>
+        )}
       </section>
 
       <section className="panel">

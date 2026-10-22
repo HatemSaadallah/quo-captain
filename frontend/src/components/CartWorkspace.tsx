@@ -10,13 +10,14 @@ interface Props {
   estimator: string;
   onError: (message: string) => void;
   onSelect: (id: string) => void;
+  onDelete: (quotation: Quotation) => void;
   onCreated: (quotation: Quotation) => void;
   /** The selected draft, rendered with the quotation page. */
   children: ReactNode;
 }
 
 /** Several draft quotations ("carts") open side by side, one per project; the selected one receives catalog adds. */
-export function CartWorkspace({ drafts, current, facets, estimator, onError, onSelect, onCreated, children }: Props) {
+export function CartWorkspace({ drafts, current, facets, estimator, onError, onSelect, onDelete, onCreated, children }: Props) {
   const [open, setCreating] = useState(false);
   const creating = open || drafts.length === 0;
 
@@ -32,13 +33,18 @@ export function CartWorkspace({ drafts, current, facets, estimator, onError, onS
 
       <div className="q-drafts" role="tablist" aria-label="Draft quotations">
         {drafts.map((c) => (
-          <button key={c.id} role="tab" aria-selected={current?.id === c.id} className={`q-draft ${current?.id === c.id ? 'on' : ''}`} onClick={() => onSelect(c.id)} title={`${c.name} · ${c.customer || 'no customer'}`}>
-            <span className="q-draft-ref">
-              {c.reference || 'No ref'} <span className="q-draft-count">{c.items.length}</span>
-            </span>
-            <span className="q-draft-name">{c.name}</span>
-            <span className="q-draft-sum">{c.customer || 'No customer'}</span>
-          </button>
+          <div key={c.id} className={`q-draft-wrap ${current?.id === c.id ? 'on' : ''}`}>
+            <button role="tab" aria-selected={current?.id === c.id} className={`q-draft ${current?.id === c.id ? 'on' : ''}`} onClick={() => onSelect(c.id)} title={`${c.name} · ${c.customer || 'no customer'}`}>
+              <span className="q-draft-ref">
+                {c.reference || 'No ref'} <span className="q-draft-count">{c.items.length}</span>
+              </span>
+              <span className="q-draft-name">{c.name}</span>
+              <span className="q-draft-sum">{c.customer || 'No customer'}</span>
+            </button>
+            <button className="q-draft-delete" onClick={() => onDelete(c)} aria-label={`Delete draft ${c.reference || c.name}`} title="Delete this draft">
+              ×
+            </button>
+          </div>
         ))}
         <button className="q-draft q-draft-new" onClick={() => setCreating(true)}>
           <span aria-hidden="true">＋</span> New draft
