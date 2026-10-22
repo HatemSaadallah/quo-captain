@@ -15,3 +15,4 @@ User ask: "for analysis in the insight with AI, we need a way to export it. mayb
 3. Anything you'd add to the export (PDF server-side via pdfkit vs. browser print)?
 
 ## Codex review
+Codex hit its limit; Claude decided: links stay public and unguessable (demo), expire after 30 days (enforced in GET); JSON file storage kept for the MVP; export stays browser print + CSV.
