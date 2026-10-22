@@ -374,6 +374,10 @@ export class XlsxEditor {
 
     // 3. sheet-view state that must not be duplicated
     xml = xml.replace(/\stabSelected="1"/g, '');
+    // A copied sheet keeps its source workbook's VBA code name (e.g. "Foglio115"); if the target already
+    // has a sheet with that code name Excel reports the file as damaged. These workbooks carry no macros,
+    // so dropping it is safe: Excel assigns a fresh one on save.
+    xml = xml.replace(/(<sheetPr\b[^>]*?)\scodeName="[^"]*"/, '$1');
 
     // 4. relationships: comments (+ their VML) and hyperlinks are carried over; every other
     //    relationship consumer (drawings, printer settings, tables, controls, OLE, pictures)
