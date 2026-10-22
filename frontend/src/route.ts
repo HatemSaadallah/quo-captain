@@ -11,6 +11,7 @@ export type Route =
   | { page: 'contacts' }
   | { page: 'insights'; q?: string }
   | { page: 'import' }
+  | { page: 'shared'; id: string }
   | { page: 'quotation'; id: string; tab: string }
   | { page: 'new'; id?: string; step: number };
 
@@ -24,6 +25,7 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === 'quotations') return { page: 'quotations', status: params.get('status') ?? undefined };
   if (parts[0] === 'contacts') return { page: 'contacts' };
   if (parts[0] === 'import') return { page: 'import' };
+  if (parts[0] === 'shared' && parts[1] === 'insight' && parts[2]) return { page: 'shared', id: parts[2] };
   if (parts[0] === 'insights') return { page: 'insights', q: params.get('q') ?? undefined };
   if (parts[0] === 'projects') return { page: 'projects', id: parts[1] ? decodeURIComponent(parts[1]) : undefined };
   if (parts[0] === 'customers') return { page: 'customers', id: parts[1] };
@@ -48,6 +50,8 @@ export function toHash(r: Route): string {
       return '#/contacts';
     case 'import':
       return '#/import';
+    case 'shared':
+      return `#/shared/insight/${encodeURIComponent(r.id)}`;
     case 'insights':
       return r.q ? `#/insights?q=${encodeURIComponent(r.q)}` : '#/insights';
     case 'projects':
