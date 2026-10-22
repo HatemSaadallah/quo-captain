@@ -159,7 +159,7 @@ export function QuotationPage({ quotation, isCart, onMakeCart, onConfirmed, face
             <button onClick={() => void downloadExcel()} disabled={!!exporting || quotation.items.length === 0} title="Builds the Analisi workbook (DATI GEN., ELENCO COSTI, one analysis sheet per item) from the template">
               {exporting === 'excel' ? (
                 <>
-                  <span className="spinner" /> Building Excel…
+                  <span className="spinner" /> {quotation.items.length > 60 ? 'Building Excel… about 20 s for this size' : 'Building Excel…'}
                 </>
               ) : (
                 'Download Excel'

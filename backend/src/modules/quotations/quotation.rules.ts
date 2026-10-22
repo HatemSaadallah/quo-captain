@@ -97,7 +97,7 @@ export function validateQuotation(p: Quotation, template: WorkbookSummary | null
   else if (!template) push('error', `Template workbook ${p.templateWorkbook} is not in the catalog`);
   else {
     if (!template.requiredSheetsPresent) push('error', `Template ${p.templateWorkbook} lacks one of the required sheets (${SHEETS.elencoCosti}, ${SHEETS.costiParz}, ...)`);
-    if (p.items.length > template.freeItemRows) push('error', `Template has only ${template.freeItemRows} free item rows; the cart has ${p.items.length}`);
+    if (p.items.length > template.freeItemRows) push('warning', `Template has room for ${template.freeItemRows} lines and the cart has ${p.items.length}; the Excel export uses a larger template`);
   }
   if (!p.items.length) push('error', 'The cart is empty: add at least one cost row');
 
@@ -107,7 +107,7 @@ export function validateQuotation(p: Quotation, template: WorkbookSummary | null
   for (const it of p.items) {
     const tag = `${it.position || '?'} / ${it.itemCode || '?'}`;
     if (!it.catalogId) push('warning', it.unitCostOverride === null ? `${tag}: no reference analysis and no price; it is exported with unit cost 0 (set a price or attach an analysis)` : `${tag}: exported as a priced line without analysis sheet`, it.id);
-    else if (!it.sourceSheet) push('error', `${tag}: the historical row has no analysis sheet, nothing can be copied`, it.id);
+    else if (!it.sourceSheet) push('warning', `${tag}: the historical row has no analysis sheet; exported as a priced line`, it.id);
     if (!(it.quantity > 0) || !Number.isFinite(it.quantity)) push('error', `${tag}: quantity must be a positive number`, it.id);
     if (!it.itemCode.trim()) push('error', `${tag}: item code is required`, it.id);
     if (!it.position.trim()) push('warning', `${tag}: position is empty (summary by position will not group it)`, it.id);

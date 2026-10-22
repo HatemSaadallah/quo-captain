@@ -190,6 +190,7 @@ export class ImportsService {
         total += (r.unitCost ?? 0) * quantity;
       }
       this.log.log(`Imported ${file.originalname}: ${rows.length} lines (${linked} linked to the catalog) into ${quotation.reference}`);
+      void this.quotations.get(quotation.id, user.id).then((q) => this.quotations.warm(q.items)); // costs ready by the time the draft opens
       addHistory({ id: randomUUID(), at: new Date().toISOString(), userId: user.id, fileName: file.originalname, status: 'imported', reference: quotation.reference, customer: customerName, name: projectName, lines: rows.length, linkedToCatalog: linked, totalEstimatedCost: Math.round(total * 100) / 100, quotationId: quotation.id });
       return { quotationId: quotation.id, projectId: project.id, reference: quotation.reference, name: projectName, customer: customerName, lines: rows.length, linkedToCatalog: linked, totalEstimatedCost: Math.round(total * 100) / 100 };
     } finally {

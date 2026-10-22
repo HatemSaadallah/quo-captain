@@ -22,11 +22,21 @@ export interface ComputedCost {
   sheet: string;
 }
 
+const TAB_FIELDS = { cells: true, dependsOnSheets: true, fidelity: true, row: true } as const;
+const toTab = (r: { cells: unknown; dependsOnSheets: unknown; fidelity: string | null; row: number }) => ({
+  snap: snapshotFromStored(r.cells as StoredCell[]),
+  depends: (r.dependsOnSheets as string[]).filter((d) => d !== '#REF!'),
+  fidelity: r.fidelity,
+  row: r.row,
+});
+
 @Injectable()
 export class CostingService {
   private readonly log = new Logger(CostingService.name);
   private readonly external = new Map<string, Map<string, SheetSnapshot>>(); // workbook -> external sheets
   private readonly tabs = new Map<string, { snap: SheetSnapshot; depends: string[]; fidelity: string | null; row: number }>(); // "wb|sheet"
+  // ponytail: in-memory results keyed by every evaluation input, oldest dropped past 5000; a restart clears it (snapshots only change on re-extraction).
+  private readonly results = new Map<string, ComputedCost | null>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -44,11 +54,22 @@ export class CostingService {
     const key = `${workbook}|${sheet}`;
     const cached = this.tabs.get(key);
     if (cached) return cached;
-    const r = await this.prisma.referenceTab.findFirst({ where: { workbook, sheet }, select: { cells: true, dependsOnSheets: true, fidelity: true, row: true } });
+    const r = await this.prisma.referenceTab.findFirst({ where: { workbook, sheet }, select: TAB_FIELDS });
     if (!r?.cells) return null;
-    const t = { snap: snapshotFromStored(r.cells as unknown as StoredCell[]), depends: (r.dependsOnSheets as string[]).filter((d) => d !== '#REF!'), fidelity: r.fidelity, row: r.row };
-    this.tabs.set(key, t);
-    return t;
+    this.tabs.set(key, toTab(r));
+    return this.tabs.get(key)!;
+  }
+
+  /** Loads every reference tab the lines need (and the sheets those depend on) in one query per pass, not one per line. */
+  async prefetch(items: QuotationItem[]): Promise<void> {
+    let wanted = items.filter((it) => it.sourceWorkbook && it.sourceSheet).map((it) => ({ workbook: it.sourceWorkbook!, sheet: it.sourceSheet! }));
+    for (let pass = 0; pass < 2; pass++) {
+      const missing = [...new Map(wanted.filter((w) => !this.tabs.has(`${w.workbook}|${w.sheet}`)).map((w) => [`${w.workbook}|${w.sheet}`, w])).values()];
+      if (!missing.length) return;
+      const rows = await this.prisma.referenceTab.findMany({ where: { OR: missing }, select: { workbook: true, sheet: true, ...TAB_FIELDS } });
+      for (const r of rows) if (r.cells && r.sheet && !this.tabs.has(`${r.workbook}|${r.sheet}`)) this.tabs.set(`${r.workbook}|${r.sheet}`, toTab(r));
+      wanted = rows.flatMap((r) => (r.dependsOnSheets as string[]).filter((d) => d !== '#REF!').map((sheet) => ({ workbook: r.workbook, sheet })));
+    }
   }
 
   /** True when the workbook's logic is stored (cells + snapshots). */
@@ -76,6 +97,15 @@ export class CostingService {
 
   /** Unit cost of the item's reference tab with the item's own quantity, text and parameter overrides. */
   async compute(item: QuotationItem): Promise<ComputedCost | null> {
+    const key = JSON.stringify([item.sourceWorkbook, item.sourceSheet, item.quantity, item.itemCode, item.description, item.unit, item.lotto, item.params.map((p) => [p.cell, p.value])]);
+    if (this.results.has(key)) return this.results.get(key)!;
+    const result = await this.evaluate(item);
+    this.results.set(key, result);
+    if (this.results.size > 5000) this.results.delete(this.results.keys().next().value!);
+    return result;
+  }
+
+  private async evaluate(item: QuotationItem): Promise<ComputedCost | null> {
     const e = await this.evaluatorFor(item);
     if (!e) return null;
     try {
