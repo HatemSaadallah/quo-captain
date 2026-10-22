@@ -76,3 +76,6 @@
 .pd-custom { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #8a5f12; margin-top: 2px; }
 .pd-recalc { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 8px; }
 .pdprice .spec-delta { font-size: 13px; margin-left: 8px; vertical-align: middle; }
+.sep-parts { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: #f7f9f9; border: 1px dashed #cfdcdd; }
+.sep-head { font-size: 12px; font-weight: 650; color: var(--muted); margin-bottom: 6px; }
+.sep-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding: 3px 0; font-variant-numeric: tabular-nums; }

@@ -187,3 +187,19 @@
 .q-draft-wrap.on .q-draft-delete { top: 9px; }
 .q-draft-delete:hover:not(:disabled) { background: #fbeee9; color: #a3401f; }
 @media (hover: none) { .q-draft-delete { opacity: 1; } }
+
+/* Labour / transport reminder */
+.q-remind { display: flex; align-items: center; gap: 14px; padding: 14px 20px; background: #fff8e8; border-top: 1px solid #f0dcae; border-bottom: 1px solid #f0dcae; }
+.q-remind-icon { width: 26px; height: 26px; border-radius: 50%; background: #e3a72f; color: #fff; font-weight: 800; display: grid; place-items: center; flex: none; }
+.q-remind-text { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: #6b4a0e; flex: 1; }
+.q-remind-text b { color: #5a3d08; }
+.q-remind-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.q-remind-actions button { background: #fff; border-color: #e6c77f; color: #6b4a0e; font-weight: 600; font-size: 13px; white-space: nowrap; }
+.q-remind-actions button:hover:not(:disabled) { border-color: #c99a35; }
+.modal-title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.modal-title-row h2 { margin: 0; }
+.modal-close { width: 32px; height: 32px; padding: 0; border: none; background: transparent; font-size: 22px; line-height: 1; color: #64767e; border-radius: 8px; }
+.modal-close:hover:not(:disabled) { background: #eef3f3; color: #17303a; }
+.create-quotation-choice.top { margin: 4px 0 10px; width: 100%; }
+.quotation-search { width: 100%; margin-bottom: 10px; }
+.quotation-choice-scroll { max-height: 52vh; overflow-y: auto; padding-right: 2px; }

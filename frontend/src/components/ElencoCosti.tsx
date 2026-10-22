@@ -97,7 +97,18 @@ export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) 
     if (v !== r.quantity) void guard(() => api.updateItem(quotation.id, r.itemId, { quantity: v }));
   };
 
+  /** Adds a priced labour or transport line, pre-filled with what the original analyses allowed for. */
+  const addSeparateLine = async (kind: 'labour' | 'transport', amount: number): Promise<void> => {
+    await guard(async () => {
+      const q = await api.addRow(quotation.id, { position: '99', itemCode: kind === 'labour' ? '99-01' : '99-02', description: kind === 'labour' ? 'Labour - site installation, site management and travel' : 'Transport', unit: 'forfait', quantity: 1 });
+      const added = q.items[q.items.length - 1];
+      return amount > 0 && added ? api.updateItem(quotation.id, added.id, { unitCostOverride: Math.round(amount * 100) / 100 }) : q;
+    });
+  };
+
   if (!data) return <section className="q-ledger q-loading">Calculating costs…</section>;
+  const sep = data.separate;
+  const missing = sep && data.rows.length > 0 ? [!sep.hasLabourLine && 'labour', !sep.hasTransportLine && 'transport'].filter(Boolean) : [];
 
   return (
     <section className="q-ledger" aria-label="Line items">
@@ -268,6 +279,24 @@ export function ElencoCosti({ quotation, onQuotation, onError, onData }: Props) 
         <button className="q-add-line" onClick={() => setAdding(true)}>
           <span aria-hidden="true">＋</span> Add a line from the customer's bill of quantities
         </button>
+      )}
+
+      {sep && missing.length > 0 && (
+        <div className="q-remind" role="note">
+          <span className="q-remind-icon" aria-hidden="true">!</span>
+          <div className="q-remind-text">
+            <b>Don't forget to include {missing.join(' and ')}.</b>
+            <span>
+              Product lines exclude them. The original analyses allowed {!sep.hasLabourLine && <>{fmtMoney(sep.labour)} for labour</>}
+              {missing.length === 2 && ' and '}
+              {!sep.hasTransportLine && <>{fmtMoney(sep.transport)} for transport</>} on these products.
+            </span>
+          </div>
+          <div className="q-remind-actions">
+            {!sep.hasLabourLine && <button onClick={() => void addSeparateLine('labour', sep.labour)}>Add labour line</button>}
+            {!sep.hasTransportLine && <button onClick={() => void addSeparateLine('transport', sep.transport)}>Add transport line</button>}
+          </div>
+        </div>
       )}
 
       <div className="q-foot">
