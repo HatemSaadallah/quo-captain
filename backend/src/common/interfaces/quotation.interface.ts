@@ -35,6 +35,8 @@ export interface QuotationItem {
   unitCostOverride: number | null;
   dependsOnSheets: string[];
   notes: string;
+  /** Unit cost without the labour and transport share (own price kept as is); see common/utils/separate-costs.ts. */
+  productUnitCost?: number | null;
 }
 
 export interface GenerationSummary {

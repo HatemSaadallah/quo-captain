@@ -1,7 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import '../product3d.css';
 import { api, fmtMoney, fmtMaterialQty, type CatalogFacets, type CatalogRecord, type Quotation, type ProductMaterial } from '../api';
-import { cleanTitle, imageOf, LABOUR_CATEGORY, locationOf, productCost, rankSimilar, separateShare, sourceOf, TRANSPORT_CATEGORY, typologyOf, type SimilarProduct } from '../product';
+import { cleanTitle, costCategory, imageOf, LABOUR_CATEGORY, locationOf, productCost, rankSimilar, separateShare, sourceOf, TRANSPORT_CATEGORY, typologyOf, type SimilarProduct } from '../product';
 import { navigate } from '../route';
 import { ProductCard } from './ProductHome';
 // three.js is large: load the 3D viewer only when it is opened.
@@ -195,7 +195,7 @@ export function ProductPage({ id, quotations, facets, estimator, onAddToQuotatio
             {breakdown.slice(0, 8).map((c) => (
               <div key={c.code} className="bar">
                 <div className="bar-label">
-                  <span>{c.category}</span>
+                  <span title={c.category}>{costCategory(c.category)}</span>
                   <span>{fmtMoney(c.unitCost)}</span>
                 </div>
                 <div className="bar-track">

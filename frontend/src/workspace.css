@@ -52,6 +52,11 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .sidebar-user-copy small { color: #94aab2; text-transform: capitalize; font-size: 10px; }
 .sidebar-signout { color: #9fb6be; font-size: 11px; padding: 9px 12px; border-radius: 7px; }
 .sidebar-signout:hover:not(:disabled) { background: #ffffff08; border-color: #ffffff15; }
+.sidebar-prefs { display: grid; gap: 2px; margin-bottom: 2px; }
+.sidebar-signout[aria-pressed] { justify-content: flex-start; }
+.sidebar-signout[aria-pressed]::after { content: ''; flex: 0 0 28px; height: 16px; margin-left: auto; border-radius: 8px; background: radial-gradient(circle at 8px 50%, #b9cdd1 5px, transparent 5.5px), #ffffff22; }
+.sidebar-signout[aria-pressed="true"] { color: #e6f1f2; }
+.sidebar-signout[aria-pressed="true"]::after { background: radial-gradient(circle at 20px 50%, #ffffff 5px, transparent 5.5px), #3f9c99; }
 .content { padding: 26px 32px 64px; width: 100%; max-width: 1880px; margin: 0 auto; }
 .content > .project-finder { margin-bottom: 30px; }
 .project-find-form { min-height: 56px; padding: 8px 12px 8px 17px; border-radius: 12px; border-color: var(--line); box-shadow: var(--shadow); gap: 10px; }

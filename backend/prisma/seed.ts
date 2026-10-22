@@ -1,5 +1,5 @@
 /**
- * Seed: a mock salesperson user and sample quotations built from the
+ * Seed: a demo estimator user and sample quotations built from the
  * extracted catalog. Idempotent. Run with `npm run db:seed` (after `npm run extract`).
  *
  *   login: estimator@somec.local / somec2026   (role salesperson)
@@ -7,7 +7,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { existsSync, readFileSync } from 'node:fs';
-import type { Catalog } from '../src/common/interfaces/catalog.interface';
+import type { Catalog, CatalogRecord } from '../src/common/interfaces/catalog.interface';
 import { hashPassword } from '../src/common/utils/password';
 import { CATALOG_FILE } from '../src/common/utils/paths';
 import { itemFromCatalog } from '../src/modules/quotations/quotation.rules';
@@ -16,7 +16,7 @@ import { seedMaterials } from './seed-materials';
 const prisma = new PrismaClient();
 
 const USERS = [
-  { email: 'estimator@somec.local', name: 'Mock Salesperson', password: 'somec2026', role: 'salesperson' },
+  { email: 'estimator@somec.local', name: 'Michele Sossai', password: 'somec2026', role: 'salesperson' },
   { email: 'admin@somec.local', name: 'Somec Admin', password: 'somec2026', role: 'admin' },
 ];
 
@@ -59,59 +59,79 @@ async function main(): Promise<void> {
     return;
   }
   const catalog = JSON.parse(readFileSync(CATALOG_FILE, 'utf8')) as Catalog;
-  // The original sample: explicit lines with a parameter change.
-  await createQuotation(owner, catalog, {
-    reference: 'TM2099-00',
-    name: 'Nave 4 - Balcony (seed)',
-    customer: 'APEXA',
-    date: new Date().toISOString().slice(0, 10),
-    template: 'TM1643-06 Analisi.xlsx',
-    status: 'draft',
-    lines: [
-      { id: 'TM1643-06#10', quantity: 50, params: { N4: 1700 } }, // PRE-FAB BALCONY Type 1 1600x2560, deeper floor
-      { id: 'TM1643-06#12', quantity: 8 }, // balcony next to steel
-      { id: 'TM1643-06#45', quantity: 120 }, // balustrade (ML)
-    ],
-  });
   // Demo history: quotations picked from the catalog by product type, spread over customers and dates.
-  const demo: Array<{ reference: string; name: string; customer: string; date: string; template: string; picks: Array<[RegExp, number]> }> = [
-    { reference: 'TM2101-00', name: 'Nave 5 - Pool deck windscreens', customer: 'OMNIX', date: '2026-02-11', template: 'TM2030-00 Analisi.xlsx', picks: [[/windscreen/i, 3]] },
-    { reference: 'TM2102-00', name: 'Nave 5 - Suite dividers & sliding doors', customer: 'OMNIX', date: '2026-04-02', template: 'TM2030-00 Analisi.xlsx', picks: [[/divider/i, 2], [/door/i, 1]] },
-    { reference: 'TM2103-01', name: 'Nave 6 - Balcony flooring refit', customer: 'ACME', date: '2026-05-20', template: 'TM2086-01 Analisi.xlsx', picks: [[/flooring|teak/i, 2], [/handrail/i, 1]] },
-    { reference: 'TM2104-00', name: 'Nave 7 - Aft balustrades', customer: 'APEXA', date: '2026-07-08', template: 'TM1837-02 Analisi.xlsx', picks: [[/balustrade/i, 2], [/handrail/i, 1]] },
-    { reference: 'TM2105-00', name: 'Nave 8 - Prefabricated balcony package', customer: 'ACME', date: '2026-09-15', template: 'TM2086-01 Analisi.xlsx', picks: [[/pre-?fab|platform/i, 2], [/balustrade/i, 1], [/divider/i, 1]] },
+  // Title patterns per product family; anchored so e.g. "RAISED PLATFORM FOR ADA SLIDING DOORS" is not a door.
+  const WINDSCREEN = /^(?!.*(handrail|hatch|guardrail|fall protection)).*wind ?screen/i;
+  const DOOR = /^(standard|motorized) sliding doors?/i;
+  const HANDRAIL = /^(?!.*step).*handrail/i;
+  const BALCONY = /^(pre-?fab(ricated)? (balcony|aluminium platform)|pref\. balcony)/i;
+  const FLOORING = /flooring|raised floor/i;
+  const demo: Array<{ reference: string; name: string; customer: string; date: string; template: string; picks: Array<[RegExp, number, number?]> }> = [
+    { reference: 'TM2101-00', name: 'Nave 5 - Pool deck windscreens', customer: 'OMNIX', date: '2026-02-11', template: 'TM2030-00 Analisi.xlsx', picks: [[WINDSCREEN, 3]] },
+    { reference: 'TM2102-00', name: 'Nave 5 - Suite dividers & sliding doors', customer: 'OMNIX', date: '2026-04-02', template: 'TM2030-00 Analisi.xlsx', picks: [[/divider/i, 2], [DOOR, 1, 140]] },
+    { reference: 'TM2103-01', name: 'Nave 6 - Balcony flooring refit', customer: 'ACME', date: '2026-05-20', template: 'TM2086-01 Analisi.xlsx', picks: [[FLOORING, 2], [HANDRAIL, 1]] },
+    { reference: 'TM2104-00', name: 'Nave 7 - Aft balustrades', customer: 'APEXA', date: '2026-07-08', template: 'TM1837-02 Analisi.xlsx', picks: [[/balustrade/i, 2], [HANDRAIL, 1]] },
+    { reference: 'TM2105-00', name: 'Nave 8 - Prefabricated balcony package', customer: 'ACME', date: '2026-09-15', template: 'TM2086-01 Analisi.xlsx', picks: [[BALCONY, 2], [/balustrade/i, 1], [/divider/i, 1]] },
   ];
   // More history so the quotation list has pages to browse.
-  const scopes: Array<[string, Array<[RegExp, number]>]> = [
-    ['Windscreens upper decks', [[/windscreen/i, 2]]],
+  const scopes: Array<[string, Array<[RegExp, number, number?]>]> = [
+    ['Windscreens upper decks', [[WINDSCREEN, 2]]],
     ['Balcony dividers', [[/divider/i, 3]]],
     ['Glass balustrades', [[/balustrade/i, 2]]],
-    ['Sliding doors & dividers', [[/door/i, 1], [/divider/i, 1]]],
-    ['Teak & resin flooring', [[/flooring|teak|raised floor/i, 3]]],
-    ['Handrails & balustrades', [[/handrail/i, 2], [/balustrade/i, 1]]],
-    ['Prefab balconies', [[/pre-?fab|platform/i, 2]]],
-    ['Pool deck windscreens', [[/windscreen/i, 3]]],
-    ['Suite balcony package', [[/pre-?fab|platform/i, 1], [/divider/i, 1], [/flooring/i, 1]]],
+    ['Sliding doors & dividers', [[DOOR, 1], [/divider/i, 1]]],
+    ['Teak & resin flooring', [[/(teak|resin)\b.*floor/i, 3]]],
+    ['Handrails & balustrades', [[HANDRAIL, 2], [/balustrade/i, 1]]],
+    ['Prefab balconies', [[BALCONY, 2]]],
+    ['Pool deck windscreens', [[WINDSCREEN, 3]]],
+    ['Suite balcony package', [[BALCONY, 1], [/divider/i, 1], [FLOORING, 1]]],
   ];
   const customers = ['APEXA', 'OMNIX', 'ACME'];
   const templates = ['TM1643-06 Analisi.xlsx', 'TM2030-00 Analisi.xlsx', 'TM2086-01 Analisi.xlsx', 'TM1641-03 Analisi.xlsx', 'TM1823-03 Analisi.xlsx', 'TM1837-02 Analisi.xlsx'];
+  // One customer per vessel: a hull number never appears under two shipyards.
+  const vessels = [9, 21, 10, 22, 23, 11, 12, 24, 13, 25, 26, 14, 27, 15, 16, 28, 29, 17];
   for (let i = 0; i < 18; i++) {
     const [label, picks] = scopes[i % scopes.length];
     const month = new Date(Date.UTC(2025, 1 + i, 3 + ((i * 7) % 24)));
-    demo.push({ reference: `TM${2106 + i}-0${i % 3}`, name: `Nave ${9 + Math.floor(i / 2)} - ${label}`, customer: customers[i % 3], date: month.toISOString().slice(0, 10), template: templates[i % templates.length], picks });
+    demo.push({ reference: `TM${2106 + i}-0${i % 3}`, name: `Nave ${vessels[i]} - ${label}`, customer: customers[i % 3], date: month.toISOString().slice(0, 10), template: templates[i % templates.length], picks });
   }
-  const usable = catalog.records.filter((r) => r.sheet && r.unitCost && !/deduct|extra|option|install|pipe|drain/i.test(r.title ?? ''));
-  for (const d of demo) {
+  // Real products only: no variations, tests, mock-ups, paint jobs, extras or deductions.
+  const usable = catalog.records.filter((r) => r.sheet && r.unitCost && r.unitCost > 0 && !/deduct|extra|option|install|pipe|drain|addition|var\.?\s?\d|mock|test|spare|not nec|paint|mural|reinforc|enhanc|change of|update of|foundation|blast|n\.b\.|diventa|#/i.test(r.title ?? ''));
+  const uses = new Map<string, number>();
+  for (const [index, d] of demo.entries()) {
     const lines: Line[] = [];
-    for (const [re, n] of d.picks) {
-      const pool = usable.filter((r) => re.test(r.title ?? '') && !lines.some((l) => l.id === r.id));
+    const titles = new Set<string>(); // the same product often appears in several workbooks
+    // Repeated scopes rotate through the pool and scale quantities differently, so no two quotations are clones.
+    const factor = 0.6 + ((index * 37) % 80) / 100;
+    for (const [re, n, max] of d.picks) {
+      const nth = uses.get(re.source) ?? 0;
+      uses.set(re.source, nth + 1);
+      const pool = usable.filter((r) => re.test(r.title ?? '') && !titles.has(r.title ?? ''));
       const ordered = [...pool.filter((r) => r.workbook === d.template), ...pool.filter((r) => r.workbook !== d.template)];
-      for (const r of ordered.slice(0, n)) lines.push({ id: r.id, quantity: Math.max(1, Math.round((r.quantity ?? 10) * 0.8)) });
+      const offset = ordered.length ? (nth * n) % ordered.length : 0;
+      const unique = [...ordered.slice(offset), ...ordered.slice(0, offset)].filter((r, i, all) => all.findIndex((x) => x.title === r.title) === i);
+      for (const r of unique.slice(0, n)) {
+        titles.add(r.title ?? '');
+        lines.push({ id: r.id, quantity: demoQuantity(r, factor, max) });
+      }
     }
-    await createQuotation(owner, catalog, { ...d, lines, status: d.reference === 'TM2118-00' ? 'draft' : 'active' });
+    const estimator = d.picks.some(([re]) => re === BALCONY) ? 'Andrea Coan' : owner.name;
+    await createQuotation(owner, catalog, { ...d, lines, status: 'active', estimator });
   }
   await attachExistingQuotations();
   await seedMaterials(prisma);
+  // Project dates follow their quotations, so lists sort by real activity rather than seed time.
+  await prisma.$executeRaw`
+    UPDATE "Project" p SET "createdAt" = q.first - interval '7 days', "updatedAt" = q.last
+    FROM (SELECT "projectId", min("createdAt") AS first, max("updatedAt") AS last FROM "Quotation" GROUP BY "projectId") q
+    WHERE p.id = q."projectId"`;
+}
+
+/** Historical quantity scaled per quotation and snapped to whole modules, so m² and m lines match the element size. */
+function demoQuantity(r: CatalogRecord, factor: number, maxPieces = Infinity): number {
+  const unit = (r.unit ?? '').toLowerCase();
+  const module = /m²|m2/.test(unit) && r.L && r.H ? (r.L * r.H) / 1_000_000 : /^m$/.test(unit) && r.L ? r.L / 1000 : 1;
+  const pieces = Math.min(maxPieces, Math.max(1, Math.round(((r.quantity ?? 10) * factor) / module)));
+  return Math.round(pieces * module * 100) / 100;
 }
 
 type Line = { id: string; quantity: number; params?: Record<string, number> };
@@ -119,7 +139,7 @@ type Line = { id: string; quantity: number; params?: Record<string, number> };
 async function createQuotation(
   owner: { id: string; name: string; email?: string },
   catalog: Catalog,
-  q: { reference: string; name: string; customer: string; date: string; template: string; lines: Line[]; status: 'draft' | 'active' },
+  q: { reference: string; name: string; customer: string; date: string; template: string; lines: Line[]; status: 'draft' | 'active'; estimator?: string },
 ): Promise<void> {
   const project = await ensureProject(owner.id, q.customer, projectName(q.name));
   const existing = await prisma.quotation.findFirst({ where: { ownerId: owner.id, reference: q.reference } });
@@ -133,8 +153,11 @@ async function createQuotation(
     console.log(`quotation ${q.reference} already exists (${existing.id}), status ${q.status}`);
     return;
   }
+  // Dated like real history: created on the quotation date, last edited a few days later.
+  const createdAt = new Date(`${q.date}T09:00:00Z`);
+  const updatedAt = new Date(Math.min(Date.now(), createdAt.getTime() + (1 + (Number(q.reference.slice(2, 6)) % 9)) * 86_400_000 + 7.5 * 3_600_000));
   const quotation = await prisma.quotation.create({
-    data: { status: q.status, name: q.name, customer: q.customer, projectId: project.id, reference: q.reference, date: q.date, estimator: owner.name, templateWorkbook: q.template, ownerId: owner.id },
+    data: { status: q.status, name: q.name, customer: q.customer, projectId: project.id, reference: q.reference, date: q.date, estimator: q.estimator ?? owner.name, templateWorkbook: q.template, ownerId: owner.id, createdAt, updatedAt },
   });
   let order = 0;
   for (const line of q.lines) {

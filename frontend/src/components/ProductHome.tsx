@@ -66,8 +66,10 @@ export function ProductCard({ r, badge, quotations, facets, estimator, onError, 
           ))}
         </div>
         <div className="pprice">
-          <b>{fmtMoney(productCost(r))}</b>
-          <span className="muted"> / {r.unit ?? 'unit'}</span>
+          <span className="pprice-value">
+            <b>{fmtMoney(productCost(r))}</b>
+            <span className="muted"> / {r.unit ?? 'unit'}</span>
+          </span>
           <AddProductButton record={r} quotations={quotations} facets={facets} estimator={estimator} onAdd={onAddToQuotation} onError={onError} />
         </div>
       </div>
@@ -117,7 +119,8 @@ export function ProductHome({ facets, quotations, estimator, onError, onAddToQuo
     }
   };
 
-  const base = useMemo(() => hits ?? featured(all ?? []), [hits, all]);
+  const products = useMemo(() => (all ?? []).filter(isProduct), [all]);
+  const base = useMemo(() => hits ?? featured(products), [hits, products]);
   const list = base.filter((r) => (!typology || typologyOf(r).key === typology) && (!material || materialsOf(r).includes(material)));
   const counts = useMemo(() => {
     const c = new Map<string, number>();
@@ -151,7 +154,7 @@ export function ProductHome({ facets, quotations, estimator, onError, onAddToQuo
         <div className="hero-inner">
           <div className="eyebrow">Somec Marine · Product intelligence</div>
           <h1>Every glass balcony, windscreen and deck we have ever costed.</h1>
-          <p>Search {all?.length ?? '…'} glass and flooring products from past cruise-ship offers and reuse their cost analysis in a new quotation.</p>
+          <p>Search {all ? products.length : '…'} glass and flooring products from past cruise-ship offers and reuse their cost analysis in a new quotation.</p>
           <SearchSuggest
             q={q}
             setQ={setQ}
@@ -166,7 +169,7 @@ export function ProductHome({ facets, quotations, estimator, onError, onAddToQuo
           />
           <div className="hero-stats">
             <div>
-              <b>{all?.length ?? '—'}</b>
+              <b>{all ? products.length : '—'}</b>
               <span>catalog products</span>
             </div>
             <div>

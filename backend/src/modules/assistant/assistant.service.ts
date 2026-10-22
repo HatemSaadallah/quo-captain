@@ -31,6 +31,10 @@ const clip = (text: string | null | undefined, max: number): string => { const l
 
 /** Product type from title/category, same families as the catalog page. */
 const TYPES: Array<[string, RegExp]> = [['windscreen', /wind ?screen/i], ['door', /\bdoors?\b/i], ['divider', /divider|partition/i], ['handrail', /handrail/i], ['balustrade', /balustrade|railing/i], ['flooring', /floor|teak|decking|resin/i], ['ceiling', /ceiling/i], ['balcony', /balcon|platform|pre-?fab/i]];
+/** Catalog rows that are deltas (extras, options, deductions, variations) or works/tests are not products; same rule as the web catalog. */
+const productKind = (title: string): 'product' | 'extra' | 'service' =>
+  /extra|deduct|option|addition|surcharge|\bvar\.?\s?\d|reinforcement|enhancement|change of|update of|not nec/i.test(title) ? 'extra'
+    : /protection|cleaning|install|washing|design|piping|electric|paint|mural|mock[ -]?up|\btests?\b|spare parts|foundation/i.test(title) ? 'service' : 'product';
 const typeOf = (...texts: Array<string | null | undefined>): string => { for (const t of texts) { const hit = t ? TYPES.find(([, re]) => re.test(t)) : undefined; if (hit) return hit[0]; } return 'other'; };
 
 const SYSTEM_PROMPT = (userName: string): string => `You are Somec's quotation analyst for ${userName} at Somec (cruise-ship glazing, balconies, windscreens, dividers, flooring). Today is ${new Date().toISOString().slice(0, 10)}.
@@ -41,7 +45,7 @@ Get every figure with the query tool, written in SomecQL:
   ops: = != > >= < <= ~ (contains) in (a, b); combine with and / or. Quote text with spaces. Aggregate columns are named sum_total, avg_unit_cost, count.
 Which dataset: "have we costed / historical / cheapest / typical or average cost of a product type" -> products; "our/my quotations, customers, pipeline, trend" -> lines or quotations. Units are always m2, m, pcs or kg.
 Datasets and fields:
-  lines: quotation, quotation_name, customer, status (draft|active), date, year, month (YYYY-MM), type, category, item, unit, quantity, unit_cost, total
+  lines: quotation, quotation_name, customer, status (draft|active), date, year, month (YYYY-MM), type, category, item, unit, quantity, unit_cost, total (product costs: site labour and transport are quoted as separate lines)
   quotations: reference, name, customer, status, date, year, month, lines, total
   products (historical catalog): product, type, category, kind (product|extra|service), unit, unit_cost, length_mm, height_mm, client, offer, year, source
   contacts: name, role, group (Installers|Buyers|Management|Sales|Accounting|Estimating), company, email, location, skills, status
@@ -151,16 +155,15 @@ export class AssistantService {
     const unit = (u: string | null): string => { const x = (u ?? '').trim().toLowerCase(); return /^(m²|m2|mq|sqm)$/.test(x) ? 'm2' : /^(m|ml|lm)$/.test(x) ? 'm' : /^(pcs|pc|nr|n°|no|pz|each)$/.test(x) ? 'pcs' : x || 'pcs'; };
     const lines = quotations.flatMap((q) =>
       q.items.map((it) => {
-        const unitCost = it.unitCostOverride ?? it.historicalUnitCost;
+        const unitCost = it.productUnitCost !== undefined ? it.productUnitCost : (it.unitCostOverride ?? it.historicalUnitCost); // product cost, labour and transport excluded
         const rec = it.catalogId && this.catalog.has(it.catalogId) ? this.catalog.get(it.catalogId) : null;
         return { quotation: q.reference, quotation_name: q.name, customer: q.customer, status: q.status, date: q.date, year: year(q.date), month: q.date.slice(0, 7), category: rec?.categoryName ?? 'Uncategorised', type: typeOf(clip(it.description, 120), rec?.categoryName), item: clip(it.description, 70), unit: unit(it.unit), quantity: it.quantity, unit_cost: unitCost === null ? null : round(unitCost), total: round((unitCost ?? 0) * it.quantity) };
       }),
     );
     const quoteRows = quotations.map((q) => ({ reference: q.reference, name: q.name, customer: q.customer, status: q.status, date: q.date, year: year(q.date), month: q.date.slice(0, 7), lines: q.items.length, total: round(lines.filter((l) => l.quotation === q.reference).reduce((s, l) => s + (l.total ?? 0), 0)) }));
-    const kind = (title: string): string => (/extra|deduct|option|addition|surcharge/i.test(title) ? 'extra' : /protection|cleaning|install|washing|design|piping|electric/i.test(title) ? 'service' : 'product');
     const products = this.catalog.records
       .filter((r) => r.unitCost !== null)
-      .map((r) => ({ product: clip(r.title, 70), category: r.categoryName ?? 'Uncategorised', type: typeOf(r.title, r.categoryName), kind: kind(r.title ?? ''), unit: unit(r.unit), unit_cost: r.unitCost === null ? null : round(r.unitCost), length_mm: r.L, height_mm: r.H, client: r.client, offer: r.offerNo, year: r.projectDate ? year(r.projectDate) : null, source: r.custom ? 'custom' : `${r.offerNo ?? r.workbook} sheet ${r.sheet}` }));
+      .map((r) => ({ product: clip(r.title, 70), category: r.categoryName ?? 'Uncategorised', type: typeOf(r.title, r.categoryName), kind: productKind(r.title ?? ''), unit: unit(r.unit), unit_cost: r.unitCost === null ? null : round(r.unitCost), length_mm: r.L, height_mm: r.H, client: r.client, offer: r.offerNo, year: r.projectDate ? year(r.projectDate) : null, source: r.custom ? 'custom' : `${r.offerNo ?? r.workbook} sheet ${r.sheet}` }));
     const text = (v: unknown): string => (Array.isArray(v) ? v.join(', ') : typeof v === 'string' ? v : '');
     const people = contacts.map((c) => ({ name: text(c.name), role: text(c.role), group: text(c.group), company: text(c.company), email: text(c.email), location: text(c.location), skills: text(c.tags), status: text(c.status) }));
     return { lines, quotations: quoteRows, products, contacts: people };
@@ -208,7 +211,7 @@ export class AssistantService {
       const result = await this.catalog.search({ q: query, limit: sort === 'relevance' ? 10 : 40 });
       let hits = result.hits;
       if (sort !== 'relevance') {
-        hits = hits.filter(({ record: r }) => r.unitCost !== null && r.unitCost > 0 && !/extra|deduct|option|addition|surcharge|protection|cleaning|install|washing|design/i.test(r.title ?? '')).sort((a, b) => ((a.record.unitCost ?? 0) - (b.record.unitCost ?? 0)) * (sort === 'cheapest' ? 1 : -1)).slice(0, 8);
+        hits = hits.filter(({ record: r }) => r.unitCost !== null && r.unitCost > 0 && productKind(r.title ?? '') === 'product').sort((a, b) => ((a.record.unitCost ?? 0) - (b.record.unitCost ?? 0)) * (sort === 'cheapest' ? 1 : -1)).slice(0, 8);
       }
       return hits.map(({ record: r }) => ({ id: r.id, title: r.title, spec: clip(r.description, 80), category: r.categoryName, unit: r.unit, unitCostEUR: r.unitCost, size: r.L && r.H ? `${r.L}x${r.H} mm` : undefined, source: r.custom ? 'custom' : `${r.offerNo ?? r.workbook} sheet ${r.sheet}` }));
     }
