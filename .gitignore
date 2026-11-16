@@ -7,7 +7,8 @@ coverage/
 .env
 
 # generated at runtime
-data/input/
+data/input/*
+!data/input/.gitkeep
 data/processed/
 data/output/*
 !data/output/.gitkeep

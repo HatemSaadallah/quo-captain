@@ -1,11 +1,11 @@
-# Somec quotation cost-analysis generator — one-stop commands.
+# Quo-Captain — one-stop commands.
 #   make all      install + database (+ seed) + catalog + build + tests + API demo
 #   make dev      run backend (:3000) and frontend (:5173) together
 #   make demo     end-to-end API run on its own port: login -> search -> cart -> generate -> report
 #
 # Prerequisites: Node 22, PostgreSQL running locally (brew services start postgresql@18),
-# the six Somec workbooks in data/input/, and (optional) Microsoft Excel for recalculation.
-# Mock login after `make db`: estimator@somec.local / somec2026
+# the historical "Analisi" workbooks in data/input/, and (optional) Microsoft Excel for recalculation.
+# Demo login after `make db`: estimator@somec.local / somec2026 (seeded, fictional)
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -45,7 +45,7 @@ db: $(BACKEND)/.env ## Create the Postgres database, sync the Prisma schema, see
 	@cd $(BACKEND) && if node -e "process.exit(require('./package.json').prisma && require('./package.json').prisma.seed ? 0 : 1)"; then npx prisma db seed; else echo "no seed configured"; fi
 
 extract: ## Index data/input/*.xlsx into data/processed (catalog + embeddings)
-	@ls data/input/*.xlsx >/dev/null 2>&1 || { echo "Put the Somec workbooks in data/input/ first"; exit 1; }
+	@ls data/input/*.xlsx >/dev/null 2>&1 || { echo "Put the Analisi workbooks in data/input/ first"; exit 1; }
 	cd $(BACKEND) && npm run extract
 
 build: ## Compile backend (tsc) and frontend (vite)
